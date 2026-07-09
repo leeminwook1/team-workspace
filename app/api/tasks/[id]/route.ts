@@ -1,7 +1,7 @@
 import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
 import { requireActiveUser, json } from "@/lib/api";
-import { canEditTaskAny, canDeleteTaskAny, canChangeStatusAny } from "@/lib/permissions";
+import { canEditTaskAny, canDeleteTaskAny, canChangeStatusAny, canCreateTaskInAll } from "@/lib/permissions";
 import { taskUpdateSchema } from "@/lib/validations";
 
 // PATCH /api/tasks/:id — 수정(팀장·부팀장·과장·부과장) / 팀원은 본인 담당 업무의 status만
@@ -29,6 +29,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     // 팀원: 본인 담당 업무의 상태만 (설계 3.2)
   } else {
     return json({ error: "이 업무를 수정할 권한이 없습니다." }, 403);
+  }
+
+  // 팀을 변경하는 경우, 새 팀 전부에 등록 권한이 있어야 함 (접근 불가 팀 태깅 방지)
+  if (d.teamIds !== undefined && !canCreateTaskInAll(user, d.teamIds)) {
+    return json({ error: "선택한 팀 중 권한이 없는 팀이 있습니다." }, 403);
   }
 
   if (d.title !== undefined) task.title = d.title;

@@ -8,6 +8,7 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import koLocale from "@fullcalendar/core/locales/ko";
 import { Icon } from "@/components/icons";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type TeamInfo = { id: string; name: string; slug: string; color: string };
 type TeamRef = { id: string; name: string; color: string };
@@ -34,6 +35,13 @@ const STATUS_LABEL: Record<string, [string, string]> = {
 const PRIORITY_LABEL: Record<string, string> = {
   low: "낮음", normal: "보통", high: "높음", urgent: "긴급",
 };
+// 우선순위 배지: 높음/긴급만 색상 배지로 강조 (보통/낮음은 숨김)
+const PRIORITY_META: Record<string, { label: string; color: string; show: boolean }> = {
+  low: { label: "낮음", color: "var(--ink-faint)", show: false },
+  normal: { label: "보통", color: "var(--ink-faint)", show: false },
+  high: { label: "높음", color: "var(--st-prog)", show: true },
+  urgent: { label: "긴급", color: "var(--danger)", show: true },
+};
 
 export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
   const { data: session } = useSession();
@@ -46,6 +54,7 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [createDate, setCreateDate] = useState("");
   const [detail, setDetail] = useState<TaskItem | null>(null);
+  const [editing, setEditing] = useState<TaskItem | null>(null);
   const [title, setTitle] = useState("");
   const [view, setView] = useState("dayGridMonth");
 
@@ -192,12 +201,25 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
       </div>
 
       {createOpen && (
-        <TaskCreateModal
+        <TaskFormModal
           teams={editableTeams}
           defaultDate={createDate}
           onClose={() => setCreateOpen(false)}
-          onCreated={() => {
+          onSaved={() => {
             setCreateOpen(false);
+            refetch();
+          }}
+        />
+      )}
+
+      {editing && (
+        <TaskFormModal
+          teams={editableTeams}
+          defaultDate={createDate}
+          task={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
             refetch();
           }}
         />
@@ -207,6 +229,7 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
         <TaskDetailModal
           task={detail}
           onClose={() => setDetail(null)}
+          onEdit={(t) => { setDetail(null); setEditing(t); }}
           onChanged={() => {
             setDetail(null);
             refetch();
@@ -217,24 +240,31 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
   );
 }
 
-/* ── 업무 추가 모달 ── */
-function TaskCreateModal({
-  teams, defaultDate, onClose, onCreated,
+/* ── 업무 추가/수정 모달 (겸용) ── */
+function TaskFormModal({
+  teams, defaultDate, task, onClose, onSaved,
 }: {
-  teams: TeamInfo[]; defaultDate: string; onClose: () => void; onCreated: () => void;
+  teams: TeamInfo[]; defaultDate: string; task?: TaskItem | null; onClose: () => void; onSaved: () => void;
 }) {
-  const [title, setTitle] = useState("");
-  const [teamIds, setTeamIds] = useState<string[]>(teams[0] ? [teams[0].id] : []);
-  const [allDay, setAllDay] = useState(true);
-  const [startDate, setStartDate] = useState(defaultDate);
-  const [endDate, setEndDate] = useState(defaultDate);
-  const [startTime, setStartTime] = useState("10:00");
-  const [endTime, setEndTime] = useState("11:00");
-  const [priority, setPriority] = useState("normal");
-  const [location, setLocation] = useState("");
-  const [description, setDescription] = useState("");
+  const isEdit = !!task;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const toDate = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const toTime = (iso: string) => { const d = new Date(iso); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+
+  const [title, setTitle] = useState(task?.title ?? "");
+  const [teamIds, setTeamIds] = useState<string[]>(
+    task ? task.teams.map((t) => t.id).filter((id) => teams.some((tm) => tm.id === id)) : (teams[0] ? [teams[0].id] : [])
+  );
+  const [allDay, setAllDay] = useState(task ? task.allDay : true);
+  const [startDate, setStartDate] = useState(task ? toDate(task.startDate) : defaultDate);
+  const [endDate, setEndDate] = useState(task ? toDate(task.endDate) : defaultDate);
+  const [startTime, setStartTime] = useState(task && !task.allDay ? toTime(task.startDate) : "10:00");
+  const [endTime, setEndTime] = useState(task && !task.allDay ? toTime(task.endDate) : "11:00");
+  const [priority, setPriority] = useState(task?.priority ?? "normal");
+  const [location, setLocation] = useState(task?.location ?? "");
+  const [description, setDescription] = useState(task?.description ?? "");
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
-  const [assignees, setAssignees] = useState<Set<string>>(new Set());
+  const [assignees, setAssignees] = useState<Set<string>>(new Set(task ? task.assignees.map((a) => a.id) : []));
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -277,8 +307,8 @@ function TaskCreateModal({
           endDate: new Date(`${startDate}T${endTime}`).toISOString(),
           allDay: false,
         };
-    const res = await fetch("/api/tasks", {
-      method: "POST",
+    const res = await fetch(isEdit ? `/api/tasks/${task!.id}` : "/api/tasks", {
+      method: isEdit ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title, teamIds, assignees: Array.from(assignees), priority, location, description, ...when,
@@ -286,14 +316,14 @@ function TaskCreateModal({
     });
     const data = await res.json();
     setLoading(false);
-    if (!res.ok) { setErr(data.error ?? "등록에 실패했습니다."); return; }
-    onCreated();
+    if (!res.ok) { setErr(data.error ?? (isEdit ? "수정에 실패했습니다." : "등록에 실패했습니다.")); return; }
+    onSaved();
   }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>업무 추가</h2>
+        <h2>{isEdit ? "업무 수정" : "업무 추가"}</h2>
         <form onSubmit={onSubmit}>
           <div className="field">
             <label>제목</label>
@@ -390,7 +420,9 @@ function TaskCreateModal({
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
-            <button className="btn btn-primary" disabled={loading}>{loading ? "등록 중…" : "등록"}</button>
+            <button className="btn btn-primary" disabled={loading}>
+              {loading ? "저장 중…" : isEdit ? "저장" : "등록"}
+            </button>
           </div>
         </form>
       </div>
@@ -400,12 +432,13 @@ function TaskCreateModal({
 
 /* ── 업무 상세 모달 ── */
 function TaskDetailModal({
-  task, onClose, onChanged,
+  task, onClose, onChanged, onEdit,
 }: {
-  task: TaskItem; onClose: () => void; onChanged: () => void;
+  task: TaskItem; onClose: () => void; onChanged: () => void; onEdit: (t: TaskItem) => void;
 }) {
   const { data: session } = useSession();
   const user = session?.user;
+  const confirm = useConfirm();
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -432,7 +465,13 @@ function TaskDetailModal({
   }
 
   async function remove() {
-    if (!confirm("이 업무를 삭제할까요?")) return;
+    const ok = await confirm({
+      title: "업무 삭제",
+      message: "이 업무를 삭제할까요? 삭제하면 되돌릴 수 없습니다.",
+      confirmText: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(true);
     const res = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
     const data = await res.json();
@@ -448,44 +487,56 @@ function TaskDetailModal({
         ? { month: "long", day: "numeric" }
         : { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
+  const prio = PRIORITY_META[task.priority] ?? PRIORITY_META.normal;
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        {/* 팀 */}
+        <div className="detail-teams">
           {task.teams.map((tm) => (
             <span className="chip" key={tm.id}>
               <span className="dot" style={{ background: tm.color }} />
               {tm.name}
             </span>
           ))}
-          <span className="status-pill" style={{ background: `color-mix(in srgb, ${stColor} 15%, transparent)`, color: stColor }}>
+        </div>
+
+        {/* 제목 + 배지 */}
+        <h2 className="detail-title">{task.title}</h2>
+        <div className="detail-badges">
+          <span className="badge" style={{ background: `color-mix(in srgb, ${stColor} 14%, transparent)`, color: stColor }}>
+            <span className="badge-dot" style={{ background: stColor }} />
             {stLabel}
           </span>
-          <span className="chip">{PRIORITY_LABEL[task.priority] ?? task.priority}</span>
-        </div>
-        <h2 style={{ marginBottom: 14 }}>{task.title}</h2>
-        <dl className="detail-meta">
-          <div><dt>기간</dt><dd>{fmt(task.startDate)} ~ {fmt(task.endDate)}</dd></div>
-          {task.location && <div><dt>장소</dt><dd>{task.location}</dd></div>}
-          {task.assignees.length > 0 && (
-            <div><dt>담당</dt><dd>{task.assignees.map((a) => a.name).join(", ")}</dd></div>
+          {prio.show && (
+            <span className="badge" style={{ background: `color-mix(in srgb, ${prio.color} 14%, transparent)`, color: prio.color }}>
+              {prio.label}
+            </span>
           )}
-        </dl>
-        {task.description && (
-          <p style={{ fontSize: 14.5, color: "var(--ink-soft)", whiteSpace: "pre-wrap", marginTop: 14, lineHeight: 1.6 }}>
-            {task.description}
-          </p>
-        )}
+        </div>
 
+        {/* 메타 */}
+        <div className="detail-info">
+          <div><span className="k">기간</span><span className="v">{fmt(task.startDate)} ~ {fmt(task.endDate)}</span></div>
+          {task.location && <div><span className="k">장소</span><span className="v">{task.location}</span></div>}
+          {task.assignees.length > 0 && (
+            <div><span className="k">담당</span><span className="v">{task.assignees.map((a) => a.name).join(", ")}</span></div>
+          )}
+        </div>
+
+        {task.description && <div className="detail-desc">{task.description}</div>}
+
+        {/* 상태 변경 */}
         {canStatus && (
-          <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink-soft)", marginBottom: 8 }}>상태 변경</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <div className="detail-status">
+            <div className="detail-status-label">상태 변경</div>
+            <div className="seg detail-seg">
               {Object.entries(STATUS_LABEL).map(([key, [label]]) => (
                 <button
                   key={key}
-                  className={`btn btn-sm ${task.status === key ? "btn-primary" : "btn-ghost"}`}
-                  disabled={busy || task.status === key}
+                  className={task.status === key ? "on" : ""}
+                  disabled={busy}
                   onClick={() => setStatus(key)}
                 >
                   {label}
@@ -500,7 +551,10 @@ function TaskDetailModal({
           {canDelete && (
             <button className="btn btn-danger" disabled={busy} onClick={remove}>삭제</button>
           )}
-          <button className="btn btn-ghost" onClick={onClose}>닫기</button>
+          {canEdit && (
+            <button className="btn btn-ghost" onClick={() => onEdit(task)}>수정</button>
+          )}
+          <button className="btn btn-primary" onClick={onClose}>닫기</button>
         </div>
       </div>
     </div>

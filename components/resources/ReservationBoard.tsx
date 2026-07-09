@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type ResourceOpt = { id: string; name: string; category: string };
 type TeamOpt = { id: string; name: string; color: string };
@@ -27,6 +28,7 @@ export default function ReservationBoard({
 }) {
   const { data: session } = useSession();
   const user = session?.user;
+  const confirm = useConfirm();
 
   const [selected, setSelected] = useState(resources[0]?.id ?? "");
   const [list, setList] = useState<ReservationItem[]>([]);
@@ -99,7 +101,14 @@ export default function ReservationBoard({
   }
 
   async function cancel(id: string) {
-    if (!confirm("이 예약을 취소할까요?")) return;
+    const confirmed = await confirm({
+      title: "예약 취소",
+      message: "이 예약을 취소할까요?",
+      confirmText: "예약 취소",
+      cancelText: "닫기",
+      danger: true,
+    });
+    if (!confirmed) return;
     const res = await fetch(`/api/reservations/${id}`, { method: "DELETE" });
     const data = await res.json();
     if (!res.ok) { setErr(data.error ?? "취소 실패"); return; }

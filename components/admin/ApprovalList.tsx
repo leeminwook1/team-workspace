@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type PendingUser = { id: string; name: string; email: string; requestedAt: string };
 type TeamOpt = { id: string; name: string; color: string };
@@ -25,6 +26,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
   const [sel, setSel] = useState<Record<string, { teamId: string; role: string; orgRole: string }>>({});
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState("");
+  const confirm = useConfirm();
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/pending");
@@ -59,7 +61,13 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
   }
 
   async function reject(u: PendingUser) {
-    if (!confirm(`${u.name}(${u.email})의 가입 신청을 거절할까요?`)) return;
+    const ok = await confirm({
+      title: "가입 거절",
+      message: `${u.name}(${u.email})의 가입 신청을 거절할까요?\n거절하면 신청 내역이 삭제됩니다.`,
+      confirmText: "거절",
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(u.id);
     const res = await fetch(`/api/admin/users/${u.id}`, { method: "DELETE" });
     const data = await res.json();

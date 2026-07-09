@@ -97,6 +97,8 @@ a { color: inherit; text-decoration: none; }
 .btn-ghost:hover:not(:disabled) { background: var(--line); }
 .btn-danger { background: var(--danger-soft); color: var(--danger); }
 .btn-danger:hover:not(:disabled) { background: var(--danger-soft-2); }
+.btn-danger-solid { background: var(--danger); color: #fff; }
+.btn-danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 88%, #000); }
 .btn-sm { padding: 8px 13px; font-size: 13px; border-radius: var(--r-sm); }
 .btn-lg { width: 100%; padding: 15px; font-size: 16px; border-radius: var(--r-md); }
 
@@ -301,10 +303,39 @@ a { color: inherit; text-decoration: none; }
 .modal h2 { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 18px; }
 .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
 .modal-actions .btn { flex: 1; }
+.modal-confirm { max-width: 360px; }
+.modal-confirm h2 { margin-bottom: 8px; }
+.confirm-msg { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin: 0; white-space: pre-wrap; }
 .detail-meta { display: flex; flex-direction: column; gap: 9px; margin: 0; }
 .detail-meta > div { display: flex; gap: 12px; font-size: 14px; }
 .detail-meta dt { flex: none; width: 44px; color: var(--ink-faint); font-weight: 600; margin: 0; }
 .detail-meta dd { margin: 0; color: var(--ink); font-weight: 500; }
+
+/* ── 업무 상세 모달 ── */
+.detail-teams { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.detail-title { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 10px; line-height: 1.32; }
+.detail-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700;
+  padding: 5px 11px; border-radius: 9999px;
+}
+.badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+.detail-info {
+  display: flex; flex-direction: column; background: var(--surface-2);
+  border-radius: var(--r-md); padding: 6px 16px;
+}
+.detail-info > div { display: flex; gap: 14px; font-size: 14px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.detail-info > div:last-child { border-bottom: 0; }
+.detail-info .k { flex: none; width: 40px; color: var(--ink-faint); font-weight: 600; }
+.detail-info .v { color: var(--ink); font-weight: 500; }
+.detail-desc {
+  margin-top: 10px; font-size: 14.5px; color: var(--ink-soft); line-height: 1.65;
+  white-space: pre-wrap; background: var(--surface-2); border-radius: var(--r-md); padding: 14px 16px;
+}
+.detail-status { margin-top: 18px; }
+.detail-status-label { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); margin-bottom: 8px; }
+.detail-seg { display: flex; width: 100%; }
+.detail-seg button { flex: 1; }
 @keyframes fade-in { from { opacity: 0; } }
 @media (max-width: 640px) {
   .modal-overlay { place-items: end stretch; padding: 0; }
