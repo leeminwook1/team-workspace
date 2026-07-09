@@ -1,16 +1,26 @@
+import { getServerSession } from "next-auth";
 import { connectDB } from "@/lib/mongodb";
 import { Team } from "@/models/Team";
+import { authOptions } from "@/lib/auth";
+import { canViewAllTeams, type SessionUser } from "@/lib/permissions";
 import CalendarView from "@/components/calendar/CalendarView";
 
 export const dynamic = "force-dynamic";
 
 export default async function CalendarPage() {
+  const session = await getServerSession(authOptions);
+  const user = session!.user as SessionUser; // (main) 레이아웃에서 인증 보장
+
   await connectDB();
-  const teams = await Team.find({ isActive: true }).sort({ createdAt: 1 }).lean();
+  const all = await Team.find({ isActive: true }).sort({ createdAt: 1 }).lean();
+
+  // 조회 권한: 전사 역할(admin/과장/부과장/서기) → 전체 / 그 외 → 소속 팀만
+  const myTeamIds = new Set(user.teams.map((t) => t.teamId));
+  const visible = canViewAllTeams(user) ? all : all.filter((t: any) => myTeamIds.has(String(t._id)));
 
   return (
     <CalendarView
-      teams={teams.map((t: any) => ({
+      teams={visible.map((t: any) => ({
         id: String(t._id),
         name: t.name,
         slug: t.slug,

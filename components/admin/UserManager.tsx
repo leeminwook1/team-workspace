@@ -59,10 +59,10 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
           <tbody>
             {users.map((u) => (
               <tr key={u.id} style={{ opacity: u.status === "active" ? 1 : 0.5 }}>
-                <td style={{ fontWeight: 700 }}>{u.name}{u.id === currentUserId && " (나)"}</td>
-                <td style={{ color: "var(--ink-soft)" }}>{u.email}</td>
-                <td>{u.orgRole ? ORG_LABEL[u.orgRole] : <span style={{ color: "var(--ink-faint)" }}>—</span>}</td>
-                <td>
+                <td>{u.name}{u.id === currentUserId && " (나)"}</td>
+                <td data-label="이메일" style={{ color: "var(--ink-soft)" }}>{u.email}</td>
+                <td data-label="전사 역할">{u.orgRole ? ORG_LABEL[u.orgRole] : <span style={{ color: "var(--ink-faint)" }}>—</span>}</td>
+                <td data-label="소속 팀">
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                     {u.teams.length === 0 && <span style={{ color: "var(--ink-faint)", fontSize: 13 }}>없음</span>}
                     {u.teams.map((t) => (
@@ -73,12 +73,12 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
                     ))}
                   </div>
                 </td>
-                <td>
+                <td data-label="상태">
                   <span className={`status-pill ${u.status === "active" ? "pill-on" : "pill-off"}`}>
                     {u.status === "active" ? "활성" : "비활성"}
                   </span>
                 </td>
-                <td>
+                <td className="td-actions">
                   <div style={{ display: "flex", gap: 6 }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setEditing(u)}>역할 편집</button>
                     {u.id !== currentUserId && (
@@ -168,7 +168,10 @@ function EditRoleModal({
         </div>
 
         <div className="field">
-          <label>소속 팀 (겸직 가능)</label>
+          <label>소속 팀 · 조회 권한 (겸직 가능)</label>
+          <p style={{ fontSize: 12.5, color: "var(--ink-faint)", margin: "-2px 0 8px" }}>
+            선택한 팀의 일정만 볼 수 있어요. (전사 역할이 있으면 전체 조회)
+          </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
             {teams.map((t) => {
               const inTeam = t.id in memberships;

@@ -57,10 +57,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           <span className="glyph">T</span>
           <span className="word">Team<b>Cal</b></span>
         </div>
-        <div className="topbar-m-right">
-          <span className="avatar avatar-sm" aria-hidden>{user.name.slice(0, 1)}</span>
-          <LogoutButton small />
-        </div>
+        <LogoutButton small />
       </header>
 
       <main className="main">{children}</main>

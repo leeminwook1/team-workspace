@@ -78,14 +78,14 @@ export default function ResourceManager({ initialResources }: { initialResources
           <tbody>
             {initialResources.map((r) => (
               <tr key={r.id} style={{ opacity: r.isActive ? 1 : 0.5 }}>
-                <td style={{ fontWeight: 700 }}>{r.name}</td>
-                <td style={{ color: "var(--ink-soft)" }}>{CAT_LABEL[r.category] ?? r.category}</td>
-                <td>
+                <td>{r.name}</td>
+                <td data-label="분류" style={{ color: "var(--ink-soft)" }}>{CAT_LABEL[r.category] ?? r.category}</td>
+                <td data-label="상태">
                   <span className={`status-pill ${r.isActive ? "pill-on" : "pill-off"}`}>
                     {r.isActive ? "활성" : "비활성"}
                   </span>
                 </td>
-                <td>
+                <td className="td-actions">
                   <button
                     className={`btn btn-sm ${r.isActive ? "btn-danger" : "btn-ghost"}`}
                     disabled={busyId === r.id}

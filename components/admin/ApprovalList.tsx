@@ -94,9 +94,9 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
             const s = getSel(u.id);
             return (
               <tr key={u.id}>
-                <td style={{ fontWeight: 700 }}>{u.name}</td>
-                <td style={{ color: "var(--ink-soft)" }}>{u.email}</td>
-                <td>
+                <td>{u.name}</td>
+                <td data-label="이메일" style={{ color: "var(--ink-soft)" }}>{u.email}</td>
+                <td data-label="소속 팀">
                   <select
                     value={s.teamId}
                     onChange={(e) => setSel({ ...sel, [u.id]: { ...s, teamId: e.target.value } })}
@@ -105,7 +105,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
                     {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </td>
-                <td>
+                <td data-label="팀 역할">
                   <select
                     value={s.role}
                     onChange={(e) => setSel({ ...sel, [u.id]: { ...s, role: e.target.value } })}
@@ -115,7 +115,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
                   </select>
                 </td>
                 {isAdmin && (
-                  <td>
+                  <td data-label="전사 역할">
                     <select
                       value={s.orgRole}
                       onChange={(e) => setSel({ ...sel, [u.id]: { ...s, orgRole: e.target.value } })}
@@ -125,7 +125,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
                     </select>
                   </td>
                 )}
-                <td>
+                <td className="td-actions">
                   <div style={{ display: "flex", gap: 6 }}>
                     <button className="btn btn-primary btn-sm" disabled={busy === u.id} onClick={() => approve(u)}>승인</button>
                     <button className="btn btn-danger btn-sm" disabled={busy === u.id} onClick={() => reject(u)}>거절</button>

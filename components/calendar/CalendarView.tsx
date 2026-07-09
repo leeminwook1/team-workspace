@@ -167,6 +167,7 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
           locale={koLocale}
           height="auto"
           headerToolbar={false}
+          dayCellContent={(arg) => String(arg.date.getDate())}
           events={events}
           datesSet={(arg) => {
             setTitle(arg.view.title);

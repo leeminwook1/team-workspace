@@ -95,13 +95,13 @@ export default function TeamManager({ initialTeams }: { initialTeams: TeamRow[] 
                     {t.name}
                   </span>
                 </td>
-                <td style={{ color: "var(--ink-soft)" }}>{t.slug}</td>
-                <td>
+                <td data-label="slug" style={{ color: "var(--ink-soft)" }}>{t.slug}</td>
+                <td data-label="상태">
                   <span className={`status-pill ${t.isActive ? "pill-on" : "pill-off"}`}>
                     {t.isActive ? "활성" : "비활성"}
                   </span>
                 </td>
-                <td>
+                <td className="td-actions">
                   <div style={{ display: "flex", gap: 6 }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setEditing(t)}>수정</button>
                     <button
