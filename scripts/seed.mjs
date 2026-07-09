@@ -24,6 +24,15 @@ const TEAMS = [
   { name: "음향", slug: "sound", color: "#22c55e" },
 ];
 
+const CATEGORIES = [
+  { name: "회의", color: "#3182f6" },
+  { name: "촬영", color: "#f0466e" },
+  { name: "편집", color: "#8b5cf6" },
+  { name: "행사", color: "#12b3a6" },
+  { name: "외부일정", color: "#f97316" },
+  { name: "기타", color: "#8b95a1" },
+];
+
 const RESOURCES = [
   { name: "스튜디오 A", category: "studio" },
   { name: "스튜디오 B", category: "studio" },
@@ -98,6 +107,16 @@ for (const r of RESOURCES) {
   );
 }
 console.log(`자원 ${RESOURCES.length}개 준비 완료`);
+
+// 3.5) 일정 카테고리 (name 기준 upsert)
+for (const cat of CATEGORIES) {
+  await db.collection("categories").updateOne(
+    { name: cat.name },
+    { $setOnInsert: { ...cat, isActive: true, createdAt: now, updatedAt: now, __v: 0 } },
+    { upsert: true }
+  );
+}
+console.log(`카테고리 ${CATEGORIES.length}개 준비 완료`);
 
 // 4) 인덱스 (설계 4.7)
 await db.collection("users").createIndex({ email: 1 }, { unique: true });

@@ -6,6 +6,7 @@ const TaskSchema = new Schema(
     title: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
     teamIds: [{ type: Schema.Types.ObjectId, ref: "Team", required: true }], // 다중 팀(협업 업무)
+    categoryId: { type: Schema.Types.ObjectId, ref: "Category", default: null }, // 일정 카테고리(선택)
     assignees: [{ type: Schema.Types.ObjectId, ref: "User" }],
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
 

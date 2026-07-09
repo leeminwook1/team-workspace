@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
+import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
 import koLocale from "@fullcalendar/core/locales/ko";
 import { Icon } from "@/components/icons";
@@ -12,11 +13,13 @@ import { useConfirm } from "@/components/ConfirmProvider";
 
 type TeamInfo = { id: string; name: string; slug: string; color: string };
 type TeamRef = { id: string; name: string; color: string };
+type CategoryInfo = { id: string; name: string; color: string };
 type TaskItem = {
   id: string;
   title: string;
   description: string;
   teams: TeamRef[];
+  category: CategoryInfo | null;
   assignees: { id: string; name: string }[];
   startDate: string;
   endDate: string;
@@ -43,7 +46,7 @@ const PRIORITY_META: Record<string, { label: string; color: string; show: boolea
   urgent: { label: "긴급", color: "var(--danger)", show: true },
 };
 
-export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
+export default function CalendarView({ teams, categories }: { teams: TeamInfo[]; categories: CategoryInfo[] }) {
   const { data: session } = useSession();
   const user = session?.user;
   const calRef = useRef<FullCalendar>(null);
@@ -108,6 +111,7 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
             end,
             allDay: t.allDay,
             backgroundColor: color + "26",
+            borderColor: color, // 리스트 뷰의 점 색상
             textColor: color,
             classNames: t.status === "done" ? ["ev-done"] : [],
             extendedProps: { taskId: t.id },
@@ -142,6 +146,7 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
           <button className={view === "dayGridMonth" ? "on" : ""} onClick={() => changeView("dayGridMonth")}>월</button>
           <button className={view === "timeGridWeek" ? "on" : ""} onClick={() => changeView("timeGridWeek")}>주</button>
           <button className={view === "timeGridDay" ? "on" : ""} onClick={() => changeView("timeGridDay")}>일</button>
+          <button className={view === "listMonth" ? "on" : ""} onClick={() => changeView("listMonth")}>목록</button>
         </div>
         {editableTeams.length > 0 && (
           <button
@@ -174,12 +179,13 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
       <div className="card" style={{ padding: 14 }}>
         <FullCalendar
           ref={calRef}
-          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
           initialView="dayGridMonth"
           locale={koLocale}
           height="auto"
           headerToolbar={false}
           dayCellContent={(arg) => String(arg.date.getDate())}
+          noEventsContent="이 기간에 등록된 업무가 없습니다"
           events={events}
           datesSet={(arg) => {
             setTitle(arg.view.title);
@@ -203,6 +209,7 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
       {createOpen && (
         <TaskFormModal
           teams={editableTeams}
+          categories={categories}
           defaultDate={createDate}
           onClose={() => setCreateOpen(false)}
           onSaved={() => {
@@ -215,6 +222,7 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
       {editing && (
         <TaskFormModal
           teams={editableTeams}
+          categories={categories}
           defaultDate={createDate}
           task={editing}
           onClose={() => setEditing(null)}
@@ -242,9 +250,9 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
 
 /* ── 업무 추가/수정 모달 (겸용) ── */
 function TaskFormModal({
-  teams, defaultDate, task, onClose, onSaved,
+  teams, categories, defaultDate, task, onClose, onSaved,
 }: {
-  teams: TeamInfo[]; defaultDate: string; task?: TaskItem | null; onClose: () => void; onSaved: () => void;
+  teams: TeamInfo[]; categories: CategoryInfo[]; defaultDate: string; task?: TaskItem | null; onClose: () => void; onSaved: () => void;
 }) {
   const isEdit = !!task;
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -261,6 +269,7 @@ function TaskFormModal({
   const [startTime, setStartTime] = useState(task && !task.allDay ? toTime(task.startDate) : "10:00");
   const [endTime, setEndTime] = useState(task && !task.allDay ? toTime(task.endDate) : "11:00");
   const [priority, setPriority] = useState(task?.priority ?? "normal");
+  const [categoryId, setCategoryId] = useState(task?.category?.id ?? "");
   const [location, setLocation] = useState(task?.location ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
@@ -311,7 +320,8 @@ function TaskFormModal({
       method: isEdit ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title, teamIds, assignees: Array.from(assignees), priority, location, description, ...when,
+        title, teamIds, categoryId: categoryId || null, assignees: Array.from(assignees),
+        priority, location, description, ...when,
       }),
     });
     const data = await res.json();
@@ -382,14 +392,25 @@ function TaskFormModal({
             </>
           )}
 
-          <div className="field">
-            <label>우선순위</label>
-            <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-              <option value="low">낮음</option>
-              <option value="normal">보통</option>
-              <option value="high">높음</option>
-              <option value="urgent">긴급</option>
-            </select>
+          <div className="form-grid-2">
+            <div className="field">
+              <label>우선순위</label>
+              <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+                <option value="low">낮음</option>
+                <option value="normal">보통</option>
+                <option value="high">높음</option>
+                <option value="urgent">긴급</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>카테고리</label>
+              <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                <option value="">없음</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {members.length > 0 && (
@@ -492,7 +513,7 @@ function TaskDetailModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        {/* 팀 */}
+        {/* 팀 · 카테고리 */}
         <div className="detail-teams">
           {task.teams.map((tm) => (
             <span className="chip" key={tm.id}>
@@ -500,6 +521,11 @@ function TaskDetailModal({
               {tm.name}
             </span>
           ))}
+          {task.category && (
+            <span className="chip" style={{ color: task.category.color, borderColor: `color-mix(in srgb, ${task.category.color} 40%, var(--line))` }}>
+              # {task.category.name}
+            </span>
+          )}
         </div>
 
         {/* 제목 + 배지 */}

@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { connectDB } from "@/lib/mongodb";
 import { Team } from "@/models/Team";
+import { Category } from "@/models/Category";
 import { authOptions } from "@/lib/auth";
 import { canViewAllTeams, type SessionUser } from "@/lib/permissions";
 import CalendarView from "@/components/calendar/CalendarView";
@@ -12,7 +13,10 @@ export default async function CalendarPage() {
   const user = session!.user as SessionUser; // (main) 레이아웃에서 인증 보장
 
   await connectDB();
-  const all = await Team.find({ isActive: true }).sort({ createdAt: 1 }).lean();
+  const [all, cats] = await Promise.all([
+    Team.find({ isActive: true }).sort({ createdAt: 1 }).lean(),
+    Category.find({ isActive: true }).sort({ createdAt: 1 }).lean(),
+  ]);
 
   // 조회 권한: 전사 역할(admin/과장/부과장/서기) → 전체 / 그 외 → 소속 팀만
   const myTeamIds = new Set(user.teams.map((t) => t.teamId));
@@ -26,6 +30,7 @@ export default async function CalendarPage() {
         slug: t.slug,
         color: t.color,
       }))}
+      categories={cats.map((c: any) => ({ id: String(c._id), name: c.name, color: c.color }))}
     />
   );
 }

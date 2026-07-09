@@ -39,6 +39,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (d.title !== undefined) task.title = d.title;
   if (d.description !== undefined) task.description = d.description;
   if (d.teamIds !== undefined) task.teamIds = d.teamIds;
+  if (d.categoryId !== undefined) task.categoryId = d.categoryId || null;
   if (d.assignees !== undefined) task.assignees = d.assignees;
   if (d.startDate !== undefined) task.startDate = new Date(d.startDate);
   if (d.endDate !== undefined) task.endDate = new Date(d.endDate);

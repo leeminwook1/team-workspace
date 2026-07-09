@@ -2,6 +2,7 @@ import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
 import "@/models/Team";
 import "@/models/User";
+import "@/models/Category";
 import { requireActiveUser, json } from "@/lib/api";
 import { canCreateTaskInAll, visibleTeamIds } from "@/lib/permissions";
 import { taskCreateSchema } from "@/lib/validations";
@@ -14,6 +15,9 @@ function serialize(t: any) {
     teams: (t.teamIds ?? [])
       .filter(Boolean)
       .map((tm: any) => ({ id: String(tm._id ?? tm), name: tm.name ?? "", color: tm.color ?? "#8b95a1" })),
+    category: t.categoryId
+      ? { id: String(t.categoryId._id ?? t.categoryId), name: t.categoryId.name ?? "", color: t.categoryId.color ?? "#8b95a1" }
+      : null,
     assignees: (t.assignees ?? []).map((a: any) => ({
       id: String(a._id ?? a),
       name: a.name ?? "",
@@ -56,6 +60,7 @@ export async function GET(req: Request) {
 
   const tasks = await Task.find(q)
     .populate("teamIds", "name color")
+    .populate("categoryId", "name color")
     .populate("assignees", "name")
     .sort({ startDate: 1 })
     .lean();
@@ -83,6 +88,7 @@ export async function POST(req: Request) {
   await connectDB();
   const task = await Task.create({
     ...d,
+    categoryId: d.categoryId || null,
     startDate: new Date(d.startDate),
     endDate: new Date(d.endDate),
     createdBy: user.id,

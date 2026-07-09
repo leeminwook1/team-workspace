@@ -12,6 +12,7 @@ export const taskCreateSchema = z.object({
   title: z.string().min(1, "제목을 입력하세요").max(120),
   description: z.string().max(2000).optional().default(""),
   teamIds: z.array(z.string().min(1)).min(1, "팀을 하나 이상 선택하세요"),
+  categoryId: z.string().nullable().optional(),
   assignees: z.array(z.string()).optional().default([]),
   startDate: z.string().min(1), // ISO date 또는 datetime
   endDate: z.string().min(1),
@@ -24,6 +25,7 @@ export const taskUpdateSchema = z.object({
   title: z.string().min(1).max(120).optional(),
   description: z.string().max(2000).optional(),
   teamIds: z.array(z.string().min(1)).min(1).optional(),
+  categoryId: z.string().nullable().optional(),
   assignees: z.array(z.string()).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
@@ -72,6 +74,11 @@ export const userUpdateSchema = z.object({
 export const resourceSchema = z.object({
   name: z.string().min(1, "자원 이름을 입력하세요").max(60),
   category: z.enum(["studio", "camera", "venue", "audio", "edit", "etc"]),
+});
+
+export const categorySchema = z.object({
+  name: z.string().min(1, "카테고리 이름을 입력하세요").max(30),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "색상 형식: #RRGGBB"),
 });
 
 export const reservationSchema = z.object({
