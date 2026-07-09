@@ -405,20 +405,16 @@ function TaskDetailModal({
           </span>
           <span className="chip">{PRIORITY_LABEL[task.priority] ?? task.priority}</span>
         </div>
-        <h2 style={{ marginBottom: 8 }}>{task.title}</h2>
-        <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: "0 0 4px" }}>
-          📆 {fmt(task.startDate)} ~ {fmt(task.endDate)}
-        </p>
-        {task.location && (
-          <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: "0 0 4px" }}>📍 {task.location}</p>
-        )}
-        {task.assignees.length > 0 && (
-          <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: "0 0 4px" }}>
-            👤 {task.assignees.map((a) => a.name).join(", ")}
-          </p>
-        )}
+        <h2 style={{ marginBottom: 14 }}>{task.title}</h2>
+        <dl className="detail-meta">
+          <div><dt>기간</dt><dd>{fmt(task.startDate)} ~ {fmt(task.endDate)}</dd></div>
+          {task.location && <div><dt>장소</dt><dd>{task.location}</dd></div>}
+          {task.assignees.length > 0 && (
+            <div><dt>담당</dt><dd>{task.assignees.map((a) => a.name).join(", ")}</dd></div>
+          )}
+        </dl>
         {task.description && (
-          <p style={{ fontSize: 14.5, color: "var(--ink-soft)", whiteSpace: "pre-wrap", marginTop: 12 }}>
+          <p style={{ fontSize: 14.5, color: "var(--ink-soft)", whiteSpace: "pre-wrap", marginTop: 14, lineHeight: 1.6 }}>
             {task.description}
           </p>
         )}

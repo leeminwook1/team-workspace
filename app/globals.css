@@ -242,6 +242,12 @@ a { color: inherit; text-decoration: none; }
 .auth-card .sub { color: var(--ink-soft); font-size: 14.5px; margin: 0 0 26px; }
 .auth-foot { margin-top: 20px; font-size: 13.5px; color: var(--ink-soft); text-align: center; }
 .auth-foot a { color: var(--primary); font-weight: 700; }
+.icon-badge {
+  width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center;
+  margin: 0 auto 18px;
+}
+.icon-badge.ok { background: var(--success-soft); color: var(--st-done); }
+.icon-badge.wait { background: var(--accent-soft); color: var(--primary); }
 
 .login-wrap { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; }
 .login-hero {
@@ -278,6 +284,10 @@ a { color: inherit; text-decoration: none; }
 .modal h2 { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 18px; }
 .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
 .modal-actions .btn { flex: 1; }
+.detail-meta { display: flex; flex-direction: column; gap: 9px; margin: 0; }
+.detail-meta > div { display: flex; gap: 12px; font-size: 14px; }
+.detail-meta dt { flex: none; width: 44px; color: var(--ink-faint); font-weight: 600; margin: 0; }
+.detail-meta dd { margin: 0; color: var(--ink); font-weight: 500; }
 @keyframes fade-in { from { opacity: 0; } }
 @media (max-width: 640px) {
   .modal-overlay { place-items: end stretch; padding: 0; }

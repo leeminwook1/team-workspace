@@ -29,8 +29,15 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token }) {
-      if (token?.sub) {
+    // 성능: 매 요청마다 DB를 치지 않고, 로그인/명시적 갱신/60초 경과 시에만 역할·상태를 새로고침.
+    // (승인·권한 변경은 최대 60초 뒤 반영 — 즉시 반영이 필요하면 재로그인)
+    async jwt({ token, user, trigger }) {
+      const now = Date.now();
+      const STALE_MS = 60_000;
+      const needsRefresh =
+        !!user || trigger === "update" || !token.refreshedAt || now - (token.refreshedAt as number) > STALE_MS;
+
+      if (token?.sub && needsRefresh) {
         await connectDB();
         const u: any = await User.findById(token.sub).lean();
         if (u) {
@@ -41,6 +48,7 @@ export const authOptions: NextAuthOptions = {
             teamId: String(t.teamId),
             role: t.role,
           }));
+          token.refreshedAt = now;
         }
       }
       return token;

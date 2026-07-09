@@ -6,12 +6,12 @@ import { useRouter } from "next/navigation";
 type ResourceRow = { id: string; name: string; category: string; isActive: boolean };
 
 const CATEGORIES = [
-  { value: "studio", label: "🎬 스튜디오" },
-  { value: "camera", label: "📷 촬영장비" },
-  { value: "venue", label: "🎭 공연장" },
-  { value: "audio", label: "🎙️ 음향장비" },
-  { value: "edit", label: "🖥️ 편집실" },
-  { value: "etc", label: "📦 기타" },
+  { value: "studio", label: "스튜디오" },
+  { value: "camera", label: "촬영장비" },
+  { value: "venue", label: "공연장" },
+  { value: "audio", label: "음향장비" },
+  { value: "edit", label: "편집실" },
+  { value: "etc", label: "기타" },
 ];
 const CAT_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.value, c.label]));
 

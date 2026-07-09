@@ -22,5 +22,6 @@ declare module "next-auth/jwt" {
     orgRole?: OrgRole;
     status?: "pending" | "active" | "disabled";
     teams?: TeamMembership[];
+    refreshedAt?: number;
   }
 }

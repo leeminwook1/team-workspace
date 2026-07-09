@@ -16,8 +16,8 @@ type ReservationItem = {
 };
 
 const CATEGORY_LABEL: Record<string, string> = {
-  studio: "🎬 스튜디오", camera: "📷 촬영장비", venue: "🎭 공연장",
-  audio: "🎙️ 음향장비", edit: "🖥️ 편집실", etc: "📦 기타",
+  studio: "스튜디오", camera: "촬영장비", venue: "공연장",
+  audio: "음향장비", edit: "편집실", etc: "기타",
 };
 
 export default function ReservationBoard({
@@ -124,16 +124,11 @@ export default function ReservationBoard({
         {resources.map((r) => (
           <button
             key={r.id}
-            className="chip"
-            style={{
-              cursor: "pointer",
-              background: selected === r.id ? "var(--accent-soft)" : undefined,
-              borderColor: selected === r.id ? "var(--primary)" : undefined,
-              color: selected === r.id ? "var(--primary)" : undefined,
-            }}
+            className={`chip chip-btn${selected === r.id ? " sel" : ""}`}
             onClick={() => setSelected(r.id)}
           >
-            {CATEGORY_LABEL[r.category]?.split(" ")[0] ?? "📦"} {r.name}
+            {r.name}
+            <span style={{ color: "var(--ink-faint)", fontWeight: 500 }}>· {CATEGORY_LABEL[r.category] ?? "기타"}</span>
           </button>
         ))}
       </div>
@@ -167,8 +162,8 @@ export default function ReservationBoard({
               <label>메모 (선택)</label>
               <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="예: 신제품 화보 촬영" />
             </div>
-            {err && <p className="err-msg">⚠️ {err}</p>}
-            {ok && <p className="ok-msg">✅ {ok}</p>}
+            {err && <p className="err-msg">{err}</p>}
+            {ok && <p className="ok-msg">{ok}</p>}
             <button className="btn btn-primary" disabled={busy}>{busy ? "예약 중…" : "예약"}</button>
           </form>
         </div>

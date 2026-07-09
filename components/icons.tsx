@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
-export type IconName = "calendar" | "resources" | "admin" | "logout" | "plus" | "chevronL" | "chevronR";
+export type IconName =
+  | "calendar" | "resources" | "admin" | "logout" | "plus" | "chevronL" | "chevronR"
+  | "check" | "clock" | "mapPin" | "userLine";
 
 const PATHS: Record<IconName, ReactNode> = {
   calendar: (
@@ -32,6 +34,25 @@ const PATHS: Record<IconName, ReactNode> = {
   plus: <path d="M12 5.5v13M5.5 12h13" />,
   chevronL: <path d="M15 5l-7 7 7 7" />,
   chevronR: <path d="M9 5l7 7-7 7" />,
+  check: <path d="M4.5 12.5l5 5 10-11" />,
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5.2l3.4 2" />
+    </>
+  ),
+  mapPin: (
+    <>
+      <path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z" />
+      <circle cx="12" cy="10" r="2.5" />
+    </>
+  ),
+  userLine: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 22, strokeWidth = 1.8 }: { name: IconName; size?: number; strokeWidth?: number }) {

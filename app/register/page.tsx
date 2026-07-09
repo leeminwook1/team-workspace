@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Icon } from "@/components/icons";
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ name: "", email: "", password: "" });
@@ -31,7 +32,7 @@ export default function RegisterPage() {
     return (
       <div className="auth-wrap">
         <div className="card auth-card" style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 44, marginBottom: 12 }}>✅</div>
+          <div className="icon-badge ok"><Icon name="check" size={30} strokeWidth={2.4} /></div>
           <h1>가입 신청 완료</h1>
           <p className="sub">
             관리자가 팀과 역할을 배정해 승인하면

@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import LogoutButton from "@/components/LogoutButton";
+import { Icon } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function PendingPage() {
   return (
     <div className="auth-wrap">
       <div className="card auth-card" style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 44, marginBottom: 12 }}>⏳</div>
+        <div className="icon-badge wait"><Icon name="clock" size={30} strokeWidth={1.9} /></div>
         <h1>승인 대기 중</h1>
         <p className="sub">
           {session.user.name}님, 가입 신청이 접수되었습니다.

@@ -28,7 +28,8 @@ export async function connectDB(): Promise<typeof mongoose> {
   if (!cached.promise) {
     cached.promise = mongoose.connect(MONGODB_URI, {
       bufferCommands: false,
-      // dbName은 URI에 포함돼 있으면 생략 가능
+      serverSelectionTimeoutMS: 8000, // 콜드스타트 시 무한 대기 방지 (기본 30s → 8s)
+      maxPoolSize: 5, // 서버리스: 함수당 커넥션 풀을 작게
     });
   }
 

@@ -73,7 +73,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
   if (users.length === 0) {
     return (
       <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--ink-faint)" }}>
-        승인 대기 중인 가입 신청이 없습니다. 🎉
+        승인 대기 중인 가입 신청이 없습니다.
       </div>
     );
   }
