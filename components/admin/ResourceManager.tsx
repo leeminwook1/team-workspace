@@ -81,10 +81,7 @@ export default function ResourceManager({ initialResources }: { initialResources
                 <td style={{ fontWeight: 700 }}>{r.name}</td>
                 <td style={{ color: "var(--ink-soft)" }}>{CAT_LABEL[r.category] ?? r.category}</td>
                 <td>
-                  <span className="status-pill" style={{
-                    background: r.isActive ? "rgba(21,196,126,.14)" : "var(--paper)",
-                    color: r.isActive ? "var(--st-done)" : "var(--ink-faint)",
-                  }}>
+                  <span className={`status-pill ${r.isActive ? "pill-on" : "pill-off"}`}>
                     {r.isActive ? "활성" : "비활성"}
                   </span>
                 </td>

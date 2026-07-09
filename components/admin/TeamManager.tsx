@@ -97,10 +97,7 @@ export default function TeamManager({ initialTeams }: { initialTeams: TeamRow[] 
                 </td>
                 <td style={{ color: "var(--ink-soft)" }}>{t.slug}</td>
                 <td>
-                  <span className="status-pill" style={{
-                    background: t.isActive ? "rgba(21,196,126,.14)" : "var(--paper)",
-                    color: t.isActive ? "var(--st-done)" : "var(--ink-faint)",
-                  }}>
+                  <span className={`status-pill ${t.isActive ? "pill-on" : "pill-off"}`}>
                     {t.isActive ? "활성" : "비활성"}
                   </span>
                 </td>

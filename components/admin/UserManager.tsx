@@ -74,10 +74,7 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
                   </div>
                 </td>
                 <td>
-                  <span className="status-pill" style={{
-                    background: u.status === "active" ? "rgba(21,196,126,.14)" : "var(--paper)",
-                    color: u.status === "active" ? "var(--st-done)" : "var(--ink-faint)",
-                  }}>
+                  <span className={`status-pill ${u.status === "active" ? "pill-on" : "pill-off"}`}>
                     {u.status === "active" ? "활성" : "비활성"}
                   </span>
                 </td>

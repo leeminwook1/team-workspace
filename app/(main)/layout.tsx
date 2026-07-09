@@ -38,6 +38,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         <NavLinks items={navItems} />
         <div className="side-foot">
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 6px 10px", minWidth: 0 }}>
+            <span className="avatar" aria-hidden>{user.name.slice(0, 1)}</span>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap" }}>{user.name}</div>
               <div className="side-user-role" style={{ fontSize: 11.5, color: "var(--ink-faint)", whiteSpace: "nowrap" }}>

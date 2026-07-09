@@ -2,31 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Toss design tokens (승인된 design-draft.html 기준) ── */
+/* ══════════════════════════════════════════════════════════
+   Toss design tokens — 승인된 design-draft.html 기준
+   라이트/다크 모두 지원 (prefers-color-scheme)
+   ══════════════════════════════════════════════════════════ */
 :root {
-  --paper: #f2f4f6;
+  --paper: #f2f4f6;        /* Grey100 — 앱 배경 */
   --surface: #ffffff;
-  --surface-2: #f9fafb;
-  --ink: #191f28;
-  --ink-soft: #4e5968;
-  --ink-faint: #8b95a1;
-  --line: #e5e8eb;
-  --line-strong: #d1d6db;
-  --primary: #3182f6;
+  --surface-2: #f9fafb;    /* Grey50 — 인풋 fill */
+  --ink: #191f28;          /* Grey900 */
+  --ink-soft: #4e5968;     /* Grey700 */
+  --ink-faint: #8b95a1;    /* Grey500 */
+  --line: #e5e8eb;         /* Grey200 */
+  --line-strong: #d1d6db;  /* Grey300 */
+  --primary: #3182f6;      /* Toss Blue */
   --primary-ink: #ffffff;
   --primary-press: #1b64da;
-  --accent-soft: #e8f3ff;
+  --accent-soft: #e8f3ff;  /* Blue50 — 틴트 fill */
   --focus: #3182f6;
+
   --st-todo: #8b95a1;
   --st-prog: #ff8a00;
   --st-done: #15c47e;
   --danger: #f04452;
+  --danger-soft: rgba(240, 68, 82, 0.1);
+  --danger-soft-2: rgba(240, 68, 82, 0.18);
+  --success-soft: rgba(21, 196, 126, 0.14);
+
+  --overlay: rgba(25, 31, 40, 0.45);
   --r-sm: 10px;
   --r-md: 14px;
   --r-lg: 20px;
   --shadow: 0 1px 3px rgba(0, 27, 55, 0.06), 0 6px 20px rgba(0, 27, 55, 0.05);
+  --shadow-lift: 0 8px 28px rgba(0, 27, 55, 0.14);
   --font: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont,
     system-ui, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #16181d;
+    --surface: #1e2228;
+    --surface-2: #191c21;
+    --ink: #f2f4f6;
+    --ink-soft: #b0b8c1;
+    --ink-faint: #6b7684;
+    --line: #2e333a;
+    --line-strong: #3a4048;
+    --primary: #4593fc;       /* 다크에선 한 톤 밝은 Toss Blue */
+    --primary-ink: #ffffff;
+    --primary-press: #3182f6;
+    --accent-soft: rgba(69, 147, 252, 0.14);
+    --focus: #4593fc;
+    --st-todo: #8b95a1;
+    --st-prog: #ffa23a;
+    --st-done: #2fd48a;
+    --danger: #ff5b68;
+    --danger-soft: rgba(255, 91, 104, 0.14);
+    --danger-soft-2: rgba(255, 91, 104, 0.24);
+    --success-soft: rgba(47, 212, 138, 0.16);
+    --overlay: rgba(0, 0, 0, 0.6);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 6px 20px rgba(0, 0, 0, 0.36);
+    --shadow-lift: 0 10px 32px rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -41,32 +81,36 @@ body {
 }
 button { font-family: inherit; cursor: pointer; }
 a { color: inherit; text-decoration: none; }
+::selection { background: var(--accent-soft); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 
-/* ── 공용 컴포넌트 ── */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow);
-}
+/* ── 버튼 — Toss: 둥근 사각(14px) + 볼드 + 눌림 스케일 ── */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   padding: 11px 18px; font-size: 14.5px; font-weight: 600; border: 0;
   border-radius: var(--r-md); letter-spacing: -0.01em;
   transition: transform 0.12s, background 0.18s, opacity 0.18s;
 }
-.btn:active { transform: scale(0.98); }
+.btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-primary { background: var(--primary); color: var(--primary-ink); }
 .btn-primary:hover:not(:disabled) { background: var(--primary-press); }
 .btn-ghost { background: var(--paper); color: var(--ink-soft); }
 .btn-ghost:hover:not(:disabled) { background: var(--line); }
-.btn-danger { background: #ffeef0; color: var(--danger); }
-.btn-danger:hover:not(:disabled) { background: #ffdce0; }
+.btn-danger { background: var(--danger-soft); color: var(--danger); }
+.btn-danger:hover:not(:disabled) { background: var(--danger-soft-2); }
 .btn-sm { padding: 7px 13px; font-size: 13px; border-radius: var(--r-sm); }
-.btn-lg { width: 100%; padding: 15px; font-size: 16px; }
+.btn-lg { width: 100%; padding: 15px; font-size: 16px; border-radius: var(--r-md); }
 
+/* ── 카드 ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+}
+
+/* ── 폼 — Toss: 회색 fill 인풋 + 블루 포커스링 ── */
 .field { margin-bottom: 14px; }
 .field label { display: block; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); margin-bottom: 6px; }
 .field input, .field select, .field textarea {
@@ -77,22 +121,31 @@ a { color: inherit; text-decoration: none; }
 .field input::placeholder { color: var(--ink-faint); }
 .field input:focus, .field select:focus, .field textarea:focus {
   outline: none; border-color: var(--primary); background: var(--surface);
-  box-shadow: 0 0 0 4px rgba(49, 130, 246, 0.14);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 14%, transparent);
 }
 .field textarea { resize: vertical; min-height: 80px; }
 
 .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .form-grid-2.wide-first { grid-template-columns: 2fr 1fr; }
 
+/* ── 칩 · 상태 배지 · 아바타 ── */
 .chip {
   display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600;
   padding: 5px 11px 5px 9px; border-radius: 9999px; background: var(--surface);
   border: 1px solid var(--line); color: var(--ink-soft); white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
 }
 .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .status-pill {
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
   padding: 4px 10px; border-radius: 9999px; white-space: nowrap;
+}
+.pill-on { background: var(--success-soft); color: var(--st-done); }
+.pill-off { background: var(--paper); color: var(--ink-faint); }
+.avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex: none;
+  background: var(--accent-soft); color: var(--primary);
+  display: grid; place-items: center; font-weight: 800; font-size: 14px;
 }
 .err-msg { color: var(--danger); font-size: 13.5px; margin: 8px 0; }
 .ok-msg { color: var(--st-done); font-size: 13.5px; margin: 8px 0; }
@@ -114,11 +167,12 @@ a { color: inherit; text-decoration: none; }
 .nav a {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;
   border-radius: var(--r-sm); color: var(--ink-soft); font-size: 14px; font-weight: 600;
+  transition: background 0.15s, color 0.15s;
 }
 .nav a.on, .nav a:hover { background: var(--accent-soft); color: var(--primary); }
 .side-foot { margin-top: auto; border-top: 1px solid var(--line); padding-top: 12px; }
 .main { min-width: 0; padding: 24px 28px; }
-.page-title { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 18px; }
+.page-title { font-size: 24px; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 18px; }
 
 @media (max-width: 880px) {
   .shell { grid-template-columns: 1fr; }
@@ -134,54 +188,92 @@ a { color: inherit; text-decoration: none; }
     margin-top: 0; margin-left: auto; border-top: 0; padding-top: 0;
     flex: none; display: flex; align-items: center; gap: 8px;
   }
-  .side-foot .side-user-role { display: none; } /* 모바일에선 이름만, 역할 라벨은 숨겨 공간 절약 */
+  .side-foot .side-user-role { display: none; }
   .main { padding: 16px; }
-  .page-title { font-size: 19px; margin-bottom: 14px; }
+  .page-title { font-size: 20px; margin-bottom: 14px; }
   .form-grid-2, .form-grid-2.wide-first { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 420px) {
   .auth-card { padding: 26px 20px; }
-  .modal { padding: 18px; }
   .table { font-size: 12.5px; }
   .table th, .table td { padding: 8px 6px; }
 }
 
-/* ── 인증 화면 ── */
-.auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+/* ── 인증 화면 — Toss 히어로(시안 그대로): 그라데이션 + 큰 볼드 헤드라인 ── */
+.auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--paper); }
 .auth-card { width: 100%; max-width: 400px; padding: 36px 32px; }
-.auth-card h1 { font-size: 25px; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 6px; }
+.auth-card h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 6px; }
 .auth-card .sub { color: var(--ink-soft); font-size: 14.5px; margin: 0 0 26px; }
 .auth-foot { margin-top: 20px; font-size: 13.5px; color: var(--ink-soft); text-align: center; }
 .auth-foot a { color: var(--primary); font-weight: 600; }
 
-/* ── 모달 ── */
+.login-wrap { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; }
+.login-hero {
+  padding: 64px 60px; display: flex; flex-direction: column; justify-content: space-between;
+  background: linear-gradient(180deg, var(--accent-soft), var(--surface-2) 60%);
+}
+.login-hero h1 {
+  font-size: clamp(34px, 4vw, 52px); line-height: 1.18; letter-spacing: -0.025em;
+  font-weight: 700; margin: 0 0 18px; text-wrap: balance; color: var(--ink);
+}
+.login-hero h1 em { font-style: normal; color: var(--primary); }
+.login-hero p { color: var(--ink-soft); font-size: 17px; line-height: 1.55; letter-spacing: -0.01em; max-width: 40ch; margin: 0; }
+.team-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
+.login-hero .hero-foot { font-size: 12.5px; color: var(--ink-faint); }
+.login-form-panel { display: grid; place-items: center; padding: 40px 24px; }
+@media (max-width: 880px) {
+  .login-wrap { grid-template-columns: 1fr; }
+  .login-hero { display: none; }
+}
+
+/* ── 모달 — 데스크톱: 센터 / 모바일: Toss 바텀시트 ── */
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(25, 31, 40, 0.45); z-index: 100;
+  position: fixed; inset: 0; background: var(--overlay); z-index: 100;
   display: grid; place-items: center; padding: 16px;
 }
 .modal {
   width: 100%; max-width: 480px; max-height: 88vh; overflow-y: auto;
   background: var(--surface); border-radius: var(--r-lg); padding: 26px;
-  box-shadow: 0 8px 28px rgba(0, 27, 55, 0.2);
+  box-shadow: var(--shadow-lift);
 }
 .modal h2 { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 18px; }
 .modal-actions { display: flex; gap: 8px; margin-top: 18px; }
 .modal-actions .btn { flex: 1; }
+@media (max-width: 640px) {
+  .modal-overlay { place-items: end stretch; padding: 0; }
+  .modal {
+    max-width: 100%; max-height: 92vh;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    padding: 22px 20px calc(22px + env(safe-area-inset-bottom));
+    animation: sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .modal::before {
+    content: ""; display: block; width: 40px; height: 4px; border-radius: 2px;
+    background: var(--line-strong); margin: 0 auto 16px;
+  }
+}
+@keyframes sheet-up {
+  from { transform: translateY(48px); opacity: 0.5; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal { animation: none; }
+}
 
 /* ── 테이블 ── */
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .table th {
-  text-align: left; font-size: 12px; font-weight: 700; color: var(--ink-faint);
-  padding: 10px 12px; border-bottom: 1px solid var(--line);
+  text-align: left; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--ink-faint); padding: 10px 12px; border-bottom: 1px solid var(--line);
 }
 .table td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .table tr:last-child td { border-bottom: 0; }
 
-/* ── FullCalendar Toss 테마 ── */
+/* ── FullCalendar Toss 테마 — 틴트 이벤트 칩 ── */
 .fc {
   --fc-border-color: var(--line);
   --fc-page-bg-color: var(--surface);
+  --fc-neutral-bg-color: var(--surface-2);
   --fc-today-bg-color: var(--accent-soft);
   --fc-button-bg-color: var(--surface);
   --fc-button-border-color: var(--line-strong);
@@ -197,8 +289,15 @@ a { color: inherit; text-decoration: none; }
 .fc .fc-button { border-radius: var(--r-sm); font-weight: 600; font-size: 13px; padding: 7px 12px; }
 .fc .fc-button:focus { box-shadow: none; }
 .fc .fc-daygrid-day-number, .fc .fc-col-header-cell-cushion { color: var(--ink-soft); font-size: 13px; font-weight: 600; padding: 6px 8px; }
-.fc .fc-event { border: 0; border-radius: 7px; padding: 2px 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.fc .fc-event {
+  border: 0; border-radius: 8px; padding: 2px 7px; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: filter 0.15s;
+}
+.fc .fc-event:hover { filter: brightness(0.96); }
+.fc .ev-done { opacity: 0.55; }
+.fc .ev-done .fc-event-title { text-decoration: line-through; }
 .fc-theme-standard .fc-scrollgrid { border-radius: var(--r-md); overflow: hidden; }
+.fc .fc-daygrid-more-link { color: var(--ink-faint); font-size: 11.5px; font-weight: 600; }
 
 @media (max-width: 640px) {
   .fc .fc-toolbar { justify-content: center; }

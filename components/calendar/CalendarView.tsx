@@ -81,12 +81,14 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
           }
           return {
             id: t.id,
-            title: (t.status === "done" ? "✓ " : "") + t.title,
+            title: t.title,
             start: t.startDate,
             end,
             allDay: t.allDay,
-            backgroundColor: t.team!.color,
-            textColor: "#fff",
+            // Toss 스타일: 팀색 틴트 배경 + 팀색 텍스트 (시안 .ev 칩과 동일)
+            backgroundColor: t.team!.color + "26",
+            textColor: t.team!.color,
+            classNames: t.status === "done" ? ["ev-done"] : [],
             extendedProps: { taskId: t.id },
           };
         }),
