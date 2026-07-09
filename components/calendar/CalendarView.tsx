@@ -62,6 +62,16 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   const [editing, setEditing] = useState<TaskItem | null>(null);
   const [title, setTitle] = useState("");
   const [view, setView] = useState("dayGridMonth");
+  const [maxEvents, setMaxEvents] = useState(4); // 하루 표시 최대 개수 (초과 시 +N개)
+
+  // 화면 크기에 따라 하루 표시 개수 조절 (셀 높이 고정과 맞춤)
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const update = () => setMaxEvents(mq.matches ? 2 : 4);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   const api = () => calRef.current?.getApi();
   function changeView(v: string) {
@@ -142,7 +152,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   }
 
   return (
-    <div>
+    <div className="cal-wrap">
       {/* 커스텀 Toss 헤더 */}
       <div className="cal-toolbar">
         <button className="cal-arrow" aria-label="이전" onClick={() => api()?.prev()}>
@@ -205,7 +215,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
         </div>
       )}
 
-      <div className="card" style={{ padding: 14, marginTop: 14 }}>
+      <div className="card cal-card" style={{ padding: 14, marginTop: 14 }}>
         <FullCalendar
           ref={calRef}
           plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
@@ -215,6 +225,9 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           headerToolbar={false}
           dayCellContent={(arg) => String(arg.date.getDate())}
           noEventsContent="이 기간에 등록된 업무가 없습니다"
+          dayMaxEvents={maxEvents}
+          fixedWeekCount={false}
+          moreLinkContent={(arg) => `+${arg.num}개`}
           events={events}
           datesSet={(arg) => {
             setTitle(arg.view.title);
@@ -231,7 +244,6 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
             const t = tasks.find((x) => x.id === arg.event.extendedProps.taskId);
             if (t) setDetail(t);
           }}
-          dayMaxEvents={3}
         />
       </div>
 
