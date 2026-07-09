@@ -16,12 +16,9 @@ export default async function AdminPendingPage() {
   const teams = await Team.find({ isActive: true }).sort({ createdAt: 1 }).lean();
 
   return (
-    <div>
-      <h1 className="page-title">가입 승인</h1>
-      <ApprovalList
-        teams={teams.map((t: any) => ({ id: String(t._id), name: t.name, color: t.color }))}
-        isAdmin={session.user.orgRole === "admin"}
-      />
-    </div>
+    <ApprovalList
+      teams={teams.map((t: any) => ({ id: String(t._id), name: t.name, color: t.color }))}
+      isAdmin={session.user.orgRole === "admin"}
+    />
   );
 }

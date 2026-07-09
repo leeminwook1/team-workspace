@@ -1,9 +1,9 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { authOptions } from "@/lib/auth";
 import { canApproveUsers, canManageTeams, type SessionUser } from "@/lib/permissions";
 import LogoutButton from "@/components/LogoutButton";
+import NavLinks, { type NavItem } from "@/components/NavLinks";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +20,13 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   if (session.user.status !== "active") redirect("/pending");
 
   const user = session.user as SessionUser & { name: string };
-  const showApprove = canApproveUsers(user);
-  const showTeamAdmin = canManageTeams(user);
+  const showAdmin = canApproveUsers(user) || canManageTeams(user);
+
+  const navItems: NavItem[] = [
+    { href: "/calendar", label: "달력", icon: "📅" },
+    { href: "/resources", label: "자원 예약", icon: "🎛️" },
+    ...(showAdmin ? [{ href: "/admin", label: "관리자", icon: "⚙️" }] : []),
+  ];
 
   return (
     <div className="shell">
@@ -30,17 +35,12 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           <span className="glyph">T</span>
           <span className="word">Team<b>Cal</b></span>
         </div>
-        <nav className="nav">
-          <Link href="/calendar">📅 달력</Link>
-          <Link href="/resources">🎛️ 자원 예약</Link>
-          {showApprove && <Link href="/admin/pending">✅ 가입 승인</Link>}
-          {showTeamAdmin && <Link href="/admin/teams">👥 팀 관리</Link>}
-        </nav>
+        <NavLinks items={navItems} />
         <div className="side-foot">
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 6px 10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 6px 10px", minWidth: 0 }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700 }}>{user.name}</div>
-              <div style={{ fontSize: 11.5, color: "var(--ink-faint)" }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap" }}>{user.name}</div>
+              <div className="side-user-role" style={{ fontSize: 11.5, color: "var(--ink-faint)", whiteSpace: "nowrap" }}>
                 {user.orgRole ? ORG_LABEL[user.orgRole] : "팀원"}
               </div>
             </div>

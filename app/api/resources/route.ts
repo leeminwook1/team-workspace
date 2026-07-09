@@ -2,6 +2,7 @@ import { connectDB } from "@/lib/mongodb";
 import { Resource } from "@/models/Resource";
 import { requireActiveUser, json } from "@/lib/api";
 import { canManageTeams } from "@/lib/permissions";
+import { resourceSchema } from "@/lib/validations";
 
 // GET /api/resources — 자원·장비 목록 (로그인)
 export async function GET() {
@@ -26,9 +27,10 @@ export async function POST(req: Request) {
   if (!canManageTeams(user)) return json({ error: "자원 등록 권한이 없습니다." }, 403);
 
   const body = await req.json().catch(() => null);
-  if (!body?.name) return json({ error: "자원 이름을 입력하세요." }, 400);
+  const parsed = resourceSchema.safeParse(body);
+  if (!parsed.success) return json({ error: parsed.error.issues[0].message }, 400);
 
   await connectDB();
-  const r = await Resource.create({ name: body.name, category: body.category ?? "etc" });
+  const r = await Resource.create(parsed.data);
   return json({ id: String(r._id) }, 201);
 }

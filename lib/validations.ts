@@ -55,6 +55,24 @@ export const approveSchema = z.object({
   orgRole: z.enum(["admin", "manager", "deputy", "secretary"]).nullable().optional(),
 });
 
+export const userUpdateSchema = z.object({
+  teams: z
+    .array(
+      z.object({
+        teamId: z.string().min(1),
+        role: z.enum(["leader", "vice_leader", "member"]),
+      })
+    )
+    .optional(),
+  orgRole: z.enum(["admin", "manager", "deputy", "secretary"]).nullable().optional(),
+  status: z.enum(["active", "disabled"]).optional(),
+});
+
+export const resourceSchema = z.object({
+  name: z.string().min(1, "자원 이름을 입력하세요").max(60),
+  category: z.enum(["studio", "camera", "venue", "audio", "edit", "etc"]),
+});
+
 export const reservationSchema = z.object({
   resourceId: z.string().min(1),
   teamId: z.string().min(1),

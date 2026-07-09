@@ -3,26 +3,25 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { canManageTeams, type SessionUser } from "@/lib/permissions";
 import { connectDB } from "@/lib/mongodb";
-import { Team } from "@/models/Team";
-import TeamManager from "@/components/admin/TeamManager";
+import { Resource } from "@/models/Resource";
+import ResourceManager from "@/components/admin/ResourceManager";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminTeamsPage() {
+export default async function AdminResourcesPage() {
   const session = await getServerSession(authOptions);
   if (!session || !canManageTeams(session.user as SessionUser)) redirect("/calendar");
 
   await connectDB();
-  const teams = await Team.find().sort({ createdAt: 1 }).lean();
+  const resources = await Resource.find().sort({ category: 1, name: 1 }).lean();
 
   return (
-    <TeamManager
-      initialTeams={teams.map((t: any) => ({
-        id: String(t._id),
-        name: t.name,
-        slug: t.slug,
-        color: t.color,
-        isActive: t.isActive,
+    <ResourceManager
+      initialResources={resources.map((r: any) => ({
+        id: String(r._id),
+        name: r.name,
+        category: r.category,
+        isActive: r.isActive,
       }))}
     />
   );
