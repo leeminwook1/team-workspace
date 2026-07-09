@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -10,11 +10,12 @@ import koLocale from "@fullcalendar/core/locales/ko";
 import { Icon } from "@/components/icons";
 
 type TeamInfo = { id: string; name: string; slug: string; color: string };
+type TeamRef = { id: string; name: string; color: string };
 type TaskItem = {
   id: string;
   title: string;
   description: string;
-  team: { id: string; name: string; color: string } | null;
+  teams: TeamRef[];
   assignees: { id: string; name: string }[];
   startDate: string;
   endDate: string;
@@ -79,7 +80,7 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
   const events = useMemo(
     () =>
       tasks
-        .filter((t) => t.team && visible.has(t.team.id))
+        .filter((t) => t.teams.some((tm) => visible.has(tm.id)))
         .map((t) => {
           // allDay 이벤트의 end는 exclusive → 하루 더해 표시
           let end = t.endDate;
@@ -88,15 +89,17 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
             d.setDate(d.getDate() + 1);
             end = d.toISOString();
           }
+          // 색상: 현재 보이는 팀 중 첫 팀 색 (Toss 틴트 배경 + 컬러 텍스트)
+          const primary = t.teams.find((tm) => visible.has(tm.id)) ?? t.teams[0];
+          const color = primary?.color ?? "#8b95a1";
           return {
             id: t.id,
             title: t.title,
             start: t.startDate,
             end,
             allDay: t.allDay,
-            // Toss 스타일: 팀색 틴트 배경 + 팀색 텍스트 (시안 .ev 칩과 동일)
-            backgroundColor: t.team!.color + "26",
-            textColor: t.team!.color,
+            backgroundColor: color + "26",
+            textColor: color,
             classNames: t.status === "done" ? ["ev-done"] : [],
             extendedProps: { taskId: t.id },
           };
@@ -220,44 +223,70 @@ function TaskCreateModal({
 }: {
   teams: TeamInfo[]; defaultDate: string; onClose: () => void; onCreated: () => void;
 }) {
-  const [form, setForm] = useState({
-    title: "", teamId: teams[0]?.id ?? "", startDate: defaultDate, endDate: defaultDate,
-    description: "", priority: "normal", location: "",
-  });
+  const [title, setTitle] = useState("");
+  const [teamIds, setTeamIds] = useState<string[]>(teams[0] ? [teams[0].id] : []);
+  const [allDay, setAllDay] = useState(true);
+  const [startDate, setStartDate] = useState(defaultDate);
+  const [endDate, setEndDate] = useState(defaultDate);
+  const [startTime, setStartTime] = useState("10:00");
+  const [endTime, setEndTime] = useState("11:00");
+  const [priority, setPriority] = useState("normal");
+  const [location, setLocation] = useState("");
+  const [description, setDescription] = useState("");
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
   const [assignees, setAssignees] = useState<Set<string>>(new Set());
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const loadMembers = useCallback(async (teamId: string) => {
-    setMembers([]);
-    setAssignees(new Set());
-    if (!teamId) return;
-    const res = await fetch(`/api/users?team=${teamId}`);
-    if (res.ok) {
-      const data = await res.json();
-      setMembers(data.users ?? []);
-    }
+  // 선택된 팀들의 담당 후보(멤버) union 로드
+  const loadMembers = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) { setMembers([]); return; }
+    const results = await Promise.all(
+      ids.map((id) =>
+        fetch(`/api/users?team=${id}`).then((r) => (r.ok ? r.json() : { users: [] })).catch(() => ({ users: [] }))
+      )
+    );
+    const map = new Map<string, { id: string; name: string }>();
+    results.forEach((r) => (r.users ?? []).forEach((u: any) => map.set(u.id, { id: u.id, name: u.name })));
+    setMembers(Array.from(map.values()));
   }, []);
 
-  // 최초 팀 멤버 로드
-  useMemo(() => { loadMembers(form.teamId); }, []); // eslint-disable-line
+  useEffect(() => { loadMembers(teamIds); }, [teamIds, loadMembers]);
+
+  function toggleTeam(id: string) {
+    setTeamIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+  function toggleAssignee(id: string) {
+    setAssignees((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
+    if (teamIds.length === 0) { setErr("팀을 하나 이상 선택하세요."); return; }
     setLoading(true);
+    // 시간 지정 업무는 브라우저 로컬시각을 ISO(UTC)로 변환해 전송 → 서버 타임존과 무관하게 정확
+    const when = allDay
+      ? { startDate, endDate, allDay: true }
+      : {
+          startDate: new Date(`${startDate}T${startTime}`).toISOString(),
+          endDate: new Date(`${startDate}T${endTime}`).toISOString(),
+          allDay: false,
+        };
     const res = await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, assignees: Array.from(assignees), allDay: true }),
+      body: JSON.stringify({
+        title, teamIds, assignees: Array.from(assignees), priority, location, description, ...when,
+      }),
     });
     const data = await res.json();
     setLoading(false);
-    if (!res.ok) {
-      setErr(data.error ?? "등록에 실패했습니다.");
-      return;
-    }
+    if (!res.ok) { setErr(data.error ?? "등록에 실패했습니다."); return; }
     onCreated();
   }
 
@@ -268,57 +297,80 @@ function TaskCreateModal({
         <form onSubmit={onSubmit}>
           <div className="field">
             <label>제목</label>
-            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="예: 홍보영상 본 촬영" required />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 홍보영상 본 촬영" required />
           </div>
+
           <div className="field">
-            <label>팀</label>
-            <select
-              value={form.teamId}
-              onChange={(e) => { setForm({ ...form, teamId: e.target.value }); loadMembers(e.target.value); }}
-            >
-              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </div>
-          <div className="form-grid-2">
-            <div className="field">
-              <label>시작일</label>
-              <input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} required />
-            </div>
-            <div className="field">
-              <label>종료일</label>
-              <input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
+            <label>팀 · 여러 팀 선택 가능</label>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {teams.map((t) => (
+                <button
+                  type="button" key={t.id}
+                  className={`chip chip-btn${teamIds.includes(t.id) ? " sel" : ""}`}
+                  onClick={() => toggleTeam(t.id)}
+                >
+                  <span className="dot" style={{ background: t.color }} />{t.name}
+                </button>
+              ))}
             </div>
           </div>
+
+          <div className="field">
+            <label className="switch-row">
+              <span>하루 종일</span>
+              <input type="checkbox" className="switch" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
+            </label>
+          </div>
+
+          {allDay ? (
+            <div className="form-grid-2">
+              <div className="field">
+                <label>시작일</label>
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+              </div>
+              <div className="field">
+                <label>종료일</label>
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="field">
+                <label>날짜</label>
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+              </div>
+              <div className="form-grid-2">
+                <div className="field">
+                  <label>시작 시각</label>
+                  <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+                </div>
+                <div className="field">
+                  <label>종료 시각</label>
+                  <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
+                </div>
+              </div>
+            </>
+          )}
+
           <div className="field">
             <label>우선순위</label>
-            <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+            <select value={priority} onChange={(e) => setPriority(e.target.value)}>
               <option value="low">낮음</option>
               <option value="normal">보통</option>
               <option value="high">높음</option>
               <option value="urgent">긴급</option>
             </select>
           </div>
+
           {members.length > 0 && (
             <div className="field">
               <label>담당자</label>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {members.map((m) => (
                   <button
-                    type="button" key={m.id} className="chip"
-                    style={{
-                      cursor: "pointer",
-                      background: assignees.has(m.id) ? "var(--accent-soft)" : undefined,
-                      borderColor: assignees.has(m.id) ? "var(--primary)" : undefined,
-                      color: assignees.has(m.id) ? "var(--primary)" : undefined,
-                    }}
-                    onClick={() =>
-                      setAssignees((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(m.id)) next.delete(m.id);
-                        else next.add(m.id);
-                        return next;
-                      })
-                    }
+                    type="button" key={m.id}
+                    className={`chip chip-btn${assignees.has(m.id) ? " sel" : ""}`}
+                    onClick={() => toggleAssignee(m.id)}
                   >
                     {m.name}
                   </button>
@@ -326,13 +378,14 @@ function TaskCreateModal({
               </div>
             </div>
           )}
+
           <div className="field">
             <label>장소 (선택)</label>
-            <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="예: 성수 스튜디오 B" />
+            <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="예: 성수 스튜디오 B" />
           </div>
           <div className="field">
             <label>상세 내용 (선택)</label>
-            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">
@@ -356,13 +409,13 @@ function TaskDetailModal({
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const teamId = task.team?.id ?? "";
+  const teamIds = task.teams.map((t) => t.id);
   const isOrgEditor = ["admin", "manager", "deputy"].includes(user?.orgRole ?? "");
-  const myTeamRole = user?.teams?.find((m) => m.teamId === teamId)?.role ?? null;
-  const canEdit = isOrgEditor || myTeamRole === "leader" || myTeamRole === "vice_leader";
-  const canDelete = user?.orgRole === "admin" || myTeamRole === "leader";
+  const myRoles = teamIds.map((id) => user?.teams?.find((m) => m.teamId === id)?.role ?? null);
+  const canEdit = isOrgEditor || myRoles.some((r) => r === "leader" || r === "vice_leader");
+  const canDelete = user?.orgRole === "admin" || myRoles.some((r) => r === "leader");
   const isAssignee = task.assignees.some((a) => a.id === user?.id);
-  const canStatus = canEdit || (myTeamRole === "member" && isAssignee);
+  const canStatus = canEdit || (myRoles.includes("member") && isAssignee);
 
   async function setStatus(status: string) {
     setBusy(true);
@@ -389,18 +442,22 @@ function TaskDetailModal({
   }
 
   const [stLabel, stColor] = STATUS_LABEL[task.status] ?? STATUS_LABEL.todo;
-  const fmt = (d: string) => new Date(d).toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
+  const fmt = (d: string) =>
+    new Date(d).toLocaleString("ko-KR",
+      task.allDay
+        ? { month: "long", day: "numeric" }
+        : { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-          {task.team && (
-            <span className="chip">
-              <span className="dot" style={{ background: task.team.color }} />
-              {task.team.name}
+          {task.teams.map((tm) => (
+            <span className="chip" key={tm.id}>
+              <span className="dot" style={{ background: tm.color }} />
+              {tm.name}
             </span>
-          )}
+          ))}
           <span className="status-pill" style={{ background: `color-mix(in srgb, ${stColor} 15%, transparent)`, color: stColor }}>
             {stLabel}
           </span>

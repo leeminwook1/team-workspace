@@ -11,9 +11,9 @@ export const registerSchema = z.object({
 export const taskCreateSchema = z.object({
   title: z.string().min(1, "제목을 입력하세요").max(120),
   description: z.string().max(2000).optional().default(""),
-  teamId: z.string().min(1),
+  teamIds: z.array(z.string().min(1)).min(1, "팀을 하나 이상 선택하세요"),
   assignees: z.array(z.string()).optional().default([]),
-  startDate: z.string().min(1), // ISO date
+  startDate: z.string().min(1), // ISO date 또는 datetime
   endDate: z.string().min(1),
   allDay: z.boolean().optional().default(true),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
@@ -23,6 +23,7 @@ export const taskCreateSchema = z.object({
 export const taskUpdateSchema = z.object({
   title: z.string().min(1).max(120).optional(),
   description: z.string().max(2000).optional(),
+  teamIds: z.array(z.string().min(1)).min(1).optional(),
   assignees: z.array(z.string()).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),

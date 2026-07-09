@@ -3,7 +3,7 @@ import { Task } from "@/models/Task";
 import "@/models/Team";
 import "@/models/User";
 import { requireActiveUser, json } from "@/lib/api";
-import { canCreateTask, visibleTeamIds } from "@/lib/permissions";
+import { canCreateTaskInAll, visibleTeamIds } from "@/lib/permissions";
 import { taskCreateSchema } from "@/lib/validations";
 
 function serialize(t: any) {
@@ -11,9 +11,9 @@ function serialize(t: any) {
     id: String(t._id),
     title: t.title,
     description: t.description,
-    team: t.teamId
-      ? { id: String(t.teamId._id ?? t.teamId), name: t.teamId.name, color: t.teamId.color }
-      : null,
+    teams: (t.teamIds ?? [])
+      .filter(Boolean)
+      .map((tm: any) => ({ id: String(tm._id ?? tm), name: tm.name ?? "", color: tm.color ?? "#8b95a1" })),
     assignees: (t.assignees ?? []).map((a: any) => ({
       id: String(a._id ?? a),
       name: a.name ?? "",
@@ -45,17 +45,17 @@ export async function GET(req: Request) {
     q.endDate = { $gt: new Date(from) };
   }
 
-  // 설계 3.2 — 전사 역할은 전체, 그 외는 소속 팀만
+  // 설계 3.2 — 전사 역할은 전체, 그 외는 소속 팀만 (teamIds 배열에 하나라도 포함되면 매치)
   const scope = visibleTeamIds(user);
   if (scope === "all") {
-    if (team) q.teamId = team;
+    if (team) q.teamIds = team;
   } else {
     if (scope.length === 0) return json({ tasks: [] });
-    q.teamId = team && scope.includes(team) ? team : { $in: scope };
+    q.teamIds = team && scope.includes(team) ? team : { $in: scope };
   }
 
   const tasks = await Task.find(q)
-    .populate("teamId", "name color")
+    .populate("teamIds", "name color")
     .populate("assignees", "name")
     .sort({ startDate: 1 })
     .lean();
@@ -73,11 +73,11 @@ export async function POST(req: Request) {
   if (!parsed.success) return json({ error: parsed.error.issues[0].message }, 400);
 
   const d = parsed.data;
-  if (!canCreateTask(user, d.teamId)) {
-    return json({ error: "이 팀에 업무를 등록할 권한이 없습니다." }, 403);
+  if (!canCreateTaskInAll(user, d.teamIds)) {
+    return json({ error: "선택한 팀 중 등록 권한이 없는 팀이 있습니다." }, 403);
   }
   if (new Date(d.endDate) < new Date(d.startDate)) {
-    return json({ error: "종료일이 시작일보다 빠를 수 없습니다." }, 400);
+    return json({ error: "종료가 시작보다 빠를 수 없습니다." }, 400);
   }
 
   await connectDB();

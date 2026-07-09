@@ -50,6 +50,20 @@ export function canChangeStatus(u: SessionUser, teamId: string, assigneeIds: str
   return teamRole(u, teamId) === "member" && assigneeIds.includes(u.id);
 }
 
+// ── 다중 팀 업무(협업) 기준 헬퍼: 팀 배열 중 하나라도 권한이 있으면 허용 ──
+export function canCreateTaskInAll(u: SessionUser, teamIds: string[]) {
+  return teamIds.length > 0 && teamIds.every((id) => canCreateTask(u, id));
+}
+export function canEditTaskAny(u: SessionUser, teamIds: string[]) {
+  return teamIds.some((id) => canEditTask(u, id));
+}
+export function canDeleteTaskAny(u: SessionUser, teamIds: string[]) {
+  return teamIds.some((id) => canDeleteTask(u, id));
+}
+export function canChangeStatusAny(u: SessionUser, teamIds: string[], assigneeIds: string[]) {
+  return teamIds.some((id) => canChangeStatus(u, id, assigneeIds));
+}
+
 export function canApproveUsers(u: SessionUser) {
   return isActive(u) && ORG_EDITORS.includes(u.orgRole ?? "");
 }
