@@ -51,7 +51,7 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
   return (
     <div>
       {err && <p className="err-msg">{err}</p>}
-      <div className="card" style={{ padding: 8, overflowX: "auto" }}>
+      <div className="card table-wrap">
         <table className="table">
           <thead>
             <tr><th>이름</th><th>이메일</th><th>전사 역할</th><th>소속 팀</th><th>상태</th><th style={{ width: 140 }} /></tr>
@@ -192,7 +192,7 @@ function EditRoleModal({
                     <select
                       value={memberships[t.id]}
                       onChange={(e) => setMemberships({ ...memberships, [t.id]: e.target.value })}
-                      style={{ padding: "6px 9px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
+                      className="mini-select"
                     >
                       <option value="member">팀원</option>
                       <option value="vice_leader">부팀장</option>

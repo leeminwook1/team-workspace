@@ -7,6 +7,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import koLocale from "@fullcalendar/core/locales/ko";
+import { Icon } from "@/components/icons";
 
 type TeamInfo = { id: string; name: string; slug: string; color: string };
 type TaskItem = {
@@ -44,6 +45,14 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [createDate, setCreateDate] = useState("");
   const [detail, setDetail] = useState<TaskItem | null>(null);
+  const [title, setTitle] = useState("");
+  const [view, setView] = useState("dayGridMonth");
+
+  const api = () => calRef.current?.getApi();
+  function changeView(v: string) {
+    setView(v);
+    api()?.changeView(v);
+  }
 
   // 권한 (설계 3.2) — 프론트 표시용, 실제 검증은 API에서 2중으로
   const isOrgEditor = ["admin", "manager", "deputy"].includes(user?.orgRole ?? "");
@@ -106,28 +115,42 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
-        <h1 className="page-title" style={{ margin: 0, flex: 1 }}>달력</h1>
+      {/* 커스텀 Toss 헤더 */}
+      <div className="cal-toolbar">
+        <button className="cal-arrow" aria-label="이전" onClick={() => api()?.prev()}>
+          <Icon name="chevronL" size={18} />
+        </button>
+        <h2 className="cal-title">{title}</h2>
+        <button className="cal-arrow" aria-label="다음" onClick={() => api()?.next()}>
+          <Icon name="chevronR" size={18} />
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={() => api()?.today()}>오늘</button>
+        <div className="cal-spacer" />
+        <div className="seg" role="tablist" aria-label="보기 전환">
+          <button className={view === "dayGridMonth" ? "on" : ""} onClick={() => changeView("dayGridMonth")}>월</button>
+          <button className={view === "timeGridWeek" ? "on" : ""} onClick={() => changeView("timeGridWeek")}>주</button>
+          <button className={view === "timeGridDay" ? "on" : ""} onClick={() => changeView("timeGridDay")}>일</button>
+        </div>
         {editableTeams.length > 0 && (
           <button
-            className="btn btn-primary"
+            className="btn btn-primary btn-sm"
             onClick={() => {
               setCreateDate(new Date().toISOString().slice(0, 10));
               setCreateOpen(true);
             }}
           >
-            ＋ 업무 추가
+            <Icon name="plus" size={16} strokeWidth={2.4} /> 업무 추가
           </button>
         )}
       </div>
 
       {/* 팀 필터 칩 */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+      <div className="team-filter">
         {teams.map((t) => (
           <button
             key={t.id}
-            className="chip"
-            style={{ opacity: visible.has(t.id) ? 1 : 0.38, cursor: "pointer" }}
+            className="chip chip-btn"
+            style={{ opacity: visible.has(t.id) ? 1 : 0.4 }}
             onClick={() => toggleTeam(t.id)}
           >
             <span className="dot" style={{ background: t.color }} />
@@ -136,20 +159,18 @@ export default function CalendarView({ teams }: { teams: TeamInfo[] }) {
         ))}
       </div>
 
-      <div className="card" style={{ padding: 16 }}>
+      <div className="card" style={{ padding: 14 }}>
         <FullCalendar
           ref={calRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView="dayGridMonth"
           locale={koLocale}
           height="auto"
-          headerToolbar={{
-            left: "prev,next today",
-            center: "title",
-            right: "dayGridMonth,timeGridWeek,timeGridDay",
-          }}
+          headerToolbar={false}
           events={events}
           datesSet={(arg) => {
+            setTitle(arg.view.title);
+            setView(arg.view.type);
             setRange({ from: arg.startStr, to: arg.endStr });
             fetchTasks(arg.startStr, arg.endStr);
           }}

@@ -72,7 +72,7 @@ export default function ResourceManager({ initialResources }: { initialResources
         </form>
       </div>
 
-      <div className="card" style={{ padding: 8, overflowX: "auto" }}>
+      <div className="card table-wrap">
         <table className="table">
           <thead><tr><th>이름</th><th>분류</th><th>상태</th><th style={{ width: 100 }} /></tr></thead>
           <tbody>

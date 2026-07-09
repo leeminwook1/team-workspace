@@ -81,7 +81,7 @@ export default function TeamManager({ initialTeams }: { initialTeams: TeamRow[] 
       </div>
 
       {/* 팀 목록 */}
-      <div className="card" style={{ padding: 8, overflowX: "auto" }}>
+      <div className="card table-wrap">
         <table className="table">
           <thead>
             <tr><th>팀</th><th>slug</th><th>상태</th><th style={{ width: 160 }} /></tr>

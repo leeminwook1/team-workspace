@@ -79,8 +79,8 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
   }
 
   return (
-    <div className="card" style={{ padding: 8, overflowX: "auto" }}>
-      {err && <p className="err-msg" style={{ padding: "0 12px" }}>{err}</p>}
+    <div className="card table-wrap">
+      {err && <p className="err-msg" style={{ padding: "8px 14px 0" }}>{err}</p>}
       <table className="table">
         <thead>
           <tr>
@@ -100,7 +100,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
                   <select
                     value={s.teamId}
                     onChange={(e) => setSel({ ...sel, [u.id]: { ...s, teamId: e.target.value } })}
-                    style={{ padding: "7px 9px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
+                    className="mini-select"
                   >
                     {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
@@ -109,7 +109,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
                   <select
                     value={s.role}
                     onChange={(e) => setSel({ ...sel, [u.id]: { ...s, role: e.target.value } })}
-                    style={{ padding: "7px 9px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
+                    className="mini-select"
                   >
                     {TEAM_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
@@ -119,7 +119,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
                     <select
                       value={s.orgRole}
                       onChange={(e) => setSel({ ...sel, [u.id]: { ...s, orgRole: e.target.value } })}
-                      style={{ padding: "7px 9px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
+                      className="mini-select"
                     >
                       {ORG_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
