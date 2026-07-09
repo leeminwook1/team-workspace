@@ -63,11 +63,12 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   const [title, setTitle] = useState("");
   const [view, setView] = useState("dayGridMonth");
   const [maxEvents, setMaxEvents] = useState(4); // 하루 표시 최대 개수 (초과 시 +N개)
+  const [isMobile, setIsMobile] = useState(false);
 
-  // 화면 크기에 따라 하루 표시 개수 조절 (셀 높이 고정과 맞춤)
+  // 화면 크기에 따라 하루 표시 개수·시간표시 조절 (셀 높이 고정과 맞춤)
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 640px)");
-    const update = () => setMaxEvents(mq.matches ? 2 : 4);
+    const update = () => { setMaxEvents(mq.matches ? 2 : 4); setIsMobile(mq.matches); };
     update();
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
@@ -228,6 +229,8 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           dayMaxEvents={maxEvents}
           fixedWeekCount={false}
           moreLinkContent={(arg) => `+${arg.num}개`}
+          eventDisplay="block"
+          displayEventTime={!isMobile}
           events={events}
           datesSet={(arg) => {
             setTitle(arg.view.title);
