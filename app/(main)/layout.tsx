@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { canApproveUsers, canManageTeams, type SessionUser } from "@/lib/permissions";
 import LogoutButton from "@/components/LogoutButton";
 import NavLinks, { BottomNav, type NavItem } from "@/components/NavLinks";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
               <div className="side-user-role">{roleLabel}</div>
             </div>
           </div>
-          <LogoutButton small />
+          <div style={{ display: "flex", gap: 8 }}>
+            <ThemeToggle />
+            <div style={{ flex: 1 }}><LogoutButton small /></div>
+          </div>
         </div>
       </aside>
 
@@ -57,7 +61,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           <span className="glyph">T</span>
           <span className="word">Team<b>Cal</b></span>
         </div>
-        <LogoutButton small />
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <ThemeToggle />
+          <LogoutButton small />
+        </div>
       </header>
 
       <main className="main">{children}</main>

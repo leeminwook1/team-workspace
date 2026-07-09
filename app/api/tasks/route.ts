@@ -22,7 +22,9 @@ function serialize(t: any) {
       id: String(a._id ?? a),
       name: a.name ?? "",
     })),
-    createdBy: String(t.createdBy),
+    createdBy: t.createdBy?.name
+      ? { id: String(t.createdBy._id ?? t.createdBy), name: t.createdBy.name }
+      : (t.createdBy ? { id: String(t.createdBy), name: "" } : null),
     startDate: t.startDate,
     endDate: t.endDate,
     allDay: t.allDay,
@@ -62,6 +64,7 @@ export async function GET(req: Request) {
     .populate("teamIds", "name color")
     .populate("categoryId", "name color")
     .populate("assignees", "name")
+    .populate("createdBy", "name")
     .sort({ startDate: 1 })
     .lean();
 

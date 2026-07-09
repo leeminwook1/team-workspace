@@ -21,6 +21,7 @@ type TaskItem = {
   teams: TeamRef[];
   category: CategoryInfo | null;
   assignees: { id: string; name: string }[];
+  createdBy: { id: string; name: string } | null;
   startDate: string;
   endDate: string;
   allDay: boolean;
@@ -53,6 +54,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [visible, setVisible] = useState<Set<string>>(new Set(teams.map((t) => t.id)));
+  const [visibleCats, setVisibleCats] = useState<Set<string>>(new Set(categories.map((c) => c.id)));
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createDate, setCreateDate] = useState("");
@@ -93,6 +95,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
     () =>
       tasks
         .filter((t) => t.teams.some((tm) => visible.has(tm.id)))
+        .filter((t) => !t.category || visibleCats.has(t.category.id))
         .map((t) => {
           // allDay 이벤트의 end는 exclusive → 하루 더해 표시
           let end = t.endDate;
@@ -117,8 +120,17 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
             extendedProps: { taskId: t.id },
           };
         }),
-    [tasks, visible]
+    [tasks, visible, visibleCats]
   );
+
+  function toggleCat(id: string) {
+    setVisibleCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function toggleTeam(id: string) {
     setVisible((prev) => {
@@ -161,8 +173,9 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
         )}
       </div>
 
-      {/* 팀 필터 칩 */}
-      <div className="team-filter">
+      {/* 필터 */}
+      <div className="filter-row">
+        <span className="filter-label">팀</span>
         {teams.map((t) => (
           <button
             key={t.id}
@@ -175,8 +188,24 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           </button>
         ))}
       </div>
+      {categories.length > 0 && (
+        <div className="filter-row">
+          <span className="filter-label">분류</span>
+          {categories.map((c) => (
+            <button
+              key={c.id}
+              className="chip chip-btn"
+              style={{ opacity: visibleCats.has(c.id) ? 1 : 0.4 }}
+              onClick={() => toggleCat(c.id)}
+            >
+              <span className="dot" style={{ background: c.color }} />
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
 
-      <div className="card" style={{ padding: 14 }}>
+      <div className="card" style={{ padding: 14, marginTop: 14 }}>
         <FullCalendar
           ref={calRef}
           plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
@@ -356,10 +385,19 @@ function TaskFormModal({
           </div>
 
           <div className="field">
-            <label className="switch-row">
-              <span>하루 종일</span>
-              <input type="checkbox" className="switch" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
-            </label>
+            <div className="switch-row">
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink-soft)" }}>하루 종일</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={allDay}
+                aria-label="하루 종일"
+                className={`toggle${allDay ? " on" : ""}`}
+                onClick={() => setAllDay(!allDay)}
+              >
+                <span className="toggle-knob" />
+              </button>
+            </div>
           </div>
 
           {allDay ? (
@@ -462,6 +500,29 @@ function TaskDetailModal({
   const confirm = useConfirm();
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [comments, setComments] = useState<{ id: string; author: { id: string; name: string } | null; content: string; createdAt: string }[]>([]);
+  const [commentText, setCommentText] = useState("");
+  const [commentBusy, setCommentBusy] = useState(false);
+
+  const loadComments = useCallback(async () => {
+    const res = await fetch(`/api/tasks/${task.id}/comments`);
+    if (res.ok) setComments((await res.json()).comments ?? []);
+  }, [task.id]);
+  useEffect(() => { loadComments(); }, [loadComments]);
+
+  async function addComment(e: React.FormEvent) {
+    e.preventDefault();
+    const text = commentText.trim();
+    if (!text) return;
+    setCommentBusy(true);
+    const res = await fetch(`/api/tasks/${task.id}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: text }),
+    });
+    setCommentBusy(false);
+    if (res.ok) { setCommentText(""); loadComments(); }
+  }
 
   const teamIds = task.teams.map((t) => t.id);
   const isOrgEditor = ["admin", "manager", "deputy"].includes(user?.orgRole ?? "");
@@ -508,6 +569,17 @@ function TaskDetailModal({
         ? { month: "long", day: "numeric" }
         : { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
+  const relTime = (iso: string) => {
+    const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+    if (m < 1) return "방금";
+    if (m < 60) return `${m}분 전`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}시간 전`;
+    const d = Math.floor(h / 24);
+    if (d < 7) return `${d}일 전`;
+    return new Date(iso).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+  };
+
   const prio = PRIORITY_META[task.priority] ?? PRIORITY_META.normal;
 
   return (
@@ -542,16 +614,23 @@ function TaskDetailModal({
           )}
         </div>
 
-        {/* 메타 */}
-        <div className="detail-info">
-          <div><span className="k">기간</span><span className="v">{fmt(task.startDate)} ~ {fmt(task.endDate)}</span></div>
-          {task.location && <div><span className="k">장소</span><span className="v">{task.location}</span></div>}
-          {task.assignees.length > 0 && (
-            <div><span className="k">담당</span><span className="v">{task.assignees.map((a) => a.name).join(", ")}</span></div>
-          )}
+        {/* 메타 그리드 (시안 스타일) */}
+        <div className="meta-grid">
+          <div className="meta"><div className="k">기간</div><div className="v">{fmt(task.startDate)} ~ {fmt(task.endDate)}</div></div>
+          <div className="meta"><div className="k">장소</div><div className="v">{task.location || "—"}</div></div>
+          <div className="meta">
+            <div className="k">담당자</div>
+            <div className="v">{task.assignees.length ? task.assignees.map((a) => a.name).join(", ") : "—"}</div>
+          </div>
+          <div className="meta"><div className="k">등록자</div><div className="v">{task.createdBy?.name || "—"}</div></div>
         </div>
 
-        {task.description && <div className="detail-desc">{task.description}</div>}
+        {task.description && (
+          <>
+            <div className="detail-section-label">상세 내용</div>
+            <div className="detail-desc">{task.description}</div>
+          </>
+        )}
 
         {/* 상태 변경 */}
         {canStatus && (
@@ -571,6 +650,25 @@ function TaskDetailModal({
             </div>
           </div>
         )}
+
+        {/* 댓글 */}
+        <div className="comments">
+          <div className="detail-section-label">댓글 {comments.length > 0 && comments.length}</div>
+          {comments.length === 0 && <div className="comment-empty">첫 댓글을 남겨보세요.</div>}
+          {comments.map((c) => (
+            <div className="comment" key={c.id}>
+              <span className="avatar" aria-hidden>{c.author?.name?.slice(0, 1) ?? "?"}</span>
+              <div className="c-body">
+                <div className="c-h">{c.author?.name ?? "알 수 없음"}<span>{relTime(c.createdAt)}</span></div>
+                <p>{c.content}</p>
+              </div>
+            </div>
+          ))}
+          <form className="comment-form" onSubmit={addComment}>
+            <input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="댓글 입력…" maxLength={1000} />
+            <button className="btn btn-primary btn-sm" disabled={commentBusy || !commentText.trim()}>등록</button>
+          </form>
+        </div>
 
         {err && <p className="err-msg">{err}</p>}
         <div className="modal-actions">
