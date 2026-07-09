@@ -54,19 +54,23 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   return json({ updated: true });
 }
 
-// DELETE /api/admin/users/:id — 가입 신청 거절 (pending만 삭제 가능)
+// DELETE /api/admin/users/:id — 사용자 삭제
+// pending 거절: 과장·부과장·admin / 활성·비활성 계정 삭제: admin만, 본인 불가
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const { user, error } = await requireActiveUser();
   if (error) return error;
-  if (!canApproveUsers(user)) return json({ error: "권한이 없습니다." }, 403);
 
   await connectDB();
   const target: any = await User.findById(params.id).lean();
   if (!target) return json({ error: "사용자를 찾을 수 없습니다." }, 404);
-  if (target.status !== "pending") {
-    return json({ error: "승인 대기 사용자만 거절(삭제)할 수 있습니다." }, 400);
+
+  if (target.status === "pending") {
+    if (!canApproveUsers(user)) return json({ error: "권한이 없습니다." }, 403);
+  } else {
+    if (!canManageTeams(user)) return json({ error: "계정 삭제는 최고관리자만 가능합니다." }, 403);
+    if (String(target._id) === user.id) return json({ error: "본인 계정은 삭제할 수 없습니다." }, 400);
   }
 
   await User.deleteOne({ _id: params.id });
-  return json({ rejected: true });
+  return json({ deleted: true });
 }

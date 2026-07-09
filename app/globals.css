@@ -103,6 +103,27 @@ a { color: inherit; text-decoration: none; }
 .btn-danger-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 88%, #000); }
 .btn-sm { padding: 8px 13px; font-size: 13px; border-radius: var(--r-sm); }
 .btn-lg { width: 100%; padding: 15px; font-size: 16px; border-radius: var(--r-md); }
+/* 아웃라인 버튼 — 리스트 안에서 확실히 '버튼'으로 보이게 */
+.btn-line { background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); }
+.btn-line:hover:not(:disabled) { background: var(--paper); border-color: var(--ink-faint); }
+
+/* ── 관리자 리스트: 카드 행 (내용 왼쪽 / 액션 오른쪽) ── */
+.admin-list { display: flex; flex-direction: column; gap: 10px; }
+.admin-item {
+  display: flex; align-items: center; gap: 14px; padding: 14px 16px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow);
+}
+.admin-item.off { opacity: 0.55; }
+.admin-item-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.admin-item-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.admin-item-sub { font-size: 12.5px; color: var(--ink-faint); }
+.admin-item-actions { display: flex; gap: 6px; flex: none; }
+.admin-section-title { font-size: 13px; font-weight: 700; color: var(--ink-soft); margin: 22px 0 10px; }
+@media (max-width: 520px) {
+  .admin-item { flex-wrap: wrap; }
+  .admin-item-actions { width: 100%; }
+  .admin-item-actions .btn { flex: 1; }
+}
 
 /* ── 카드 ── */
 .card {

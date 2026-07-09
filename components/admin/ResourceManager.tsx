@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type ResourceRow = { id: string; name: string; category: string; isActive: boolean };
 
@@ -17,19 +18,17 @@ const CAT_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.value, c.label]));
 
 export default function ResourceManager({ initialResources }: { initialResources: ResourceRow[] }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [form, setForm] = useState({ name: "", category: "studio" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  const [busyId, setBusyId] = useState("");
+  const [editing, setEditing] = useState<ResourceRow | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
+  async function create(e: React.FormEvent) {
     e.preventDefault();
-    setErr("");
-    setLoading(true);
+    setErr(""); setLoading(true);
     const res = await fetch("/api/resources", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
     });
     const data = await res.json();
     setLoading(false);
@@ -38,23 +37,24 @@ export default function ResourceManager({ initialResources }: { initialResources
     router.refresh();
   }
 
-  async function toggleActive(r: ResourceRow) {
-    setBusyId(r.id);
-    const res = await fetch(`/api/resources/${r.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive: !r.isActive }),
+  async function remove(r: ResourceRow) {
+    const ok = await confirm({
+      title: "자원 삭제",
+      message: `"${r.name}"을(를) 삭제할까요?\n예정된 예약이 있으면 삭제되지 않습니다.`,
+      confirmText: "삭제", danger: true,
     });
-    setBusyId("");
-    if (!res.ok) { const d = await res.json(); setErr(d.error ?? "변경 실패"); return; }
+    if (!ok) return;
+    const res = await fetch(`/api/resources/${r.id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
     router.refresh();
   }
 
   return (
-    <div style={{ display: "grid", gap: 18, maxWidth: 720 }}>
+    <div style={{ maxWidth: 640 }}>
       <div className="card" style={{ padding: 22 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 14px" }}>새 자원 등록</h2>
-        <form onSubmit={onSubmit}>
+        <form onSubmit={create}>
           <div className="form-grid-2 wide-first">
             <div className="field">
               <label>이름</label>
@@ -72,35 +72,80 @@ export default function ResourceManager({ initialResources }: { initialResources
         </form>
       </div>
 
-      <div className="card table-wrap">
-        <table className="table">
-          <thead><tr><th>이름</th><th>분류</th><th>상태</th><th style={{ width: 100 }} /></tr></thead>
-          <tbody>
-            {initialResources.map((r) => (
-              <tr key={r.id} style={{ opacity: r.isActive ? 1 : 0.5 }}>
-                <td>{r.name}</td>
-                <td data-label="분류" style={{ color: "var(--ink-soft)" }}>{CAT_LABEL[r.category] ?? r.category}</td>
-                <td data-label="상태">
-                  <span className={`status-pill ${r.isActive ? "pill-on" : "pill-off"}`}>
-                    {r.isActive ? "활성" : "비활성"}
-                  </span>
-                </td>
-                <td className="td-actions">
-                  <button
-                    className={`btn btn-sm ${r.isActive ? "btn-danger" : "btn-ghost"}`}
-                    disabled={busyId === r.id}
-                    onClick={() => toggleActive(r)}
-                  >
-                    {r.isActive ? "비활성화" : "다시 활성화"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {initialResources.length === 0 && (
-              <tr><td colSpan={4} style={{ textAlign: "center", color: "var(--ink-faint)", padding: 24 }}>등록된 자원이 없습니다.</td></tr>
-            )}
-          </tbody>
-        </table>
+      <div className="admin-section-title">자원 {initialResources.length}개</div>
+      <div className="admin-list">
+        {initialResources.map((r) => (
+          <div className={`admin-item${r.isActive ? "" : " off"}`} key={r.id}>
+            <div className="admin-item-main">
+              <span className="admin-item-title">{r.name}</span>
+              <span className="admin-item-sub">{CAT_LABEL[r.category] ?? r.category}</span>
+              {!r.isActive && <span className="status-pill pill-off">비활성</span>}
+            </div>
+            <div className="admin-item-actions">
+              <button className="btn btn-line btn-sm" onClick={() => setEditing(r)}>수정</button>
+              <button className="btn btn-danger btn-sm" onClick={() => remove(r)}>삭제</button>
+            </div>
+          </div>
+        ))}
+        {initialResources.length === 0 && (
+          <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--ink-faint)" }}>등록된 자원이 없습니다.</div>
+        )}
+      </div>
+
+      {editing && <EditModal res={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); router.refresh(); }} />}
+    </div>
+  );
+}
+
+function EditModal({ res, onClose, onSaved }: { res: ResourceRow; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(res.name);
+  const [category, setCategory] = useState(res.category);
+  const [active, setActive] = useState(res.isActive);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setErr("");
+    const r = await fetch(`/api/resources/${res.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, category, isActive: active }),
+    });
+    const data = await r.json();
+    setBusy(false);
+    if (!r.ok) { setErr(data.error ?? "저장 실패"); return; }
+    onSaved();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>자원 수정</h2>
+        <form onSubmit={save}>
+          <div className="field">
+            <label>이름</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} required />
+          </div>
+          <div className="field">
+            <label>분류</label>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <div className="switch-row">
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink-soft)" }}>활성 (예약 가능)</span>
+              <button type="button" role="switch" aria-checked={active} className={`toggle${active ? " on" : ""}`} onClick={() => setActive(!active)}>
+                <span className="toggle-knob" />
+              </button>
+            </div>
+          </div>
+          {err && <p className="err-msg">{err}</p>}
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
+            <button className="btn btn-primary" disabled={busy}>{busy ? "저장 중…" : "저장"}</button>
+          </div>
+        </form>
       </div>
     </div>
   );

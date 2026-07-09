@@ -1,5 +1,7 @@
 import { connectDB } from "@/lib/mongodb";
 import { Team } from "@/models/Team";
+import { User } from "@/models/User";
+import { Task } from "@/models/Task";
 import { requireActiveUser, json } from "@/lib/api";
 import { canManageTeams } from "@/lib/permissions";
 import { teamSchema } from "@/lib/validations";
@@ -28,4 +30,27 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   await team.save();
 
   return json({ id: String(team._id) });
+}
+
+// DELETE /api/teams/:id — 팀 완전 삭제 (Admin). 사용 중이면 차단.
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const { user, error } = await requireActiveUser();
+  if (error) return error;
+  if (!canManageTeams(user)) return json({ error: "팀 삭제 권한이 없습니다." }, 403);
+
+  await connectDB();
+  const team: any = await Team.findById(params.id).lean();
+  if (!team) return json({ error: "팀을 찾을 수 없습니다." }, 404);
+
+  const memberCount = await User.countDocuments({ teamId: params.id });
+  const taskCount = await Task.countDocuments({ teamIds: params.id });
+  if (memberCount > 0 || taskCount > 0) {
+    return json(
+      { error: `사용 중인 팀은 삭제할 수 없습니다. (소속 ${memberCount}명, 업무 ${taskCount}건) 먼저 비활성화하세요.` },
+      409
+    );
+  }
+
+  await Team.deleteOne({ _id: params.id });
+  return json({ deleted: true });
 }

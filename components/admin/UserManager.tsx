@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type TeamOpt = { id: string; name: string; color: string };
 type UserRow = {
@@ -29,6 +30,7 @@ const ROLE_OPTIONS = [
 ];
 
 export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]; currentUserId: string }) {
+  const confirm = useConfirm();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
@@ -39,76 +41,60 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
     if (res.ok) setUsers((await res.json()).users ?? []);
     setLoaded(true);
   }, []);
-
   useEffect(() => { load(); }, [load]);
 
-  async function toggleStatus(u: UserRow) {
-    setErr("");
-    const nextStatus = u.status === "active" ? "disabled" : "active";
-    const res = await fetch(`/api/admin/users/${u.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
+  async function remove(u: UserRow) {
+    const ok = await confirm({
+      title: "사용자 삭제",
+      message: `"${u.name}"(${u.email}) 계정을 완전히 삭제할까요?\n되돌릴 수 없습니다.`,
+      confirmText: "삭제", danger: true,
     });
+    if (!ok) return;
+    const res = await fetch(`/api/admin/users/${u.id}`, { method: "DELETE" });
     const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "변경 실패"); return; }
+    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
     load();
   }
 
   if (!loaded) return <p style={{ color: "var(--ink-faint)" }}>불러오는 중…</p>;
 
   return (
-    <div>
+    <div style={{ maxWidth: 720 }}>
       {err && <p className="err-msg">{err}</p>}
-      <div className="card table-wrap">
-        <table className="table">
-          <thead>
-            <tr><th>이름</th><th>이메일</th><th>역할</th><th>소속 팀</th><th>상태</th><th style={{ width: 140 }} /></tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} style={{ opacity: u.status === "active" ? 1 : 0.5 }}>
-                <td>{u.name}{u.id === currentUserId && " (나)"}</td>
-                <td data-label="이메일" style={{ color: "var(--ink-soft)" }}>{u.email}</td>
-                <td data-label="역할" style={{ fontWeight: 600 }}>{ROLE_LABEL[u.role] ?? u.role}</td>
-                <td data-label="소속 팀">
-                  {u.team ? (
-                    <span className="chip"><span className="dot" style={{ background: u.team.color }} />{u.team.name}</span>
-                  ) : (
-                    <span style={{ color: "var(--ink-faint)", fontSize: 13 }}>전체</span>
-                  )}
-                </td>
-                <td data-label="상태">
-                  <span className={`status-pill ${u.status === "active" ? "pill-on" : "pill-off"}`}>
-                    {u.status === "active" ? "활성" : "비활성"}
-                  </span>
-                </td>
-                <td className="td-actions">
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setEditing(u)}>역할 편집</button>
-                    {u.id !== currentUserId && (
-                      <button
-                        className={`btn btn-sm ${u.status === "active" ? "btn-danger" : "btn-ghost"}`}
-                        onClick={() => toggleStatus(u)}
-                      >
-                        {u.status === "active" ? "비활성화" : "활성화"}
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {users.length === 0 && (
-              <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--ink-faint)", padding: 24 }}>사용자가 없습니다.</td></tr>
-            )}
-          </tbody>
-        </table>
+      <div className="admin-section-title">사용자 {users.length}명</div>
+      <div className="admin-list">
+        {users.map((u) => (
+          <div className={`admin-item${u.status === "active" ? "" : " off"}`} key={u.id}>
+            <div className="admin-item-main">
+              <span className="avatar avatar-sm" aria-hidden>{u.name.slice(0, 1)}</span>
+              <div style={{ minWidth: 0 }}>
+                <div className="admin-item-title">
+                  {u.name}{u.id === currentUserId && <span style={{ color: "var(--ink-faint)", fontWeight: 500 }}> (나)</span>}
+                </div>
+                <div className="admin-item-sub">{u.email}</div>
+              </div>
+              <span className="chip" style={{ marginLeft: 4 }}>{ROLE_LABEL[u.role] ?? u.role}</span>
+              {u.team && <span className="chip"><span className="dot" style={{ background: u.team.color }} />{u.team.name}</span>}
+              {u.status !== "active" && <span className="status-pill pill-off">비활성</span>}
+            </div>
+            <div className="admin-item-actions">
+              <button className="btn btn-line btn-sm" onClick={() => setEditing(u)}>편집</button>
+              {u.id !== currentUserId && (
+                <button className="btn btn-danger btn-sm" onClick={() => remove(u)}>삭제</button>
+              )}
+            </div>
+          </div>
+        ))}
+        {users.length === 0 && (
+          <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--ink-faint)" }}>사용자가 없습니다.</div>
+        )}
       </div>
 
       {editing && (
-        <EditRoleModal
+        <EditModal
           user={editing}
           teams={teams}
+          isSelf={editing.id === currentUserId}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }}
         />
@@ -117,24 +103,23 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
   );
 }
 
-function EditRoleModal({
-  user, teams, onClose, onSaved,
+function EditModal({
+  user, teams, isSelf, onClose, onSaved,
 }: {
-  user: UserRow; teams: TeamOpt[]; onClose: () => void; onSaved: () => void;
+  user: UserRow; teams: TeamOpt[]; isSelf: boolean; onClose: () => void; onSaved: () => void;
 }) {
   const [role, setRole] = useState(user.role);
   const [teamId, setTeamId] = useState(user.team?.id ?? teams[0]?.id ?? "");
+  const [active, setActive] = useState(user.status === "active");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function save() {
-    setBusy(true);
-    setErr("");
-    const body = { role, teamId: isTeamRole(role) ? teamId : null };
+    setBusy(true); setErr("");
+    const body: any = { role, teamId: isTeamRole(role) ? teamId : null };
+    if (!isSelf) body.status = active ? "active" : "disabled";
     const res = await fetch(`/api/admin/users/${user.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     const data = await res.json();
     setBusy(false);
@@ -145,7 +130,7 @@ function EditRoleModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>{user.name} — 역할 편집</h2>
+        <h2>{user.name} — 편집</h2>
 
         <div className="field">
           <label>역할</label>
@@ -165,6 +150,17 @@ function EditRoleModal({
           <p style={{ fontSize: 12.5, color: "var(--ink-faint)", margin: "0 0 8px" }}>
             과장·부과장·서기·최고관리자는 <b>모든 팀</b>을 조회합니다. (소속 팀 없음)
           </p>
+        )}
+
+        {!isSelf && (
+          <div className="field">
+            <div className="switch-row">
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink-soft)" }}>계정 활성</span>
+              <button type="button" role="switch" aria-checked={active} className={`toggle${active ? " on" : ""}`} onClick={() => setActive(!active)}>
+                <span className="toggle-knob" />
+              </button>
+            </div>
+          </div>
         )}
 
         {err && <p className="err-msg">{err}</p>}

@@ -2,26 +2,42 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type CatRow = { id: string; name: string; color: string; isActive: boolean };
 
 const PRESET_COLORS = ["#3182f6", "#f0466e", "#8b5cf6", "#12b3a6", "#e8951b", "#f97316", "#22c55e", "#64748b"];
 
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {PRESET_COLORS.map((c) => (
+        <button
+          key={c} type="button" aria-label={c} onClick={() => onChange(c)}
+          style={{
+            width: 30, height: 30, borderRadius: 9, background: c, border: 0, cursor: "pointer",
+            outline: value === c ? "3px solid var(--accent-soft)" : "none",
+            boxShadow: value === c ? `0 0 0 2px ${c}` : "none",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function CategoryManager({ initial }: { initial: CatRow[] }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [form, setForm] = useState({ name: "", color: PRESET_COLORS[0] });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  const [busyId, setBusyId] = useState("");
+  const [editing, setEditing] = useState<CatRow | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
+  async function create(e: React.FormEvent) {
     e.preventDefault();
-    setErr("");
-    setLoading(true);
+    setErr(""); setLoading(true);
     const res = await fetch("/api/categories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
     });
     const data = await res.json();
     setLoading(false);
@@ -30,72 +46,109 @@ export default function CategoryManager({ initial }: { initial: CatRow[] }) {
     router.refresh();
   }
 
-  async function toggleActive(c: CatRow) {
-    setBusyId(c.id);
-    const res = await fetch(`/api/categories/${c.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive: !c.isActive }),
+  async function remove(c: CatRow) {
+    const ok = await confirm({
+      title: "카테고리 삭제",
+      message: `"${c.name}" 카테고리를 삭제할까요?\n이 카테고리를 쓰던 업무는 '분류 없음'이 됩니다.`,
+      confirmText: "삭제", danger: true,
     });
-    setBusyId("");
-    if (!res.ok) { const d = await res.json(); setErr(d.error ?? "변경 실패"); return; }
+    if (!ok) return;
+    const res = await fetch(`/api/categories/${c.id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
     router.refresh();
   }
 
   return (
-    <div style={{ display: "grid", gap: 18, maxWidth: 640 }}>
+    <div style={{ maxWidth: 640 }}>
       <div className="card" style={{ padding: 22 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 14px" }}>새 카테고리</h2>
-        <form onSubmit={onSubmit}>
+        <form onSubmit={create}>
           <div className="field">
             <label>이름</label>
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: 회의 · 촬영 · 편집 · 행사" required />
           </div>
           <div className="field">
             <label>색상</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              {PRESET_COLORS.map((c) => (
-                <button
-                  key={c} type="button" aria-label={c}
-                  onClick={() => setForm({ ...form, color: c })}
-                  style={{
-                    width: 30, height: 30, borderRadius: 9, background: c, border: 0, cursor: "pointer",
-                    outline: form.color === c ? "3px solid var(--accent-soft)" : "none",
-                    boxShadow: form.color === c ? `0 0 0 2px ${c}` : "none",
-                  }}
-                />
-              ))}
-            </div>
+            <ColorPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
           </div>
           {err && <p className="err-msg">{err}</p>}
           <button className="btn btn-primary" disabled={loading}>{loading ? "등록 중…" : "카테고리 추가"}</button>
         </form>
       </div>
 
-      <div className="card table-wrap">
-        <table className="table">
-          <thead><tr><th>카테고리</th><th>상태</th><th style={{ width: 100 }} /></tr></thead>
-          <tbody>
-            {initial.map((c) => (
-              <tr key={c.id} style={{ opacity: c.isActive ? 1 : 0.5 }}>
-                <td>
-                  <span className="chip"><span className="dot" style={{ background: c.color }} />{c.name}</span>
-                </td>
-                <td data-label="상태">
-                  <span className={`status-pill ${c.isActive ? "pill-on" : "pill-off"}`}>{c.isActive ? "활성" : "비활성"}</span>
-                </td>
-                <td className="td-actions">
-                  <button className={`btn btn-sm ${c.isActive ? "btn-danger" : "btn-ghost"}`} disabled={busyId === c.id} onClick={() => toggleActive(c)}>
-                    {c.isActive ? "비활성화" : "다시 활성화"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {initial.length === 0 && (
-              <tr><td colSpan={3} style={{ textAlign: "center", color: "var(--ink-faint)", padding: 24 }}>등록된 카테고리가 없습니다.</td></tr>
-            )}
-          </tbody>
-        </table>
+      <div className="admin-section-title">카테고리 {initial.length}개</div>
+      <div className="admin-list">
+        {initial.map((c) => (
+          <div className={`admin-item${c.isActive ? "" : " off"}`} key={c.id}>
+            <div className="admin-item-main">
+              <span className="dot" style={{ background: c.color, width: 12, height: 12 }} />
+              <span className="admin-item-title">{c.name}</span>
+              {!c.isActive && <span className="status-pill pill-off">비활성</span>}
+            </div>
+            <div className="admin-item-actions">
+              <button className="btn btn-line btn-sm" onClick={() => setEditing(c)}>수정</button>
+              <button className="btn btn-danger btn-sm" onClick={() => remove(c)}>삭제</button>
+            </div>
+          </div>
+        ))}
+        {initial.length === 0 && (
+          <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--ink-faint)" }}>등록된 카테고리가 없습니다.</div>
+        )}
+      </div>
+
+      {editing && <EditModal cat={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); router.refresh(); }} />}
+    </div>
+  );
+}
+
+function EditModal({ cat, onClose, onSaved }: { cat: CatRow; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(cat.name);
+  const [color, setColor] = useState(cat.color);
+  const [active, setActive] = useState(cat.isActive);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setErr("");
+    const res = await fetch(`/api/categories/${cat.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, color, isActive: active }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
+    onSaved();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>카테고리 수정</h2>
+        <form onSubmit={save}>
+          <div className="field">
+            <label>이름</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} required />
+          </div>
+          <div className="field">
+            <label>색상</label>
+            <ColorPicker value={color} onChange={setColor} />
+          </div>
+          <div className="field">
+            <div className="switch-row">
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink-soft)" }}>활성 (달력·업무에서 선택 가능)</span>
+              <button type="button" role="switch" aria-checked={active} className={`toggle${active ? " on" : ""}`} onClick={() => setActive(!active)}>
+                <span className="toggle-knob" />
+              </button>
+            </div>
+          </div>
+          {err && <p className="err-msg">{err}</p>}
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
+            <button className="btn btn-primary" disabled={busy}>{busy ? "저장 중…" : "저장"}</button>
+          </div>
+        </form>
       </div>
     </div>
   );

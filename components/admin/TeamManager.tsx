@@ -2,27 +2,42 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 type TeamRow = { id: string; name: string; slug: string; color: string; isActive: boolean };
 
 const PRESET_COLORS = ["#e8951b", "#f0466e", "#8b5cf6", "#12b3a6", "#3182f6", "#f97316", "#22c55e", "#64748b"];
 
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {PRESET_COLORS.map((c) => (
+        <button
+          key={c} type="button" aria-label={c} onClick={() => onChange(c)}
+          style={{
+            width: 30, height: 30, borderRadius: 9, background: c, border: 0, cursor: "pointer",
+            outline: value === c ? "3px solid var(--accent-soft)" : "none",
+            boxShadow: value === c ? `0 0 0 2px ${c}` : "none",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function TeamManager({ initialTeams }: { initialTeams: TeamRow[] }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [form, setForm] = useState({ name: "", slug: "", color: PRESET_COLORS[4], description: "" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<TeamRow | null>(null);
-  const [busyId, setBusyId] = useState("");
 
-  async function onSubmit(e: React.FormEvent) {
+  async function create(e: React.FormEvent) {
     e.preventDefault();
-    setErr("");
-    setLoading(true);
+    setErr(""); setLoading(true);
     const res = await fetch("/api/teams", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
     });
     const data = await res.json();
     setLoading(false);
@@ -31,24 +46,24 @@ export default function TeamManager({ initialTeams }: { initialTeams: TeamRow[] 
     router.refresh();
   }
 
-  async function toggleActive(t: TeamRow) {
-    setBusyId(t.id);
-    const res = await fetch(`/api/teams/${t.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive: !t.isActive }),
+  async function remove(t: TeamRow) {
+    const ok = await confirm({
+      title: "팀 삭제",
+      message: `"${t.name}" 팀을 삭제할까요?\n소속 인원이나 업무가 있으면 삭제되지 않습니다.`,
+      confirmText: "삭제", danger: true,
     });
-    setBusyId("");
-    if (!res.ok) { const d = await res.json(); setErr(d.error ?? "변경 실패"); return; }
+    if (!ok) return;
+    const res = await fetch(`/api/teams/${t.id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
     router.refresh();
   }
 
   return (
-    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "1fr", maxWidth: 720 }}>
-      {/* 팀 생성 */}
+    <div style={{ maxWidth: 640 }}>
       <div className="card" style={{ padding: 22 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 14px" }}>새 팀 만들기</h2>
-        <form onSubmit={onSubmit}>
+        <form onSubmit={create}>
           <div className="form-grid-2">
             <div className="field">
               <label>팀 이름</label>
@@ -61,96 +76,52 @@ export default function TeamManager({ initialTeams }: { initialTeams: TeamRow[] 
           </div>
           <div className="field">
             <label>팀 색상</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              {PRESET_COLORS.map((c) => (
-                <button
-                  key={c} type="button" aria-label={c}
-                  onClick={() => setForm({ ...form, color: c })}
-                  style={{
-                    width: 30, height: 30, borderRadius: 9, background: c, border: 0, cursor: "pointer",
-                    outline: form.color === c ? "3px solid var(--accent-soft)" : "none",
-                    boxShadow: form.color === c ? `0 0 0 2px ${c}` : "none",
-                  }}
-                />
-              ))}
-            </div>
+            <ColorPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
           </div>
           {err && <p className="err-msg">{err}</p>}
           <button className="btn btn-primary" disabled={loading}>{loading ? "생성 중…" : "팀 생성"}</button>
         </form>
       </div>
 
-      {/* 팀 목록 */}
-      <div className="card table-wrap">
-        <table className="table">
-          <thead>
-            <tr><th>팀</th><th>slug</th><th>상태</th><th style={{ width: 160 }} /></tr>
-          </thead>
-          <tbody>
-            {initialTeams.map((t) => (
-              <tr key={t.id} style={{ opacity: t.isActive ? 1 : 0.5 }}>
-                <td>
-                  <span className="chip">
-                    <span className="dot" style={{ background: t.color }} />
-                    {t.name}
-                  </span>
-                </td>
-                <td data-label="slug" style={{ color: "var(--ink-soft)" }}>{t.slug}</td>
-                <td data-label="상태">
-                  <span className={`status-pill ${t.isActive ? "pill-on" : "pill-off"}`}>
-                    {t.isActive ? "활성" : "비활성"}
-                  </span>
-                </td>
-                <td className="td-actions">
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setEditing(t)}>수정</button>
-                    <button
-                      className={`btn btn-sm ${t.isActive ? "btn-danger" : "btn-ghost"}`}
-                      disabled={busyId === t.id}
-                      onClick={() => toggleActive(t)}
-                    >
-                      {t.isActive ? "비활성화" : "다시 활성화"}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {initialTeams.length === 0 && (
-              <tr><td colSpan={4} style={{ textAlign: "center", color: "var(--ink-faint)", padding: 24 }}>등록된 팀이 없습니다.</td></tr>
-            )}
-          </tbody>
-        </table>
+      <div className="admin-section-title">팀 {initialTeams.length}개</div>
+      <div className="admin-list">
+        {initialTeams.map((t) => (
+          <div className={`admin-item${t.isActive ? "" : " off"}`} key={t.id}>
+            <div className="admin-item-main">
+              <span className="dot" style={{ background: t.color, width: 12, height: 12 }} />
+              <span className="admin-item-title">{t.name}</span>
+              <span className="admin-item-sub">{t.slug}</span>
+              {!t.isActive && <span className="status-pill pill-off">비활성</span>}
+            </div>
+            <div className="admin-item-actions">
+              <button className="btn btn-line btn-sm" onClick={() => setEditing(t)}>수정</button>
+              <button className="btn btn-danger btn-sm" onClick={() => remove(t)}>삭제</button>
+            </div>
+          </div>
+        ))}
+        {initialTeams.length === 0 && (
+          <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--ink-faint)" }}>등록된 팀이 없습니다.</div>
+        )}
       </div>
 
-      {editing && (
-        <EditTeamModal
-          team={editing}
-          onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); router.refresh(); }}
-        />
-      )}
+      {editing && <EditModal team={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); router.refresh(); }} />}
     </div>
   );
 }
 
-function EditTeamModal({
-  team, onClose, onSaved,
-}: {
-  team: TeamRow; onClose: () => void; onSaved: () => void;
-}) {
+function EditModal({ team, onClose, onSaved }: { team: TeamRow; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState(team.name);
   const [color, setColor] = useState(team.color);
+  const [active, setActive] = useState(team.isActive);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    setErr("");
+    setBusy(true); setErr("");
     const res = await fetch(`/api/teams/${team.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, slug: team.slug, color }),
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, slug: team.slug, color, isActive: active }),
     });
     const data = await res.json();
     setBusy(false);
@@ -169,18 +140,14 @@ function EditTeamModal({
           </div>
           <div className="field">
             <label>팀 색상</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              {PRESET_COLORS.map((c) => (
-                <button
-                  key={c} type="button" aria-label={c}
-                  onClick={() => setColor(c)}
-                  style={{
-                    width: 30, height: 30, borderRadius: 9, background: c, border: 0, cursor: "pointer",
-                    outline: color === c ? "3px solid var(--accent-soft)" : "none",
-                    boxShadow: color === c ? `0 0 0 2px ${c}` : "none",
-                  }}
-                />
-              ))}
+            <ColorPicker value={color} onChange={setColor} />
+          </div>
+          <div className="field">
+            <div className="switch-row">
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink-soft)" }}>활성</span>
+              <button type="button" role="switch" aria-checked={active} className={`toggle${active ? " on" : ""}`} onClick={() => setActive(!active)}>
+                <span className="toggle-knob" />
+              </button>
             </div>
           </div>
           {err && <p className="err-msg">{err}</p>}
