@@ -347,6 +347,10 @@ a { color: inherit; text-decoration: none; }
 .detail-status-label { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); margin-bottom: 8px; }
 .detail-seg { display: flex; width: 100%; }
 .detail-seg button { flex: 1; }
+/* 상세 하단 액션 — 삭제(왼쪽) / 수정·닫기(오른쪽), 버튼 auto 크기 */
+.detail-actions { display: flex; align-items: center; gap: 8px; margin-top: 22px; }
+.detail-actions-right { display: flex; gap: 8px; margin-left: auto; }
+.detail-actions .btn { min-width: 68px; }
 
 /* 시안 스타일: 메타 그리드 (2x2) */
 .meta-grid {
@@ -355,7 +359,7 @@ a { color: inherit; text-decoration: none; }
 }
 .meta-grid .meta { background: var(--surface-2); padding: 12px 14px; }
 .meta-grid .meta .k { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; color: var(--ink-faint); margin-bottom: 5px; }
-.meta-grid .meta .v { font-size: 14px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 7px; word-break: break-all; }
+.meta-grid .meta .v { font-size: 14px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 7px; word-break: keep-all; line-height: 1.4; }
 .detail-section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--ink-faint); margin: 18px 0 8px; }
 
 /* 댓글 */

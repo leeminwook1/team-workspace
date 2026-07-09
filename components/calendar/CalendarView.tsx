@@ -564,11 +564,16 @@ function TaskDetailModal({
   }
 
   const [stLabel, stColor] = STATUS_LABEL[task.status] ?? STATUS_LABEL.todo;
-  const fmt = (d: string) =>
-    new Date(d).toLocaleString("ko-KR",
-      task.allDay
-        ? { month: "long", day: "numeric" }
-        : { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  // 기간 표시: 같은 날은 날짜 1번만, 시간지정이면 시간 범위만 (줄바꿈 최소화)
+  const periodLabel = (() => {
+    const s = new Date(task.startDate), e = new Date(task.endDate);
+    const dateStr = (d: Date) => d.toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
+    const timeStr = (d: Date) => d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+    const sameDay = s.toDateString() === e.toDateString();
+    if (task.allDay) return sameDay ? dateStr(s) : `${dateStr(s)} ~ ${dateStr(e)}`;
+    if (sameDay) return `${dateStr(s)} · ${timeStr(s)} ~ ${timeStr(e)}`;
+    return `${dateStr(s)} ${timeStr(s)} ~ ${dateStr(e)} ${timeStr(e)}`;
+  })();
 
   const relTime = (iso: string) => {
     const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -617,7 +622,7 @@ function TaskDetailModal({
 
         {/* 메타 그리드 (시안 스타일) */}
         <div className="meta-grid">
-          <div className="meta"><div className="k">기간</div><div className="v">{fmt(task.startDate)} ~ {fmt(task.endDate)}</div></div>
+          <div className="meta"><div className="k">기간</div><div className="v">{periodLabel}</div></div>
           <div className="meta"><div className="k">장소</div><div className="v">{task.location || "—"}</div></div>
           <div className="meta">
             <div className="k">담당자</div>
@@ -672,14 +677,16 @@ function TaskDetailModal({
         </div>
 
         {err && <p className="err-msg">{err}</p>}
-        <div className="modal-actions">
+        <div className="detail-actions">
           {canDelete && (
-            <button className="btn btn-danger" disabled={busy} onClick={remove}>삭제</button>
+            <button className="btn btn-danger btn-sm" disabled={busy} onClick={remove}>삭제</button>
           )}
-          {canEdit && (
-            <button className="btn btn-ghost" onClick={() => onEdit(task)}>수정</button>
-          )}
-          <button className="btn btn-primary" onClick={onClose}>닫기</button>
+          <div className="detail-actions-right">
+            {canEdit && (
+              <button className="btn btn-ghost btn-sm" onClick={() => onEdit(task)}>수정</button>
+            )}
+            <button className="btn btn-primary btn-sm" onClick={onClose}>닫기</button>
+          </div>
         </div>
       </div>
     </div>
