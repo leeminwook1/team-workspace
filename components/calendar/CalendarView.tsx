@@ -69,15 +69,15 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
     api()?.changeView(v);
   }
 
-  // 권한 (설계 3.2) — 프론트 표시용, 실제 검증은 API에서 2중으로
-  const isOrgEditor = ["admin", "manager", "deputy"].includes(user?.orgRole ?? "");
+  // 권한 (프론트 표시용, 실제 검증은 API에서 2중으로)
+  const isOrgEditor = ["admin", "manager", "deputy"].includes(user?.role ?? "");
+  const canEditOwnTeam = user?.role === "leader" || user?.role === "vice_leader";
   const editableTeams = useMemo(() => {
     if (!user) return [];
     if (isOrgEditor) return teams;
-    return teams.filter((t) =>
-      user.teams?.some((m) => m.teamId === t.id && (m.role === "leader" || m.role === "vice_leader"))
-    );
-  }, [teams, user, isOrgEditor]);
+    if (canEditOwnTeam && user.teamId) return teams.filter((t) => t.id === user.teamId);
+    return [];
+  }, [teams, user, isOrgEditor, canEditOwnTeam]);
 
   const fetchTasks = useCallback(async (from: string, to: string) => {
     const res = await fetch(`/api/tasks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
@@ -525,12 +525,13 @@ function TaskDetailModal({
   }
 
   const teamIds = task.teams.map((t) => t.id);
-  const isOrgEditor = ["admin", "manager", "deputy"].includes(user?.orgRole ?? "");
-  const myRoles = teamIds.map((id) => user?.teams?.find((m) => m.teamId === id)?.role ?? null);
-  const canEdit = isOrgEditor || myRoles.some((r) => r === "leader" || r === "vice_leader");
-  const canDelete = user?.orgRole === "admin" || myRoles.some((r) => r === "leader");
+  const role = user?.role;
+  const isOrgEditor = ["admin", "manager", "deputy"].includes(role ?? "");
+  const inTaskTeam = user?.teamId != null && teamIds.includes(user.teamId);
+  const canEdit = isOrgEditor || ((role === "leader" || role === "vice_leader") && inTaskTeam);
+  const canDelete = role === "admin" || (role === "leader" && inTaskTeam);
   const isAssignee = task.assignees.some((a) => a.id === user?.id);
-  const canStatus = canEdit || (myRoles.includes("member") && isAssignee);
+  const canStatus = canEdit || (role === "member" && inTaskTeam && isAssignee);
 
   async function setStatus(status: string) {
     setBusy(true);

@@ -12,7 +12,7 @@ export async function GET() {
 
   await connectDB();
   const users = await User.find({ status: { $ne: "pending" } })
-    .populate("teams.teamId", "name color")
+    .populate("teamId", "name color")
     .sort({ createdAt: 1 })
     .lean();
 
@@ -21,16 +21,11 @@ export async function GET() {
       id: String(u._id),
       name: u.name,
       email: u.email,
-      orgRole: u.orgRole ?? null,
+      role: u.role ?? "member",
       status: u.status,
-      teams: (u.teams ?? [])
-        .filter((t: any) => t.teamId) // 삭제된 팀 참조 방어
-        .map((t: any) => ({
-          teamId: String(t.teamId._id ?? t.teamId),
-          teamName: t.teamId.name ?? "(알 수 없음)",
-          teamColor: t.teamId.color ?? "#8b95a1",
-          role: t.role,
-        })),
+      team: u.teamId
+        ? { id: String(u.teamId._id ?? u.teamId), name: u.teamId.name ?? "(알 수 없음)", color: u.teamId.color ?? "#8b95a1" }
+        : null,
     })),
   });
 }

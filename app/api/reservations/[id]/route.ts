@@ -11,7 +11,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const r: any = await Reservation.findById(params.id);
   if (!r || r.status !== "booked") return json({ error: "예약을 찾을 수 없습니다." }, 404);
 
-  if (String(r.reservedBy) !== user.id && user.orgRole !== "admin") {
+  if (String(r.reservedBy) !== user.id && user.role !== "admin") {
     return json({ error: "본인 예약 또는 최고관리자만 취소할 수 있습니다." }, 403);
   }
 

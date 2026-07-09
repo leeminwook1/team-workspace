@@ -46,28 +46,22 @@ export const teamSchema = z.object({
   description: z.string().max(200).optional().default(""),
 });
 
-export const approveSchema = z.object({
-  teams: z
-    .array(
-      z.object({
-        teamId: z.string().min(1),
-        role: z.enum(["leader", "vice_leader", "member"]),
-      })
-    )
-    .default([]),
-  orgRole: z.enum(["admin", "manager", "deputy", "secretary"]).nullable().optional(),
-});
+const roleEnum = z.enum(["admin", "manager", "deputy", "secretary", "leader", "vice_leader", "member"]);
+
+// 단일 역할 + 소속 팀(팀 역할일 때만). role이 팀 역할이면 teamId 필수.
+export const approveSchema = z
+  .object({
+    role: roleEnum,
+    teamId: z.string().nullable().optional(),
+  })
+  .refine(
+    (d) => !["leader", "vice_leader", "member"].includes(d.role) || !!d.teamId,
+    { message: "팀 역할은 소속 팀을 선택해야 합니다.", path: ["teamId"] }
+  );
 
 export const userUpdateSchema = z.object({
-  teams: z
-    .array(
-      z.object({
-        teamId: z.string().min(1),
-        role: z.enum(["leader", "vice_leader", "member"]),
-      })
-    )
-    .optional(),
-  orgRole: z.enum(["admin", "manager", "deputy", "secretary"]).nullable().optional(),
+  role: roleEnum.optional(),
+  teamId: z.string().nullable().optional(),
   status: z.enum(["active", "disabled"]).optional(),
 });
 

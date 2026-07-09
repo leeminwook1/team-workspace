@@ -6,27 +6,30 @@ import { useConfirm } from "@/components/ConfirmProvider";
 type PendingUser = { id: string; name: string; email: string; requestedAt: string };
 type TeamOpt = { id: string; name: string; color: string };
 
-const TEAM_ROLES = [
-  { value: "member", label: "팀원" },
-  { value: "vice_leader", label: "부팀장" },
-  { value: "leader", label: "팀장" },
-];
-const ORG_ROLES = [
-  { value: "", label: "없음 (일반)" },
-  { value: "manager", label: "과장" },
-  { value: "deputy", label: "부과장" },
-  { value: "secretary", label: "서기" },
-  { value: "admin", label: "최고관리자" },
-];
+const TEAM_ROLE_VALUES = ["leader", "vice_leader", "member"];
+const isTeamRole = (r: string) => TEAM_ROLE_VALUES.includes(r);
+// isAdmin이면 전사 역할까지 선택 가능
+function roleOptions(isAdmin: boolean) {
+  const base = [
+    { value: "member", label: "팀원" },
+    { value: "vice_leader", label: "부팀장" },
+    { value: "leader", label: "팀장" },
+    { value: "secretary", label: "서기" },
+    { value: "deputy", label: "부과장" },
+    { value: "manager", label: "과장" },
+  ];
+  return isAdmin ? [...base, { value: "admin", label: "최고관리자" }] : base;
+}
 
 export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isAdmin: boolean }) {
   const [users, setUsers] = useState<PendingUser[]>([]);
   const [loaded, setLoaded] = useState(false);
-  // 사용자별 선택값
-  const [sel, setSel] = useState<Record<string, { teamId: string; role: string; orgRole: string }>>({});
+  // 사용자별 선택값 (역할 하나 + 소속 팀)
+  const [sel, setSel] = useState<Record<string, { role: string; teamId: string }>>({});
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState("");
   const confirm = useConfirm();
+  const ROLES = roleOptions(isAdmin);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/pending");
@@ -40,15 +43,14 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
   useEffect(() => { load(); }, [load]);
 
   function getSel(id: string) {
-    return sel[id] ?? { teamId: teams[0]?.id ?? "", role: "member", orgRole: "" };
+    return sel[id] ?? { role: "member", teamId: teams[0]?.id ?? "" };
   }
 
   async function approve(u: PendingUser) {
     const s = getSel(u.id);
     setBusy(u.id);
     setErr("");
-    const body: any = { teams: s.teamId ? [{ teamId: s.teamId, role: s.role }] : [] };
-    if (s.orgRole) body.orgRole = s.orgRole;
+    const body = { role: s.role, teamId: isTeamRole(s.role) ? s.teamId : null };
     const res = await fetch(`/api/admin/users/${u.id}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -92,8 +94,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
       <table className="table">
         <thead>
           <tr>
-            <th>이름</th><th>이메일</th><th>소속 팀</th><th>팀 역할</th>
-            {isAdmin && <th>전사 역할</th>}
+            <th>이름</th><th>이메일</th><th>역할</th><th>소속 팀</th>
             <th style={{ width: 160 }}>처리</th>
           </tr>
         </thead>
@@ -104,35 +105,28 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
               <tr key={u.id}>
                 <td>{u.name}</td>
                 <td data-label="이메일" style={{ color: "var(--ink-soft)" }}>{u.email}</td>
-                <td data-label="소속 팀">
-                  <select
-                    value={s.teamId}
-                    onChange={(e) => setSel({ ...sel, [u.id]: { ...s, teamId: e.target.value } })}
-                    className="mini-select"
-                  >
-                    {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </td>
-                <td data-label="팀 역할">
+                <td data-label="역할">
                   <select
                     value={s.role}
                     onChange={(e) => setSel({ ...sel, [u.id]: { ...s, role: e.target.value } })}
                     className="mini-select"
                   >
-                    {TEAM_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
                 </td>
-                {isAdmin && (
-                  <td data-label="전사 역할">
+                <td data-label="소속 팀">
+                  {isTeamRole(s.role) ? (
                     <select
-                      value={s.orgRole}
-                      onChange={(e) => setSel({ ...sel, [u.id]: { ...s, orgRole: e.target.value } })}
+                      value={s.teamId}
+                      onChange={(e) => setSel({ ...sel, [u.id]: { ...s, teamId: e.target.value } })}
                       className="mini-select"
                     >
-                      {ORG_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                      {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
-                  </td>
-                )}
+                  ) : (
+                    <span style={{ color: "var(--ink-faint)", fontSize: 13 }}>전체</span>
+                  )}
+                </td>
                 <td className="td-actions">
                   <div style={{ display: "flex", gap: 6 }}>
                     <button className="btn btn-primary btn-sm" disabled={busy === u.id} onClick={() => approve(u)}>승인</button>

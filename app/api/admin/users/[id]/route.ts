@@ -26,13 +26,28 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return json({ error: "본인 계정은 비활성화할 수 없습니다." }, 400);
   }
 
-  if (d.teams) {
-    const ids = d.teams.map((t) => t.teamId);
-    const found = await Team.countDocuments({ _id: { $in: ids } });
-    if (found !== new Set(ids).size) return json({ error: "존재하지 않는 팀이 포함되어 있습니다." }, 400);
-    target.teams = d.teams;
+  if (d.role !== undefined) {
+    const isOrgRole = ["admin", "manager", "deputy", "secretary"].includes(d.role);
+    if (isOrgRole) {
+      target.role = d.role;
+      target.teamId = null;
+    } else {
+      // 팀 역할: teamId 필요 (요청값 또는 기존값)
+      const tid = d.teamId ?? (target.teamId ? String(target.teamId) : null);
+      if (!tid) return json({ error: "팀 역할은 소속 팀을 선택해야 합니다." }, 400);
+      const found = await Team.countDocuments({ _id: tid });
+      if (!found) return json({ error: "존재하지 않는 팀입니다." }, 400);
+      target.role = d.role;
+      target.teamId = tid;
+    }
+  } else if (d.teamId !== undefined) {
+    // 역할 변경 없이 팀만 변경
+    if (d.teamId) {
+      const found = await Team.countDocuments({ _id: d.teamId });
+      if (!found) return json({ error: "존재하지 않는 팀입니다." }, 400);
+    }
+    target.teamId = d.teamId || null;
   }
-  if (d.orgRole !== undefined) target.orgRole = d.orgRole ?? undefined;
   if (d.status) target.status = d.status;
 
   await target.save();

@@ -5,11 +5,10 @@ import "@/models/User";
 import { requireActiveUser, json } from "@/lib/api";
 import { canViewAllTeams, type SessionUser } from "@/lib/permissions";
 
-// 업무 열람 권한: 전사 역할이거나, 업무의 팀 중 하나에 소속
+// 업무 열람 권한: 전사 역할이거나, 업무의 팀에 소속(1인 1팀)
 function canViewTask(user: SessionUser, teamIds: string[]) {
   if (canViewAllTeams(user)) return true;
-  const mine = new Set(user.teams.map((t) => t.teamId));
-  return teamIds.some((id) => mine.has(id));
+  return user.teamId != null && teamIds.includes(user.teamId);
 }
 
 // GET /api/tasks/:id/comments — 댓글 목록

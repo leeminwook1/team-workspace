@@ -37,14 +37,14 @@ export default function ReservationBoard({
   const [busy, setBusy] = useState(false);
 
   // 예약 가능한 팀 (팀장·부팀장 소속팀 / 전사 편집자는 전체)
-  const isOrgEditor = ["admin", "manager", "deputy"].includes(user?.orgRole ?? "");
+  const isOrgEditor = ["admin", "manager", "deputy"].includes(user?.role ?? "");
+  const canReserveOwn = user?.role === "leader" || user?.role === "vice_leader";
   const reservableTeams = useMemo(() => {
     if (!user) return [];
     if (isOrgEditor) return teams;
-    return teams.filter((t) =>
-      user.teams?.some((m) => m.teamId === t.id && (m.role === "leader" || m.role === "vice_leader"))
-    );
-  }, [teams, user, isOrgEditor]);
+    if (canReserveOwn && user.teamId) return teams.filter((t) => t.id === user.teamId);
+    return [];
+  }, [teams, user, isOrgEditor, canReserveOwn]);
 
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
@@ -210,7 +210,7 @@ export default function ReservationBoard({
                   <td style={{ color: "var(--ink-soft)" }}>{r.reservedBy?.name}</td>
                   <td style={{ color: "var(--ink-soft)", fontSize: 13 }}>{r.note}</td>
                   <td>
-                    {(r.reservedBy?.id === user?.id || user?.orgRole === "admin") && (
+                    {(r.reservedBy?.id === user?.id || user?.role === "admin") && (
                       <button className="btn btn-danger btn-sm" onClick={() => cancel(r.id)}>취소</button>
                     )}
                   </td>

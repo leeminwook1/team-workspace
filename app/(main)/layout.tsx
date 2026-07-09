@@ -1,19 +1,12 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
-import { canApproveUsers, canManageTeams, type SessionUser } from "@/lib/permissions";
+import { canApproveUsers, canManageTeams, ROLE_LABEL, type SessionUser } from "@/lib/permissions";
 import LogoutButton from "@/components/LogoutButton";
 import NavLinks, { BottomNav, type NavItem } from "@/components/NavLinks";
 import ThemeToggle from "@/components/ThemeToggle";
 
 export const dynamic = "force-dynamic";
-
-const ORG_LABEL: Record<string, string> = {
-  admin: "최고관리자",
-  manager: "과장",
-  deputy: "부과장",
-  secretary: "서기",
-};
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -29,7 +22,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     ...(showAdmin ? [{ href: "/admin", label: "관리자", icon: "admin" as const }] : []),
   ];
 
-  const roleLabel = user.orgRole ? ORG_LABEL[user.orgRole] : "팀원";
+  const roleLabel = ROLE_LABEL[user.role] ?? "팀원";
 
   return (
     <div className="shell">

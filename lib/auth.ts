@@ -42,12 +42,9 @@ export const authOptions: NextAuthOptions = {
         const u: any = await User.findById(token.sub).lean();
         if (u) {
           token.name = u.name;
-          token.orgRole = u.orgRole ?? null;
+          token.role = u.role ?? "member";
+          token.teamId = u.teamId ? String(u.teamId) : null;
           token.status = u.status;
-          token.teams = (u.teams ?? []).map((t: any) => ({
-            teamId: String(t.teamId),
-            role: t.role,
-          }));
           token.refreshedAt = now;
         }
       }
@@ -56,9 +53,9 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub!;
-        session.user.orgRole = (token.orgRole as any) ?? null;
+        session.user.role = (token.role as any) ?? "member";
+        session.user.teamId = (token.teamId as any) ?? null;
         session.user.status = (token.status as any) ?? "pending";
-        session.user.teams = (token.teams as any) ?? [];
       }
       return session;
     },

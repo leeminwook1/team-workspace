@@ -1,8 +1,7 @@
 import "next-auth";
 import "next-auth/jwt";
 
-export type TeamMembership = { teamId: string; role: "leader" | "vice_leader" | "member" };
-export type OrgRole = "admin" | "manager" | "deputy" | "secretary" | null;
+export type Role = "admin" | "manager" | "deputy" | "secretary" | "leader" | "vice_leader" | "member";
 
 declare module "next-auth" {
   interface Session {
@@ -10,18 +9,18 @@ declare module "next-auth" {
       id: string;
       name: string;
       email: string;
-      orgRole: OrgRole;
+      role: Role;
+      teamId: string | null;
       status: "pending" | "active" | "disabled";
-      teams: TeamMembership[];
     };
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
-    orgRole?: OrgRole;
+    role?: Role;
+    teamId?: string | null;
     status?: "pending" | "active" | "disabled";
-    teams?: TeamMembership[];
     refreshedAt?: number;
   }
 }

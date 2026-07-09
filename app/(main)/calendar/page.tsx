@@ -19,8 +19,9 @@ export default async function CalendarPage() {
   ]);
 
   // 조회 권한: 전사 역할(admin/과장/부과장/서기) → 전체 / 그 외 → 소속 팀만
-  const myTeamIds = new Set(user.teams.map((t) => t.teamId));
-  const visible = canViewAllTeams(user) ? all : all.filter((t: any) => myTeamIds.has(String(t._id)));
+  const visible = canViewAllTeams(user)
+    ? all
+    : all.filter((t: any) => user.teamId && String(t._id) === user.teamId);
 
   return (
     <CalendarView

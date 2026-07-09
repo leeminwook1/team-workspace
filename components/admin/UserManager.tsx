@@ -7,17 +7,26 @@ type UserRow = {
   id: string;
   name: string;
   email: string;
-  orgRole: string | null;
+  role: string;
   status: "active" | "disabled";
-  teams: { teamId: string; teamName: string; teamColor: string; role: string }[];
+  team: { id: string; name: string; color: string } | null;
 };
 
-const ORG_LABEL: Record<string, string> = {
+const ROLE_LABEL: Record<string, string> = {
   admin: "최고관리자", manager: "과장", deputy: "부과장", secretary: "서기",
-};
-const TEAM_ROLE_LABEL: Record<string, string> = {
   leader: "팀장", vice_leader: "부팀장", member: "팀원",
 };
+const TEAM_ROLE_VALUES = ["leader", "vice_leader", "member"];
+const isTeamRole = (r: string) => TEAM_ROLE_VALUES.includes(r);
+const ROLE_OPTIONS = [
+  { value: "member", label: "팀원" },
+  { value: "vice_leader", label: "부팀장" },
+  { value: "leader", label: "팀장" },
+  { value: "secretary", label: "서기" },
+  { value: "deputy", label: "부과장" },
+  { value: "manager", label: "과장" },
+  { value: "admin", label: "최고관리자" },
+];
 
 export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]; currentUserId: string }) {
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -54,24 +63,20 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
       <div className="card table-wrap">
         <table className="table">
           <thead>
-            <tr><th>이름</th><th>이메일</th><th>전사 역할</th><th>소속 팀</th><th>상태</th><th style={{ width: 140 }} /></tr>
+            <tr><th>이름</th><th>이메일</th><th>역할</th><th>소속 팀</th><th>상태</th><th style={{ width: 140 }} /></tr>
           </thead>
           <tbody>
             {users.map((u) => (
               <tr key={u.id} style={{ opacity: u.status === "active" ? 1 : 0.5 }}>
                 <td>{u.name}{u.id === currentUserId && " (나)"}</td>
                 <td data-label="이메일" style={{ color: "var(--ink-soft)" }}>{u.email}</td>
-                <td data-label="전사 역할">{u.orgRole ? ORG_LABEL[u.orgRole] : <span style={{ color: "var(--ink-faint)" }}>—</span>}</td>
+                <td data-label="역할" style={{ fontWeight: 600 }}>{ROLE_LABEL[u.role] ?? u.role}</td>
                 <td data-label="소속 팀">
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    {u.teams.length === 0 && <span style={{ color: "var(--ink-faint)", fontSize: 13 }}>없음</span>}
-                    {u.teams.map((t) => (
-                      <span key={t.teamId} className="chip">
-                        <span className="dot" style={{ background: t.teamColor }} />
-                        {t.teamName} · {TEAM_ROLE_LABEL[t.role]}
-                      </span>
-                    ))}
-                  </div>
+                  {u.team ? (
+                    <span className="chip"><span className="dot" style={{ background: u.team.color }} />{u.team.name}</span>
+                  ) : (
+                    <span style={{ color: "var(--ink-faint)", fontSize: 13 }}>전체</span>
+                  )}
                 </td>
                 <td data-label="상태">
                   <span className={`status-pill ${u.status === "active" ? "pill-on" : "pill-off"}`}>
@@ -117,29 +122,15 @@ function EditRoleModal({
 }: {
   user: UserRow; teams: TeamOpt[]; onClose: () => void; onSaved: () => void;
 }) {
-  const [orgRole, setOrgRole] = useState(user.orgRole ?? "");
-  const [memberships, setMemberships] = useState<Record<string, string>>(
-    Object.fromEntries(user.teams.map((t) => [t.teamId, t.role]))
-  );
+  const [role, setRole] = useState(user.role);
+  const [teamId, setTeamId] = useState(user.team?.id ?? teams[0]?.id ?? "");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-
-  function toggleTeam(teamId: string) {
-    setMemberships((prev) => {
-      const next = { ...prev };
-      if (teamId in next) delete next[teamId];
-      else next[teamId] = "member";
-      return next;
-    });
-  }
 
   async function save() {
     setBusy(true);
     setErr("");
-    const body = {
-      orgRole: orgRole || null,
-      teams: Object.entries(memberships).map(([teamId, role]) => ({ teamId, role })),
-    };
+    const body = { role, teamId: isTeamRole(role) ? teamId : null };
     const res = await fetch(`/api/admin/users/${user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -157,56 +148,24 @@ function EditRoleModal({
         <h2>{user.name} — 역할 편집</h2>
 
         <div className="field">
-          <label>전사 역할</label>
-          <select value={orgRole} onChange={(e) => setOrgRole(e.target.value)}>
-            <option value="">없음 (일반)</option>
-            <option value="manager">과장</option>
-            <option value="deputy">부과장</option>
-            <option value="secretary">서기</option>
-            <option value="admin">최고관리자</option>
+          <label>역할</label>
+          <select value={role} onChange={(e) => setRole(e.target.value)}>
+            {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </div>
 
-        <div className="field">
-          <label>소속 팀 · 조회 권한 (겸직 가능)</label>
-          <p style={{ fontSize: 12.5, color: "var(--ink-faint)", margin: "-2px 0 8px" }}>
-            선택한 팀의 일정만 볼 수 있어요. (전사 역할이 있으면 전체 조회)
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
-            {teams.map((t) => {
-              const inTeam = t.id in memberships;
-              return (
-                <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button
-                    type="button"
-                    className="chip"
-                    style={{
-                      cursor: "pointer", minWidth: 90,
-                      background: inTeam ? "var(--accent-soft)" : undefined,
-                      borderColor: inTeam ? "var(--primary)" : undefined,
-                      color: inTeam ? "var(--primary)" : undefined,
-                    }}
-                    onClick={() => toggleTeam(t.id)}
-                  >
-                    <span className="dot" style={{ background: t.color }} />
-                    {t.name}
-                  </button>
-                  {inTeam && (
-                    <select
-                      value={memberships[t.id]}
-                      onChange={(e) => setMemberships({ ...memberships, [t.id]: e.target.value })}
-                      className="mini-select"
-                    >
-                      <option value="member">팀원</option>
-                      <option value="vice_leader">부팀장</option>
-                      <option value="leader">팀장</option>
-                    </select>
-                  )}
-                </div>
-              );
-            })}
+        {isTeamRole(role) ? (
+          <div className="field">
+            <label>소속 팀</label>
+            <select value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
           </div>
-        </div>
+        ) : (
+          <p style={{ fontSize: 12.5, color: "var(--ink-faint)", margin: "0 0 8px" }}>
+            과장·부과장·서기·최고관리자는 <b>모든 팀</b>을 조회합니다. (소속 팀 없음)
+          </p>
+        )}
 
         {err && <p className="err-msg">{err}</p>}
         <div className="modal-actions">

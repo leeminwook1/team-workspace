@@ -18,7 +18,7 @@ export default async function AdminPendingPage() {
   return (
     <ApprovalList
       teams={teams.map((t: any) => ({ id: String(t._id), name: t.name, color: t.color }))}
-      isAdmin={session.user.orgRole === "admin"}
+      isAdmin={session.user.role === "admin"}
     />
   );
 }

@@ -1,29 +1,23 @@
 import mongoose, { Schema, models, model } from "mongoose";
 
-// 설계 4.1 — 전사 역할(orgRole) + 팀별 역할(teams[].role) 2축 구조
-const TeamMembershipSchema = new Schema(
-  {
-    teamId: { type: Schema.Types.ObjectId, ref: "Team", required: true },
-    role: { type: String, enum: ["leader", "vice_leader", "member"], required: true },
-  },
-  { _id: false }
-);
-
+// 단일 역할 체계 — 역할 하나 + 소속 팀 1개 (1인 1팀)
+// 전사 역할(admin/manager/deputy/secretary): 전체 팀 조회, teamId 없음(null)
+// 팀 역할(leader/vice_leader/member): teamId 필수
 const UserSchema = new Schema(
   {
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
     name: { type: String, required: true, trim: true },
-    orgRole: {
+    role: {
       type: String,
-      enum: ["admin", "manager", "deputy", "secretary"],
-      default: undefined, // 일반 사용자는 전사 역할 없음
+      enum: ["admin", "manager", "deputy", "secretary", "leader", "vice_leader", "member"],
+      default: "member",
     },
-    teams: { type: [TeamMembershipSchema], default: [] },
+    teamId: { type: Schema.Types.ObjectId, ref: "Team", default: null },
     status: {
       type: String,
       enum: ["pending", "active", "disabled"],
-      default: "pending", // 가입 = 승인 대기 (설계 5.3)
+      default: "pending", // 가입 = 승인 대기
       index: true,
     },
   },
