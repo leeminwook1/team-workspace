@@ -547,6 +547,8 @@ a { color: inherit; text-decoration: none; }
 .filter-reset:hover { background: var(--accent-soft); }
 
 /* 활동 로그 */
+.log-tabs { margin-bottom: 14px; }
+.activity-sub { color: var(--ink-faint); font-weight: 500; }
 .muted-note { color: var(--ink-faint); font-size: 14px; padding: 24px 4px; }
 .activity-list { display: flex; flex-direction: column; gap: 2px; }
 .activity-item {

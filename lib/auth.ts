@@ -3,12 +3,19 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { connectDB } from "./mongodb";
 import { User } from "@/models/User";
+import { logLogin } from "./activity";
 
 // 설계 5장 — Credentials 로그인 + JWT 세션.
 // jwt 콜백에서 매번 DB의 최신 역할/상태를 반영 → 승인 즉시 세션에 반영됨.
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
+  events: {
+    // 로그인 성공 시 로그인 로그 기록 (실패해도 로그인 자체엔 영향 없음)
+    async signIn({ user }) {
+      if (user?.id) await logLogin({ actorId: user.id, actorName: user.name, email: user.email });
+    },
+  },
   providers: [
     CredentialsProvider({
       name: "credentials",

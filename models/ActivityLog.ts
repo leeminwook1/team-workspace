@@ -6,8 +6,8 @@ const ActivityLogSchema = new Schema(
   {
     actorId: { type: Schema.Types.ObjectId, ref: "User", default: null },
     actorName: { type: String, default: "알 수 없음" }, // 스냅샷
-    action: { type: String, enum: ["create", "update", "delete", "status"], required: true },
-    targetType: { type: String, default: "task" },
+    action: { type: String, enum: ["create", "update", "delete", "status", "login"], required: true },
+    targetType: { type: String, default: "task" }, // task | directive | auth
     targetTitle: { type: String, default: "" }, // 스냅샷
     meta: { type: Schema.Types.Mixed, default: {} }, // 예: { status: "done" }
   },
