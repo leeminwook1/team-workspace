@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Icon } from "@/components/icons";
 
 type Log = {
   id: string;
@@ -42,23 +43,34 @@ export default function ActivityLogView() {
   const [tab, setTab] = useState<Tab>("activity");
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
 
-  const load = useCallback((t: Tab) => {
+  const load = useCallback((t: Tab, p: number) => {
     setLoading(true);
-    fetch(`/api/admin/activity?type=${t}`)
-      .then((r) => (r.ok ? r.json() : { logs: [] }))
-      .then((d) => setLogs(d.logs ?? []))
-      .catch(() => setLogs([]))
+    fetch(`/api/admin/activity?type=${t}&page=${p}`)
+      .then((r) => (r.ok ? r.json() : { logs: [], total: 0 }))
+      .then((d) => { setLogs(d.logs ?? []); setTotal(d.total ?? 0); setPageSize(d.pageSize ?? 20); })
+      .catch(() => { setLogs([]); setTotal(0); })
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { load(tab); }, [tab, load]);
+  useEffect(() => { load(tab, page); }, [tab, page, load]);
+
+  function changeTab(t: Tab) {
+    if (t === tab) return;
+    setTab(t);
+    setPage(1); // 탭 바꾸면 1페이지로
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div>
       <div className="seg log-tabs" role="tablist">
-        <button className={tab === "activity" ? "on" : ""} onClick={() => setTab("activity")}>활동</button>
-        <button className={tab === "login" ? "on" : ""} onClick={() => setTab("login")}>로그인</button>
+        <button className={tab === "activity" ? "on" : ""} onClick={() => changeTab("activity")}>활동</button>
+        <button className={tab === "login" ? "on" : ""} onClick={() => changeTab("login")}>로그인</button>
       </div>
 
       {loading ? (
@@ -66,6 +78,7 @@ export default function ActivityLogView() {
       ) : logs.length === 0 ? (
         <p className="muted-note">{tab === "login" ? "아직 로그인 기록이 없습니다." : "아직 활동 기록이 없습니다."}</p>
       ) : (
+        <>
         <div className="activity-list">
           {logs.map((l) => {
             const a = ACTION_META[l.action] ?? ACTION_META.update;
@@ -106,7 +119,36 @@ export default function ActivityLogView() {
             );
           })}
         </div>
+        <Pagination page={page} totalPages={totalPages} onPage={setPage} />
+        </>
       )}
+    </div>
+  );
+}
+
+function Pagination({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+  let start = Math.max(1, page - 2);
+  const end = Math.min(totalPages, start + 4);
+  start = Math.max(1, end - 4);
+  const nums = [];
+  for (let i = start; i <= end; i++) nums.push(i);
+
+  return (
+    <div className="pager">
+      <button className="pager-arrow" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="이전">
+        <Icon name="chevronL" size={15} />
+      </button>
+      {start > 1 && <button className="pager-num" onClick={() => onPage(1)}>1</button>}
+      {start > 2 && <span className="pager-gap">…</span>}
+      {nums.map((n) => (
+        <button key={n} className={`pager-num${n === page ? " on" : ""}`} onClick={() => onPage(n)}>{n}</button>
+      ))}
+      {end < totalPages - 1 && <span className="pager-gap">…</span>}
+      {end < totalPages && <button className="pager-num" onClick={() => onPage(totalPages)}>{totalPages}</button>}
+      <button className="pager-arrow" disabled={page >= totalPages} onClick={() => onPage(page + 1)} aria-label="다음">
+        <Icon name="chevronR" size={15} />
+      </button>
     </div>
   );
 }

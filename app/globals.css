@@ -675,6 +675,18 @@ a { color: inherit; text-decoration: none; }
 }
 .filter-reset:hover { background: var(--accent-soft); }
 
+/* 페이지네이션 */
+.pager { display: flex; justify-content: center; align-items: center; gap: 4px; margin-top: 20px; flex-wrap: wrap; }
+.pager-num, .pager-arrow {
+  min-width: 34px; height: 34px; padding: 0 6px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink-soft); border-radius: var(--r-sm); font-size: 13px; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; transition: background 0.12s;
+}
+.pager-num:hover, .pager-arrow:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.pager-num.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.pager-arrow:disabled { opacity: 0.4; cursor: not-allowed; }
+.pager-gap { color: var(--ink-faint); padding: 0 2px; }
+
 /* 활동 로그 */
 .log-tabs { margin-bottom: 14px; }
 .activity-sub { color: var(--ink-faint); font-weight: 500; }

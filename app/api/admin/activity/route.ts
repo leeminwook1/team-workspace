@@ -9,14 +9,23 @@ export async function GET(req: Request) {
   if (error) return error;
   if (!canManageTeams(user)) return json({ error: "권한이 없습니다." }, 403);
 
-  const type = new URL(req.url).searchParams.get("type");
+  const url = new URL(req.url);
+  const type = url.searchParams.get("type");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
+  const pageSize = 20;
   // 로그인 탭 = auth, 활동 탭 = 그 외(업무·TODO)
   const q = type === "login" ? { targetType: "auth" } : { targetType: { $ne: "auth" } };
 
   await connectDB();
-  const logs = await ActivityLog.find(q).sort({ createdAt: -1 }).limit(100).lean();
+  const [total, logs] = await Promise.all([
+    ActivityLog.countDocuments(q),
+    ActivityLog.find(q).sort({ createdAt: -1 }).skip((page - 1) * pageSize).limit(pageSize).lean(),
+  ]);
 
   return json({
+    total,
+    page,
+    pageSize,
     logs: logs.map((l: any) => ({
       id: String(l._id),
       actorName: l.actorName ?? "알 수 없음",
