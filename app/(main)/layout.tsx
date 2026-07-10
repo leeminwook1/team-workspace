@@ -52,10 +52,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     <div className="shell">
       {/* ── 데스크톱 사이드바 ── */}
       <aside className="side">
-        <div className="brand">
+        <Link href="/home" className="brand" aria-label="홈으로">
           <span className="glyph">T</span>
           <span className="word">Team<b>Cal</b></span>
-        </div>
+        </Link>
         <GlobalSearch />
         <NavLinks items={navItems} />
         <div className="side-foot">
@@ -75,10 +75,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
       {/* ── 모바일 상단바 ── */}
       <header className="topbar-m">
-        <div className="brand">
+        <Link href="/home" className="brand" aria-label="홈으로">
           <span className="glyph">T</span>
           <span className="word">Team<b>Cal</b></span>
-        </div>
+        </Link>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <GlobalSearch compact />
           <Link href="/settings" className="avatar" aria-label="내 계정" style={{ textDecoration: "none" }}>{user.name.slice(0, 1)}</Link>
