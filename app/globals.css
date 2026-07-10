@@ -753,33 +753,60 @@ a { color: inherit; text-decoration: none; }
 
 /* ── 홈 대시보드 ── */
 .dash { max-width: 1080px; }
-.dash-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
-.dash-date { font-size: 13px; font-weight: 600; color: var(--ink-faint); margin: 0 0 4px; }
-.dash-greet { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; margin: 0; }
-.dash-greet b { color: var(--primary); }
-.dash-alert {
-  font-size: 13.5px; font-weight: 700; color: var(--st-prog);
-  background: color-mix(in srgb, var(--st-prog) 12%, transparent);
-  padding: 9px 14px; border-radius: var(--r-sm);
+
+/* 히어로 — Toss 블루 그라디언트 */
+.dash-hero {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  background: linear-gradient(130deg, #2f7ded 0%, #3182f6 45%, #63a1f8 100%);
+  border-radius: var(--r-lg); padding: 26px 28px; margin-bottom: 16px;
+  box-shadow: 0 10px 26px color-mix(in srgb, #3182f6 28%, transparent);
 }
+.dash-hero::before, .dash-hero::after {
+  content: ""; position: absolute; border-radius: 50%; background: rgba(255, 255, 255, 0.09); pointer-events: none;
+}
+.dash-hero::before { width: 240px; height: 240px; right: -70px; top: -120px; }
+.dash-hero::after { width: 130px; height: 130px; right: 110px; bottom: -75px; background: rgba(255, 255, 255, 0.06); }
+.dash-hero > * { position: relative; z-index: 1; }
+.dash-date { font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.75); margin: 0 0 5px; }
+.dash-greet { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; margin: 0; color: #fff; }
+.dash-greet b { color: #fff; }
+.dash-alert {
+  font-size: 13.5px; font-weight: 700; color: #fff;
+  background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 9px 14px; border-radius: 999px; backdrop-filter: blur(4px);
+}
+.dash-alert:hover { background: rgba(255, 255, 255, 0.24); }
+
+/* 요약 숫자 — 아이콘 틴트 카드 */
 .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
 .dash-stat {
-  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 15px 8px;
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow);
   transition: transform 0.15s, box-shadow 0.15s;
 }
 .dash-stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
-.dash-stat b { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1; }
-.dash-stat b.danger { color: var(--danger); }
-.dash-stat b.warn { color: var(--st-prog); }
-.dash-stat span { font-size: 12px; font-weight: 600; color: var(--ink-faint); }
+.dash-stat-ico { width: 40px; height: 40px; border-radius: 13px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.dash-stat-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.dash-stat-body b { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1.15; }
+.dash-stat-body b.danger { color: var(--danger); }
+.dash-stat-body b.warn { color: var(--st-prog); }
+.dash-stat-body span { font-size: 12px; font-weight: 600; color: var(--ink-faint); white-space: nowrap; }
 .dash-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; align-items: start; }
 .dash-card { padding: 18px 18px 10px; }
 .dash-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.dash-card-head h2 { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
+.dash-card-head h2 { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
+.dash-h-ico { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .dash-card-head a { font-size: 12.5px; font-weight: 700; color: var(--ink-faint); }
 .dash-card-head a:hover { color: var(--primary); }
-.dash-empty { font-size: 13.5px; color: var(--ink-faint); padding: 14px 0 18px; margin: 0; }
+.dash-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 9px;
+  font-size: 13px; font-weight: 500; color: var(--ink-faint); padding: 20px 0 24px; margin: 0; text-align: center;
+}
+.dash-empty-ico {
+  width: 42px; height: 42px; border-radius: 50%; background: var(--surface-2);
+  display: inline-flex; align-items: center; justify-content: center; color: var(--ink-faint);
+}
 .dash-list { list-style: none; margin: 0; padding: 0; }
 .dash-list li { border-top: 1px solid var(--line); }
 .dash-list li:first-child { border-top: 0; }
