@@ -71,12 +71,12 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
         <div>
           <h1 className="page-title">TODO</h1>
           <p className="page-sub">
-            {canCreate ? "팀장에게 할 일을 내려주고 진행 상황을 확인하세요." : "받은 지시를 확인하고 팀원에게 분배하세요."}
+            {canCreate ? "팀장에게 할 일(TODO)을 내려주고 진행 상황을 확인하세요." : "받은 TODO를 확인하고 팀원에게 분배하세요."}
           </p>
         </div>
         {canCreate && (
           <button className="btn btn-primary btn-sm" onClick={() => setCreateOpen(true)}>
-            <Icon name="plus" size={16} strokeWidth={2.4} /> 지시 내리기
+            <Icon name="plus" size={16} strokeWidth={2.4} /> TODO 내리기
           </button>
         )}
       </div>
@@ -84,7 +84,7 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
       {loading ? (
         <p className="muted-note">불러오는 중…</p>
       ) : items.length === 0 ? (
-        <p className="muted-note">아직 지시가 없습니다.</p>
+        <p className="muted-note">아직 TODO가 없습니다.</p>
       ) : (
         <div className="dir-list">
           {items.map((d) => (
@@ -138,7 +138,7 @@ function DirectiveCard({
     else { const e = await res.json().catch(() => ({})); console.error("convert:", e.error ?? res.status); onChanged(); }
   }
   async function remove() {
-    const ok = await confirm({ title: "지시 삭제", message: "이 지시를 삭제할까요?", confirmText: "삭제", danger: true });
+    const ok = await confirm({ title: "TODO 삭제", message: "이 TODO를 삭제할까요?", confirmText: "삭제", danger: true });
     if (!ok) return;
     setBusy(true);
     await fetch(`/api/directives/${dir.id}`, { method: "DELETE" });
@@ -239,7 +239,7 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>지시 내리기</h2>
+        <h2>TODO 내리기</h2>
         <form onSubmit={submit}>
           <div className="field">
             <label>대상 팀 · 이 팀의 팀장이 받습니다</label>
@@ -258,8 +258,8 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 홍보영상 콘티 초안 작성" required />
           </div>
           <div className="field">
-            <label>지시 내용 (선택)</label>
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="세부 지시 사항" />
+            <label>TODO 내용 (선택)</label>
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="세부 내용" />
           </div>
           <div className="form-grid-2">
             <div className="field">
@@ -279,7 +279,7 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
-            <button className="btn btn-primary" disabled={busy}>{busy ? "내리는 중…" : "지시 내리기"}</button>
+            <button className="btn btn-primary" disabled={busy}>{busy ? "내리는 중…" : "TODO 내리기"}</button>
           </div>
         </form>
       </div>

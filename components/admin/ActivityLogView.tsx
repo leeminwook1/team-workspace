@@ -51,7 +51,7 @@ export default function ActivityLogView() {
     <div className="activity-list">
       {logs.map((l) => {
         const a = ACTION_META[l.action] ?? ACTION_META.update;
-        const kind = l.targetType === "directive" ? "지시" : "업무";
+        const kind = l.targetType === "directive" ? "TODO" : "업무";
         const statusLabel = l.action === "status" && l.meta?.status ? STATUS_LABEL[l.meta.status] : null;
         return (
           <div className="activity-item" key={l.id}>
