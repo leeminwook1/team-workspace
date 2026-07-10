@@ -47,7 +47,7 @@ function dueInfo(iso: string | null, done: boolean) {
   return { label, overdue, soon: !done && diff >= 0 && diff <= 2 };
 }
 
-export default function EventKanban({ eventId, teams, canManage }: { eventId: string; teams: Team[]; canManage: boolean }) {
+export default function EventKanban({ eventId, allTeams, canManage }: { eventId: string; allTeams: Team[]; canManage: boolean }) {
   const confirm = useConfirm();
   const { data: session } = useSession();
   const myId = session?.user?.id;
@@ -117,7 +117,7 @@ export default function EventKanban({ eventId, teams, canManage }: { eventId: st
   }
   function saveItem(data: { title: string; teamId: string; assigneeId: string; dueDate: string; note: string; status: Item["status"] }, existing?: Item) {
     if (!ev) return;
-    const team = teams.find((t) => t.id === data.teamId) ?? null;
+    const team = allTeams.find((t) => t.id === data.teamId) ?? null;
     const assignee = members.find((m) => m.id === data.assigneeId) ?? null;
     const dueDate = data.dueDate || null;
     if (existing) {
@@ -174,11 +174,11 @@ export default function EventKanban({ eventId, teams, canManage }: { eventId: st
       {/* 필터 + 뷰 전환 */}
       <div className="ev-controls">
         <div className="filter-row" style={{ margin: 0 }}>
-          {teams.length > 1 && (
+          {ev.teams.length > 1 && (
             <>
               <span className="filter-label">팀</span>
               <button className={`chip chip-btn${teamFilter === "all" ? " sel" : ""}`} onClick={() => setTeamFilter("all")}>전체</button>
-              {teams.map((t) => (
+              {ev.teams.map((t) => (
                 <button key={t.id} className={`chip chip-btn${teamFilter === t.id ? " sel" : ""}`} onClick={() => setTeamFilter(t.id)}>
                   <span className="dot" style={{ background: t.color }} />{t.name}
                 </button>
@@ -237,14 +237,14 @@ export default function EventKanban({ eventId, teams, canManage }: { eventId: st
 
       {itemModal && (
         <ItemModal
-          teams={teams} members={members} status={itemModal.status} item={itemModal.item}
+          teams={ev.teams} members={members} status={itemModal.status} item={itemModal.item}
           onClose={() => setItemModal(null)}
           onSave={saveItem}
           onDelete={itemModal.item ? () => deleteItem(itemModal.item!) : undefined}
         />
       )}
       {editEvent && (
-        <EventFormModal teams={teams} ev={ev} onClose={() => setEditEvent(false)} onSaved={() => { setEditEvent(false); load(); }} />
+        <EventFormModal teams={allTeams} ev={ev} onClose={() => setEditEvent(false)} onSaved={() => { setEditEvent(false); load(); }} />
       )}
     </div>
   );
