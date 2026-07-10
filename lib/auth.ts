@@ -8,7 +8,9 @@ import { logLogin } from "./activity";
 // 설계 5장 — Credentials 로그인 + JWT 세션.
 // jwt 콜백에서 매번 DB의 최신 역할/상태를 반영 → 승인 즉시 세션에 반영됨.
 export const authOptions: NextAuthOptions = {
-  session: { strategy: "jwt" },
+  // maxAge: 마지막 활동 후 2시간 지나면 세션 만료 → 재로그인 필요
+  // (사용 중에는 세션 조회 시마다 만료가 연장되는 롤링 방식)
+  session: { strategy: "jwt", maxAge: 2 * 60 * 60 },
   pages: { signIn: "/login" },
   events: {
     // 로그인 성공 시 로그인 로그 기록 (실패해도 로그인 자체엔 영향 없음)
