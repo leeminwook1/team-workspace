@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import koLocale from "@fullcalendar/core/locales/ko";
 import { Icon } from "@/components/icons";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { EventFormModal } from "@/components/events/EventList";
 
 type Team = { id: string; name: string; color: string };
 type Person = { id: string; name: string } | null;
-type Item = { id: string; title: string; status: "todo" | "doing" | "hold" | "done"; team: Team | null; assignee: Person; note: string };
+type Item = { id: string; title: string; status: "todo" | "doing" | "hold" | "done"; team: Team | null; assignee: Person; dueDate: string | null; note: string };
 type EventFull = {
   id: string; title: string; description: string; teams: Team[]; manager: Person;
   eventDate: string | null; location: string; priority: string; createdBy: string | null; items: Item[];
@@ -31,13 +35,26 @@ function ddayOf(iso: string | null) {
 }
 const uid = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `tmp-${Math.random().toString(36).slice(2)}`);
 const toPayload = (items: Item[]) =>
-  items.map((it) => ({ id: it.id, title: it.title, status: it.status, teamId: it.team?.id ?? null, assigneeId: it.assignee?.id ?? null, note: it.note }));
+  items.map((it) => ({ id: it.id, title: it.title, status: it.status, teamId: it.team?.id ?? null, assigneeId: it.assignee?.id ?? null, dueDate: it.dueDate, note: it.note }));
+function dueInfo(iso: string | null, done: boolean) {
+  if (!iso) return null;
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const d = new Date(iso); d.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - t.getTime()) / 86400000);
+  const label = d.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+  const overdue = !done && diff < 0;
+  return { label, overdue, soon: !done && diff >= 0 && diff <= 2 };
+}
 
 export default function EventKanban({ eventId, teams, canManage }: { eventId: string; teams: Team[]; canManage: boolean }) {
   const confirm = useConfirm();
+  const { data: session } = useSession();
+  const myId = session?.user?.id;
   const [ev, setEv] = useState<EventFull | null>(null);
   const [loading, setLoading] = useState(true);
   const [teamFilter, setTeamFilter] = useState<string>("all");
+  const [mineOnly, setMineOnly] = useState(false);
+  const [view, setView] = useState<"board" | "calendar">("board");
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
   const [itemModal, setItemModal] = useState<{ status: Item["status"]; item?: Item } | null>(null);
   const [editEvent, setEditEvent] = useState(false);
@@ -61,10 +78,11 @@ export default function EventKanban({ eventId, teams, canManage }: { eventId: st
 
   const filtered = useMemo(() => {
     if (!ev) return [];
-    if (teamFilter === "all") return ev.items;
-    if (teamFilter === "none") return ev.items.filter((i) => !i.team);
-    return ev.items.filter((i) => i.team?.id === teamFilter);
-  }, [ev, teamFilter]);
+    let list = ev.items;
+    if (teamFilter !== "all") list = list.filter((i) => i.team?.id === teamFilter);
+    if (mineOnly) list = list.filter((i) => i.assignee?.id === myId);
+    return list;
+  }, [ev, teamFilter, mineOnly, myId]);
 
   const byCol = useMemo(() => {
     const m: Record<string, Item[]> = { todo: [], doing: [], hold: [], done: [] };
@@ -96,14 +114,15 @@ export default function EventKanban({ eventId, teams, canManage }: { eventId: st
     setDragId(null);
     if (item) setStatus(item, status);
   }
-  function saveItem(data: { title: string; teamId: string; assigneeId: string; note: string; status: Item["status"] }, existing?: Item) {
+  function saveItem(data: { title: string; teamId: string; assigneeId: string; dueDate: string; note: string; status: Item["status"] }, existing?: Item) {
     if (!ev) return;
     const team = teams.find((t) => t.id === data.teamId) ?? null;
     const assignee = members.find((m) => m.id === data.assigneeId) ?? null;
+    const dueDate = data.dueDate || null;
     if (existing) {
-      persist(ev.items.map((i) => (i.id === existing.id ? { ...i, title: data.title, team, assignee, note: data.note, status: data.status } : i)));
+      persist(ev.items.map((i) => (i.id === existing.id ? { ...i, title: data.title, team, assignee, dueDate, note: data.note, status: data.status } : i)));
     } else {
-      persist([...ev.items, { id: uid(), title: data.title, status: data.status, team, assignee, note: data.note }]);
+      persist([...ev.items, { id: uid(), title: data.title, status: data.status, team, assignee, dueDate, note: data.note }]);
     }
     setItemModal(null);
   }
@@ -151,53 +170,69 @@ export default function EventKanban({ eventId, teams, canManage }: { eventId: st
         )}
       </div>
 
-      {/* 팀별 필터 */}
-      {teams.length > 1 && (
-        <div className="filter-row" style={{ marginBottom: 14 }}>
-          <span className="filter-label">팀</span>
-          <button className={`chip chip-btn${teamFilter === "all" ? " sel" : ""}`} onClick={() => setTeamFilter("all")}>전체</button>
-          {teams.map((t) => (
-            <button key={t.id} className={`chip chip-btn${teamFilter === t.id ? " sel" : ""}`} onClick={() => setTeamFilter(t.id)}>
-              <span className="dot" style={{ background: t.color }} />{t.name}
-            </button>
+      {/* 필터 + 뷰 전환 */}
+      <div className="ev-controls">
+        <div className="filter-row" style={{ margin: 0 }}>
+          {teams.length > 1 && (
+            <>
+              <span className="filter-label">팀</span>
+              <button className={`chip chip-btn${teamFilter === "all" ? " sel" : ""}`} onClick={() => setTeamFilter("all")}>전체</button>
+              {teams.map((t) => (
+                <button key={t.id} className={`chip chip-btn${teamFilter === t.id ? " sel" : ""}`} onClick={() => setTeamFilter(t.id)}>
+                  <span className="dot" style={{ background: t.color }} />{t.name}
+                </button>
+              ))}
+              <span className="filter-divider" />
+            </>
+          )}
+          <button className={`chip chip-btn${mineOnly ? " sel" : ""}`} onClick={() => setMineOnly((v) => !v)}>
+            <Icon name="userLine" size={13} /> 내 담당만
+          </button>
+        </div>
+        <div className="seg" role="tablist" aria-label="보기 전환" style={{ flex: "none" }}>
+          <button className={view === "board" ? "on" : ""} onClick={() => setView("board")}>보드</button>
+          <button className={view === "calendar" ? "on" : ""} onClick={() => setView("calendar")}>달력</button>
+        </div>
+      </div>
+
+      {view === "board" ? (
+        <div className="kanban">
+          {COLS.map((c, ci) => (
+            <div
+              key={c.key}
+              className={`kb-col${dragOver === c.key ? " drop-over" : ""}`}
+              onDragOver={canManage ? (e) => { e.preventDefault(); if (dragOver !== c.key) setDragOver(c.key); } : undefined}
+              onDragLeave={canManage ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver((cur) => (cur === c.key ? null : cur)); } : undefined}
+              onDrop={canManage ? () => handleDrop(c.key) : undefined}
+            >
+              <div className="kb-col-head">
+                <span className="kb-col-title"><span className="dot" style={{ background: c.color }} />{c.label}</span>
+                <span className="kb-count">{byCol[c.key].length}</span>
+              </div>
+              <div className="kb-cards">
+                {byCol[c.key].length === 0 && <div className="kb-empty">{dragOver === c.key ? "여기에 놓기" : "비어 있음"}</div>}
+                {byCol[c.key].map((it) => (
+                  <ItemCard
+                    key={it.id} item={it} colIdx={ci} canManage={canManage}
+                    dragging={dragId === it.id}
+                    onDragStart={() => setDragId(it.id)}
+                    onDragEnd={() => { setDragId(null); setDragOver(null); }}
+                    onOpen={() => canManage && setItemModal({ status: it.status, item: it })}
+                    onMove={(d) => move(it, d)}
+                  />
+                ))}
+              </div>
+              {canManage && (
+                <button className="kb-add" onClick={() => setItemModal({ status: c.key })}>
+                  <Icon name="plus" size={14} strokeWidth={2.4} /> 할 일 추가
+                </button>
+              )}
+            </div>
           ))}
         </div>
+      ) : (
+        <EventItemCalendar items={filtered} eventDate={ev.eventDate} onOpen={(it) => canManage && setItemModal({ status: it.status, item: it })} />
       )}
-
-      <div className="kanban">
-        {COLS.map((c, ci) => (
-          <div
-            key={c.key}
-            className={`kb-col${dragOver === c.key ? " drop-over" : ""}`}
-            onDragOver={canManage ? (e) => { e.preventDefault(); if (dragOver !== c.key) setDragOver(c.key); } : undefined}
-            onDragLeave={canManage ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver((cur) => (cur === c.key ? null : cur)); } : undefined}
-            onDrop={canManage ? () => handleDrop(c.key) : undefined}
-          >
-            <div className="kb-col-head">
-              <span className="kb-col-title"><span className="dot" style={{ background: c.color }} />{c.label}</span>
-              <span className="kb-count">{byCol[c.key].length}</span>
-            </div>
-            <div className="kb-cards">
-              {byCol[c.key].length === 0 && <div className="kb-empty">{dragOver === c.key ? "여기에 놓기" : "비어 있음"}</div>}
-              {byCol[c.key].map((it) => (
-                <ItemCard
-                  key={it.id} item={it} colIdx={ci} canManage={canManage}
-                  dragging={dragId === it.id}
-                  onDragStart={() => setDragId(it.id)}
-                  onDragEnd={() => { setDragId(null); setDragOver(null); }}
-                  onOpen={() => canManage && setItemModal({ status: it.status, item: it })}
-                  onMove={(d) => move(it, d)}
-                />
-              ))}
-            </div>
-            {canManage && (
-              <button className="kb-add" onClick={() => setItemModal({ status: c.key })}>
-                <Icon name="plus" size={14} strokeWidth={2.4} /> 할 일 추가
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
 
       {itemModal && (
         <ItemModal
@@ -220,6 +255,7 @@ function ItemCard({
   item: Item; colIdx: number; canManage: boolean; dragging: boolean;
   onDragStart: () => void; onDragEnd: () => void; onOpen: () => void; onMove: (dir: -1 | 1) => void;
 }) {
+  const due = dueInfo(item.dueDate, item.status === "done");
   return (
     <div className={`kb-card${dragging ? " dragging" : ""}`} onClick={onOpen} role="button" tabIndex={0}
       draggable={canManage}
@@ -227,9 +263,10 @@ function ItemCard({
       onDragEnd={canManage ? onDragEnd : undefined}
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}>
       <div className="kb-card-title">{item.title}</div>
-      {(item.team || item.assignee) && (
+      {(item.team || item.assignee || due) && (
         <div className="kb-card-meta">
           {item.team && <span className="chip chip-xs"><span className="dot" style={{ background: item.team.color }} />{item.team.name}</span>}
+          {due && <span className={`due-badge${due.overdue ? " overdue" : due.soon ? " soon" : ""}`}>{due.overdue ? "지연 " : ""}{due.label}</span>}
           {item.assignee && <span>· {item.assignee.name}</span>}
         </div>
       )}
@@ -248,11 +285,13 @@ function ItemModal({
   teams, members, status, item, onClose, onSave, onDelete,
 }: {
   teams: Team[]; members: { id: string; name: string }[]; status: Item["status"]; item?: Item;
-  onClose: () => void; onSave: (d: { title: string; teamId: string; assigneeId: string; note: string; status: Item["status"] }, existing?: Item) => void; onDelete?: () => void;
+  onClose: () => void; onSave: (d: { title: string; teamId: string; assigneeId: string; dueDate: string; note: string; status: Item["status"] }, existing?: Item) => void; onDelete?: () => void;
 }) {
+  const toDate = (iso: string | null | undefined) => (iso ? new Date(iso).toISOString().slice(0, 10) : "");
   const [title, setTitle] = useState(item?.title ?? "");
   const [teamId, setTeamId] = useState(item?.team?.id ?? (teams.length === 1 ? teams[0].id : ""));
   const [assigneeId, setAssigneeId] = useState(item?.assignee?.id ?? "");
+  const [dueDate, setDueDate] = useState(toDate(item?.dueDate));
   const [note, setNote] = useState(item?.note ?? "");
   const [st, setSt] = useState<Item["status"]>(item?.status ?? status);
   const [err, setErr] = useState("");
@@ -260,7 +299,7 @@ function ItemModal({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) { setErr("할 일 내용을 입력하세요."); return; }
-    onSave({ title: title.trim(), teamId, assigneeId, note, status: st }, item);
+    onSave({ title: title.trim(), teamId, assigneeId, dueDate, note: note, status: st }, item);
   }
 
   return (
@@ -290,6 +329,10 @@ function ItemModal({
             </div>
           </div>
           <div className="field">
+            <label>마감일 (선택)</label>
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </div>
+          <div className="field">
             <label>상태</label>
             <div className="seg" style={{ width: "100%" }}>
               {COLS.map((c) => (
@@ -311,6 +354,50 @@ function ItemModal({
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+const STATUS_COLOR: Record<Item["status"], string> = { todo: "#8b95a1", doing: "#3182f6", hold: "#e8951b", done: "#22c55e" };
+
+// 행사별 달력 — 그 행사의 투두를 마감일 기준으로 표시 (메인 달력과 분리)
+function EventItemCalendar({ items, eventDate, onOpen }: { items: Item[]; eventDate: string | null; onOpen: (it: Item) => void }) {
+  const events: any[] = items.filter((i) => i.dueDate).map((i) => {
+    const color = i.team?.color ?? STATUS_COLOR[i.status];
+    return {
+      id: i.id, title: i.title, start: i.dueDate!, allDay: true,
+      backgroundColor: color + "26", borderColor: color, textColor: color,
+      classNames: i.status === "done" ? ["ev-done"] : [],
+      extendedProps: { itemId: i.id },
+    };
+  });
+  if (eventDate) {
+    events.push({
+      id: "__eventdate", title: "🎯 행사일", start: eventDate, allDay: true,
+      backgroundColor: "var(--accent-soft)", borderColor: "var(--primary)", textColor: "var(--primary)",
+      extendedProps: { itemId: "" },
+    });
+  }
+  const initialDate = eventDate ?? items.find((i) => i.dueDate)?.dueDate ?? undefined;
+
+  return (
+    <div className="card cal-card" style={{ padding: 14 }}>
+      <FullCalendar
+        plugins={[dayGridPlugin]}
+        initialView="dayGridMonth"
+        initialDate={initialDate}
+        locale={koLocale}
+        height="auto"
+        headerToolbar={{ left: "title", right: "prev,today,next" }}
+        buttonText={{ today: "오늘" }}
+        dayMaxEvents={4}
+        fixedWeekCount={false}
+        moreLinkContent={(arg) => `+${arg.num}개`}
+        eventDisplay="block"
+        events={events}
+        eventClick={(arg) => { const it = items.find((x) => x.id === arg.event.extendedProps.itemId); if (it) onOpen(it); }}
+        noEventsContent="마감일이 지정된 할 일이 없습니다"
+      />
     </div>
   );
 }

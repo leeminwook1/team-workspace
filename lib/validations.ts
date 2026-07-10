@@ -51,6 +51,7 @@ const eventItemSchema = z.object({
   status: z.enum(["todo", "doing", "hold", "done"]).optional().default("todo"),
   teamId: z.string().nullable().optional(),
   assigneeId: z.string().nullable().optional(),
+  dueDate: z.string().nullable().optional(),
   note: z.string().max(500).optional().default(""),
 });
 export const eventUpdateSchema = z.object({

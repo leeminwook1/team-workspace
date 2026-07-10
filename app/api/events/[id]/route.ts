@@ -25,6 +25,7 @@ function serializeFull(e: any) {
       status: it.status,
       team: it.teamId?.name ? { id: String(it.teamId._id ?? it.teamId), name: it.teamId.name, color: it.teamId.color ?? "#8b95a1" } : null,
       assignee: it.assigneeId?.name ? { id: String(it.assigneeId._id ?? it.assigneeId), name: it.assigneeId.name } : null,
+      dueDate: it.dueDate ?? null,
       note: it.note ?? "",
     })),
     createdAt: e.createdAt,
@@ -77,6 +78,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       status: it.status ?? "todo",
       teamId: it.teamId || null,
       assigneeId: it.assigneeId || null,
+      dueDate: it.dueDate ? new Date(it.dueDate) : null,
       note: it.note ?? "",
     }));
   }

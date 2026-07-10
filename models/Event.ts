@@ -8,6 +8,7 @@ const EventItemSchema = new Schema(
     status: { type: String, enum: ["todo", "doing", "hold", "done"], default: "todo" },
     teamId: { type: Schema.Types.ObjectId, ref: "Team", default: null }, // 담당 팀(팀별 필터)
     assigneeId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    dueDate: { type: Date, default: null }, // 투두 마감일(행사별 달력·지연 표시)
     note: { type: String, default: "", trim: true, maxlength: 500 },
   },
   { _id: true }
