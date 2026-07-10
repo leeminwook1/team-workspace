@@ -8,7 +8,7 @@ import { EventFormModal } from "@/components/events/EventList";
 
 type Team = { id: string; name: string; color: string };
 type Person = { id: string; name: string } | null;
-type Item = { id: string; title: string; status: "todo" | "doing" | "done"; team: Team | null; assignee: Person; note: string };
+type Item = { id: string; title: string; status: "todo" | "doing" | "hold" | "done"; team: Team | null; assignee: Person; note: string };
 type EventFull = {
   id: string; title: string; description: string; teams: Team[]; manager: Person;
   eventDate: string | null; location: string; priority: string; createdBy: string | null; items: Item[];
@@ -17,6 +17,7 @@ type EventFull = {
 const COLS: { key: Item["status"]; label: string; color: string }[] = [
   { key: "todo", label: "할 일", color: "#8b95a1" },
   { key: "doing", label: "진행중", color: "#3182f6" },
+  { key: "hold", label: "보류", color: "#e8951b" },
   { key: "done", label: "완료", color: "#22c55e" },
 ];
 function ddayOf(iso: string | null) {
@@ -50,16 +51,13 @@ export default function EventKanban({ eventId, teams, canManage }: { eventId: st
   }, [eventId]);
   useEffect(() => { load(); }, [load]);
 
-  // 담당자 후보(참여 팀 멤버 union)
+  // 담당자 후보 = 전체 활성 사용자 (팀 무관 지정 가능)
   useEffect(() => {
-    if (teams.length === 0) return;
-    Promise.all(teams.map((t) => fetch(`/api/users?team=${t.id}`).then((r) => (r.ok ? r.json() : { users: [] })).catch(() => ({ users: [] }))))
-      .then((res) => {
-        const map = new Map<string, { id: string; name: string }>();
-        res.forEach((r) => (r.users ?? []).forEach((u: any) => map.set(u.id, { id: u.id, name: u.name })));
-        setMembers(Array.from(map.values()));
-      });
-  }, [teams]);
+    fetch("/api/users")
+      .then((r) => (r.ok ? r.json() : { users: [] }))
+      .then((d) => setMembers((d.users ?? []).map((u: any) => ({ id: u.id, name: u.name }))))
+      .catch(() => setMembers([]));
+  }, []);
 
   const filtered = useMemo(() => {
     if (!ev) return [];
@@ -69,7 +67,7 @@ export default function EventKanban({ eventId, teams, canManage }: { eventId: st
   }, [ev, teamFilter]);
 
   const byCol = useMemo(() => {
-    const m: Record<string, Item[]> = { todo: [], doing: [], done: [] };
+    const m: Record<string, Item[]> = { todo: [], doing: [], hold: [], done: [] };
     filtered.forEach((i) => m[i.status].push(i));
     return m;
   }, [filtered]);
@@ -166,7 +164,7 @@ export default function EventKanban({ eventId, teams, canManage }: { eventId: st
         </div>
       )}
 
-      <div className="kanban kanban-3">
+      <div className="kanban">
         {COLS.map((c, ci) => (
           <div
             key={c.key}

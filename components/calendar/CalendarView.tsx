@@ -321,6 +321,13 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
             const t = tasks.find((x) => x.id === arg.event.extendedProps.taskId);
             if (t) setDetail(t);
           }}
+          eventDidMount={(info) => {
+            // 잘려서 안 보이는 일정: 마우스 올리면 전체(시간·제목·장소) 툴팁
+            const t = tasks.find((x) => x.id === info.event.extendedProps.taskId);
+            const time = info.timeText ? `${info.timeText} ` : "";
+            const place = t?.location ? ` · ${t.location}` : "";
+            info.el.setAttribute("title", `${time}${info.event.title}${place}`);
+          }}
         />
       </div>
 

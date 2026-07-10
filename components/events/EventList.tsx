@@ -124,15 +124,13 @@ export function EventFormModal({
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // 담당자 후보 = 전체 활성 사용자 (팀에 안 묶인 과장·부과장 등도 지정 가능)
   useEffect(() => {
-    if (teamIds.length === 0) { setMembers([]); return; }
-    Promise.all(teamIds.map((id) => fetch(`/api/users?team=${id}`).then((r) => (r.ok ? r.json() : { users: [] })).catch(() => ({ users: [] }))))
-      .then((res) => {
-        const map = new Map<string, { id: string; name: string }>();
-        res.forEach((r) => (r.users ?? []).forEach((u: any) => map.set(u.id, { id: u.id, name: u.name })));
-        setMembers(Array.from(map.values()));
-      });
-  }, [teamIds]);
+    fetch("/api/users")
+      .then((r) => (r.ok ? r.json() : { users: [] }))
+      .then((d) => setMembers((d.users ?? []).map((u: any) => ({ id: u.id, name: u.name }))))
+      .catch(() => setMembers([]));
+  }, []);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();

@@ -48,7 +48,7 @@ export const eventCreateSchema = z.object({
 const eventItemSchema = z.object({
   id: z.string().optional(), // 기존 항목이면 _id 유지
   title: z.string().min(1).max(200),
-  status: z.enum(["todo", "doing", "done"]).optional().default("todo"),
+  status: z.enum(["todo", "doing", "hold", "done"]).optional().default("todo"),
   teamId: z.string().nullable().optional(),
   assigneeId: z.string().nullable().optional(),
   note: z.string().max(500).optional().default(""),

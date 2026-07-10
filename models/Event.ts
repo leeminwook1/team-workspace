@@ -5,7 +5,7 @@ import { Schema, models, model } from "mongoose";
 const EventItemSchema = new Schema(
   {
     title: { type: String, required: true, trim: true, maxlength: 200 },
-    status: { type: String, enum: ["todo", "doing", "done"], default: "todo" },
+    status: { type: String, enum: ["todo", "doing", "hold", "done"], default: "todo" },
     teamId: { type: Schema.Types.ObjectId, ref: "Team", default: null }, // 담당 팀(팀별 필터)
     assigneeId: { type: Schema.Types.ObjectId, ref: "User", default: null },
     note: { type: String, default: "", trim: true, maxlength: 500 },
