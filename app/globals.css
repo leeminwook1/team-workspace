@@ -283,8 +283,27 @@ a { color: inherit; text-decoration: none; }
 .assign-note { flex: 1; min-width: 0; padding: 7px 10px; font-size: 13px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); }
 .assign-note:disabled { opacity: 0.5; }
 
-/* ── 행사 관리 (칸반) ── */
+/* ── 행사 관리 ── */
+/* 행사 목록 (카드 그리드) */
+.ev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.ev-item { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow); padding: 16px; transition: border-color 0.15s, transform 0.1s; }
+.ev-item:hover { border-color: var(--line-strong); }
+.ev-item:active { transform: scale(0.995); }
+.ev-item-top { display: flex; align-items: center; gap: 6px; min-height: 20px; margin-bottom: 9px; }
+.ev-item-top .kb-dday { margin-left: auto; }
+.ev-item-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); line-height: 1.35; word-break: keep-all; }
+.ev-item-meta { display: flex; flex-wrap: wrap; gap: 5px; font-size: 12.5px; color: var(--ink-faint); margin-top: 6px; }
+.ev-item-foot { display: flex; align-items: center; gap: 9px; margin-top: 14px; }
+.ev-item-count { font-size: 11.5px; font-weight: 700; color: var(--ink-faint); white-space: nowrap; }
+
+/* 행사 상세(칸반) 헤더 */
+.ev-back { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; font-weight: 700; color: var(--ink-faint); margin-bottom: 12px; }
+.ev-back:hover { color: var(--primary); }
+.ev-detail-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* ── 칸반 ── */
 .kanban { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: start; }
+.kanban-3 { grid-template-columns: repeat(3, 1fr); }
 .kb-col { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px; min-width: 0; }
 .kb-col-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 10px; }
 .kb-col-title { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 800; color: var(--ink); }
@@ -295,6 +314,9 @@ a { color: inherit; text-decoration: none; }
 .kb-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow); padding: 11px 12px; cursor: pointer; transition: border-color 0.15s, transform 0.1s; }
 .kb-card:hover { border-color: var(--line-strong); }
 .kb-card:active { transform: scale(0.99); }
+.kb-card[draggable="true"] { cursor: grab; }
+.kb-card.dragging { opacity: 0.4; }
+.kb-col.drop-over { border-color: var(--primary); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--primary); }
 .kb-card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; min-height: 18px; }
 .kb-teams { display: flex; gap: 3px; }
 .kb-dday { font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; margin-left: auto; }
@@ -314,6 +336,12 @@ a { color: inherit; text-decoration: none; }
 .kb-move-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; height: 28px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft); border-radius: var(--r-sm); cursor: pointer; transition: 0.15s; }
 .kb-move-btn:hover:not(:disabled) { background: var(--accent-soft); color: var(--primary); border-color: var(--primary); }
 .kb-move-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.kb-card-note { font-size: 12px; color: var(--ink-soft); margin-top: 6px; line-height: 1.5; white-space: pre-wrap; }
+.chip-xs { padding: 2px 7px; font-size: 11px; gap: 4px; }
+.chip-xs .dot { width: 6px; height: 6px; }
+.kb-add { width: 100%; margin-top: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 8px; font-size: 12.5px; font-weight: 700; color: var(--ink-faint); background: transparent; border: 1px dashed var(--line-strong); border-radius: var(--r-sm); cursor: pointer; transition: 0.15s; }
+.kb-add:hover { color: var(--primary); border-color: var(--primary); background: var(--accent-soft); }
+.modal.modal-sm { max-width: 440px; }
 
 /* 체크리스트 편집기 (모달) */
 .check-editor { display: flex; flex-direction: column; gap: 7px; }

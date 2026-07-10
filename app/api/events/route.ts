@@ -7,28 +7,25 @@ import { canManageEvents } from "@/lib/permissions";
 import { eventCreateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 
-function serializeEvent(e: any) {
+// 목록용 요약 (투두 진행률 포함, items 본문은 제외)
+function serializeSummary(e: any) {
+  const items = e.items ?? [];
   return {
     id: String(e._id),
     title: e.title,
-    description: e.description,
-    stage: e.stage,
-    teams: (e.teamIds ?? [])
-      .filter(Boolean)
-      .map((tm: any) => ({ id: String(tm._id ?? tm), name: tm.name ?? "", color: tm.color ?? "#8b95a1" })),
-    manager: e.managerId?.name
-      ? { id: String(e.managerId._id ?? e.managerId), name: e.managerId.name }
-      : null,
+    stageless: true,
+    teams: (e.teamIds ?? []).filter(Boolean).map((tm: any) => ({ id: String(tm._id ?? tm), name: tm.name ?? "", color: tm.color ?? "#8b95a1" })),
+    manager: e.managerId?.name ? { id: String(e.managerId._id ?? e.managerId), name: e.managerId.name } : null,
     eventDate: e.eventDate,
     location: e.location,
     priority: e.priority,
-    checklist: (e.checklist ?? []).map((c: any) => ({ id: String(c._id), text: c.text, done: !!c.done })),
-    createdBy: e.createdBy ? String(e.createdBy._id ?? e.createdBy) : null,
+    itemsTotal: items.length,
+    itemsDone: items.filter((it: any) => it.status === "done").length,
     createdAt: e.createdAt,
   };
 }
 
-// GET /api/events — 행사 전체 (공유 보드: 모든 활성 유저 조회)
+// GET /api/events — 행사 목록 (공유 보드: 모든 활성 유저 조회)
 export async function GET() {
   const { error } = await requireActiveUser();
   if (error) return error;
@@ -41,7 +38,7 @@ export async function GET() {
     .limit(300)
     .lean();
 
-  return json({ events: list.map(serializeEvent) });
+  return json({ events: list.map(serializeSummary) });
 }
 
 // POST /api/events — 행사 등록 (편집자 역할)
@@ -64,7 +61,7 @@ export async function POST(req: Request) {
     eventDate: d.eventDate ? new Date(d.eventDate) : null,
     location: d.location,
     priority: d.priority,
-    checklist: d.checklist,
+    items: [],
     createdBy: user.id,
   });
   await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetType: "event", targetTitle: created.title });

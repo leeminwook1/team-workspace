@@ -35,11 +35,7 @@ export const taskUpdateSchema = z.object({
   location: z.string().max(120).optional(),
 });
 
-// 행사 관리 (칸반)
-const checklistItemSchema = z.object({
-  text: z.string().min(1).max(200),
-  done: z.boolean().optional().default(false),
-});
+// 행사 관리 — 행사(컨테이너) + 그 안의 투두(items) 칸반
 export const eventCreateSchema = z.object({
   title: z.string().min(1, "행사명을 입력하세요").max(200),
   description: z.string().max(2000).optional().default(""),
@@ -48,18 +44,24 @@ export const eventCreateSchema = z.object({
   eventDate: z.string().nullable().optional(),
   location: z.string().max(120).optional().default(""),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
-  checklist: z.array(checklistItemSchema).optional().default([]),
+});
+const eventItemSchema = z.object({
+  id: z.string().optional(), // 기존 항목이면 _id 유지
+  title: z.string().min(1).max(200),
+  status: z.enum(["todo", "doing", "done"]).optional().default("todo"),
+  teamId: z.string().nullable().optional(),
+  assigneeId: z.string().nullable().optional(),
+  note: z.string().max(500).optional().default(""),
 });
 export const eventUpdateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),
-  stage: z.enum(["planning", "preparing", "ongoing", "done"]).optional(),
   teamIds: z.array(z.string().min(1)).min(1).optional(),
   managerId: z.string().nullable().optional(),
   eventDate: z.string().nullable().optional(),
   location: z.string().max(120).optional(),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
-  checklist: z.array(checklistItemSchema).optional(),
+  items: z.array(eventItemSchema).optional(),
 });
 
 // 지시(하달) — 발신은 전사 역할, 대상은 팀(그 팀장이 수신)

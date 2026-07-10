@@ -3,7 +3,7 @@ import { connectDB } from "@/lib/mongodb";
 import { Team } from "@/models/Team";
 import { authOptions } from "@/lib/auth";
 import { canManageEvents, type SessionUser } from "@/lib/permissions";
-import EventBoard from "@/components/events/EventBoard";
+import EventList from "@/components/events/EventList";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export default async function EventsPage() {
   const teams = await Team.find({ isActive: true }).sort({ createdAt: 1 }).lean();
 
   return (
-    <EventBoard
+    <EventList
       teams={teams.map((t: any) => ({ id: String(t._id), name: t.name, color: t.color }))}
       canManage={canManageEvents(user)}
     />
