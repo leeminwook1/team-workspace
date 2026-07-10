@@ -10,6 +10,7 @@ export type Role = "admin" | "manager" | "deputy" | "secretary" | "leader" | "vi
 
 export type SessionUser = {
   id: string;
+  name?: string | null;
   role: Role;
   teamId: string | null;
   status: "pending" | "active" | "disabled";

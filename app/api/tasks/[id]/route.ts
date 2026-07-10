@@ -3,6 +3,7 @@ import { Task } from "@/models/Task";
 import { requireActiveUser, json } from "@/lib/api";
 import { canEditTaskAny, canDeleteTaskAny, canChangeStatusAny, canCreateTaskInAll } from "@/lib/permissions";
 import { taskUpdateSchema } from "@/lib/validations";
+import { logActivity } from "@/lib/activity";
 
 // PATCH /api/tasks/:id — 수정(팀장·부팀장·과장·부과장) / 팀원은 본인 담당 업무의 status만
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -53,6 +54,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   await task.save();
+  await logActivity({
+    actorId: user.id,
+    actorName: user.name,
+    action: statusOnly ? "status" : "update",
+    targetTitle: task.title,
+    meta: statusOnly ? { status: task.status } : undefined,
+  });
   return json({ id: String(task._id) });
 }
 
@@ -71,5 +79,6 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   }
 
   await Task.deleteOne({ _id: params.id });
+  await logActivity({ actorId: user.id, actorName: user.name, action: "delete", targetTitle: task.title });
   return json({ deleted: true });
 }

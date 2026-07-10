@@ -55,6 +55,8 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [visible, setVisible] = useState<Set<string>>(new Set(teams.map((t) => t.id)));
   const [visibleCats, setVisibleCats] = useState<Set<string>>(new Set(categories.map((c) => c.id)));
+  const [mineOnly, setMineOnly] = useState(false); // 내가 담당자인 일정만
+  const [visibleStatus, setVisibleStatus] = useState<Set<string>>(new Set(["todo", "in_progress", "done", "hold"]));
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createDate, setCreateDate] = useState("");
@@ -107,6 +109,8 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
       tasks
         .filter((t) => t.teams.some((tm) => visible.has(tm.id)))
         .filter((t) => !t.category || visibleCats.has(t.category.id))
+        .filter((t) => visibleStatus.has(t.status))
+        .filter((t) => !mineOnly || t.assignees.some((a) => a.id === user?.id))
         .map((t) => {
           // allDay 이벤트의 end는 exclusive → 하루 더해 표시
           let end = t.endDate;
@@ -131,8 +135,17 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
             extendedProps: { taskId: t.id },
           };
         }),
-    [tasks, visible, visibleCats]
+    [tasks, visible, visibleCats, visibleStatus, mineOnly, user?.id]
   );
+
+  function toggleStatus(id: string) {
+    setVisibleStatus((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function toggleCat(id: string) {
     setVisibleCats((prev) => {
@@ -215,6 +228,27 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           ))}
         </div>
       )}
+      <div className="filter-row">
+        <span className="filter-label">상태</span>
+        <button
+          className={`chip chip-btn${mineOnly ? " sel" : ""}`}
+          onClick={() => setMineOnly((v) => !v)}
+        >
+          <Icon name="userLine" size={13} /> 내 일정만
+        </button>
+        <span className="filter-divider" />
+        {Object.entries(STATUS_LABEL).map(([key, [label, color]]) => (
+          <button
+            key={key}
+            className="chip chip-btn"
+            style={{ opacity: visibleStatus.has(key) ? 1 : 0.4 }}
+            onClick={() => toggleStatus(key)}
+          >
+            <span className="dot" style={{ background: color }} />
+            {label}
+          </button>
+        ))}
+      </div>
 
       <div className="card cal-card" style={{ padding: 14, marginTop: 14 }}>
         <FullCalendar
@@ -231,6 +265,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           moreLinkContent={(arg) => `+${arg.num}개`}
           eventDisplay="block"
           displayEventTime={!isMobile}
+          eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           events={events}
           datesSet={(arg) => {
             setTitle(arg.view.title);
@@ -635,14 +670,18 @@ function TaskDetailModal({
           )}
         </div>
 
-        {/* 메타 그리드 (시안 스타일) */}
+        {/* 메타 그리드 (시안 스타일) — 값 없는 항목은 숨겨 깔끔하게 */}
         <div className="meta-grid">
           <div className="meta"><div className="k">기간</div><div className="v">{periodLabel}</div></div>
-          <div className="meta"><div className="k">장소</div><div className="v">{task.location || "—"}</div></div>
-          <div className="meta">
-            <div className="k">담당자</div>
-            <div className="v">{task.assignees.length ? task.assignees.map((a) => a.name).join(", ") : "—"}</div>
-          </div>
+          {task.location && (
+            <div className="meta"><div className="k">장소</div><div className="v">{task.location}</div></div>
+          )}
+          {task.assignees.length > 0 && (
+            <div className="meta">
+              <div className="k">담당자</div>
+              <div className="v">{task.assignees.map((a) => a.name).join(", ")}</div>
+            </div>
+          )}
           <div className="meta"><div className="k">등록자</div><div className="v">{task.createdBy?.name || "—"}</div></div>
         </div>
 

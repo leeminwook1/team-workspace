@@ -6,6 +6,7 @@ import "@/models/Category";
 import { requireActiveUser, json } from "@/lib/api";
 import { canCreateTaskInAll, visibleTeamIds } from "@/lib/permissions";
 import { taskCreateSchema } from "@/lib/validations";
+import { logActivity } from "@/lib/activity";
 
 function serialize(t: any) {
   return {
@@ -96,5 +97,6 @@ export async function POST(req: Request) {
     endDate: new Date(d.endDate),
     createdBy: user.id,
   });
+  await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetTitle: task.title });
   return json({ id: String(task._id) }, 201);
 }
