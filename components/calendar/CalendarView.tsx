@@ -57,6 +57,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   const [visibleCats, setVisibleCats] = useState<Set<string>>(new Set(categories.map((c) => c.id)));
   const [mineOnly, setMineOnly] = useState(false); // 내가 담당자인 일정만
   const [visibleStatus, setVisibleStatus] = useState<Set<string>>(new Set(["todo", "in_progress", "done", "hold"]));
+  const [filtersOpen, setFiltersOpen] = useState(false); // 필터 패널 접기/펼치기
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createDate, setCreateDate] = useState("");
@@ -165,6 +166,20 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
     });
   }
 
+  // 필터가 기본(전체 표시)에서 벗어났는지 → 버튼에 활성 표시
+  const filtersActive =
+    mineOnly ||
+    visible.size !== teams.length ||
+    visibleCats.size !== categories.length ||
+    visibleStatus.size !== 4;
+
+  function resetFilters() {
+    setVisible(new Set(teams.map((t) => t.id)));
+    setVisibleCats(new Set(categories.map((c) => c.id)));
+    setVisibleStatus(new Set(["todo", "in_progress", "done", "hold"]));
+    setMineOnly(false);
+  }
+
   return (
     <div className="cal-wrap">
       {/* 커스텀 Toss 헤더 */}
@@ -177,6 +192,14 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           <Icon name="chevronR" size={18} />
         </button>
         <button className="btn btn-ghost btn-sm" onClick={() => api()?.today()}>오늘</button>
+        <button
+          className={`btn btn-ghost btn-sm cal-filter-btn${filtersOpen ? " open" : ""}`}
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen((v) => !v)}
+        >
+          <Icon name="filter" size={15} /> 필터
+          {filtersActive && <span className="cal-filter-dot" aria-label="필터 적용됨" />}
+        </button>
         <div className="cal-spacer" />
         <div className="seg" role="tablist" aria-label="보기 전환">
           <button className={view === "dayGridMonth" ? "on" : ""} onClick={() => changeView("dayGridMonth")}>월</button>
@@ -197,58 +220,65 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
         )}
       </div>
 
-      {/* 필터 */}
-      <div className="filter-row">
-        <span className="filter-label">팀</span>
-        {teams.map((t) => (
-          <button
-            key={t.id}
-            className="chip chip-btn"
-            style={{ opacity: visible.has(t.id) ? 1 : 0.4 }}
-            onClick={() => toggleTeam(t.id)}
-          >
-            <span className="dot" style={{ background: t.color }} />
-            {t.name}
-          </button>
-        ))}
-      </div>
-      {categories.length > 0 && (
-        <div className="filter-row">
-          <span className="filter-label">분류</span>
-          {categories.map((c) => (
+      {/* 필터 — 기본 접힘, '필터' 버튼으로 펼침 */}
+      {filtersOpen && (
+        <div className="filter-panel">
+          <div className="filter-row">
+            <span className="filter-label">팀</span>
+            {teams.map((t) => (
+              <button
+                key={t.id}
+                className="chip chip-btn"
+                style={{ opacity: visible.has(t.id) ? 1 : 0.4 }}
+                onClick={() => toggleTeam(t.id)}
+              >
+                <span className="dot" style={{ background: t.color }} />
+                {t.name}
+              </button>
+            ))}
+          </div>
+          {categories.length > 0 && (
+            <div className="filter-row">
+              <span className="filter-label">분류</span>
+              {categories.map((c) => (
+                <button
+                  key={c.id}
+                  className="chip chip-btn"
+                  style={{ opacity: visibleCats.has(c.id) ? 1 : 0.4 }}
+                  onClick={() => toggleCat(c.id)}
+                >
+                  <span className="dot" style={{ background: c.color }} />
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="filter-row">
+            <span className="filter-label">상태</span>
             <button
-              key={c.id}
-              className="chip chip-btn"
-              style={{ opacity: visibleCats.has(c.id) ? 1 : 0.4 }}
-              onClick={() => toggleCat(c.id)}
+              className={`chip chip-btn${mineOnly ? " sel" : ""}`}
+              onClick={() => setMineOnly((v) => !v)}
             >
-              <span className="dot" style={{ background: c.color }} />
-              {c.name}
+              <Icon name="userLine" size={13} /> 내 일정만
             </button>
-          ))}
+            <span className="filter-divider" />
+            {Object.entries(STATUS_LABEL).map(([key, [label, color]]) => (
+              <button
+                key={key}
+                className="chip chip-btn"
+                style={{ opacity: visibleStatus.has(key) ? 1 : 0.4 }}
+                onClick={() => toggleStatus(key)}
+              >
+                <span className="dot" style={{ background: color }} />
+                {label}
+              </button>
+            ))}
+            {filtersActive && (
+              <button className="filter-reset" onClick={resetFilters}>전체 초기화</button>
+            )}
+          </div>
         </div>
       )}
-      <div className="filter-row">
-        <span className="filter-label">상태</span>
-        <button
-          className={`chip chip-btn${mineOnly ? " sel" : ""}`}
-          onClick={() => setMineOnly((v) => !v)}
-        >
-          <Icon name="userLine" size={13} /> 내 일정만
-        </button>
-        <span className="filter-divider" />
-        {Object.entries(STATUS_LABEL).map(([key, [label, color]]) => (
-          <button
-            key={key}
-            className="chip chip-btn"
-            style={{ opacity: visibleStatus.has(key) ? 1 : 0.4 }}
-            onClick={() => toggleStatus(key)}
-          >
-            <span className="dot" style={{ background: color }} />
-            {label}
-          </button>
-        ))}
-      </div>
 
       <div className="card cal-card" style={{ padding: 14, marginTop: 14 }}>
         <FullCalendar
@@ -258,7 +288,11 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           locale={koLocale}
           height="auto"
           headerToolbar={false}
-          dayCellContent={(arg) => String(arg.date.getDate())}
+          dayCellContent={(arg) => (arg.view.type === "dayGridMonth" ? String(arg.date.getDate()) : undefined)}
+          views={{
+            timeGridWeek: { dayHeaderFormat: { weekday: "short", day: "numeric" } },
+            timeGridDay: { dayHeaderFormat: { weekday: "short", day: "numeric" } },
+          }}
           noEventsContent="이 기간에 등록된 업무가 없습니다"
           dayMaxEvents={maxEvents}
           fixedWeekCount={false}
@@ -266,6 +300,11 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           eventDisplay="block"
           displayEventTime={!isMobile}
           eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
+          slotLabelFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
+          slotMinTime="06:00:00"
+          scrollTime="09:00:00"
+          allDayText="종일"
+          nowIndicator
           events={events}
           datesSet={(arg) => {
             setTitle(arg.view.title);
