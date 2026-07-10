@@ -140,6 +140,13 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
     await fetch(`/api/events/${eventId}`, { method: "DELETE" });
     window.location.href = "/events";
   }
+  async function duplicateEvent() {
+    const ok = await confirm({ title: "행사 복제", message: "이 행사의 할 일 목록을 복사해 새 행사를 만듭니다. (상태·담당자·날짜는 초기화)", confirmText: "복제" });
+    if (!ok) return;
+    const res = await fetch(`/api/events/${eventId}/duplicate`, { method: "POST" });
+    const data = await res.json();
+    if (res.ok) window.location.href = `/events/${data.id}`;
+  }
 
   if (loading) return <p className="muted-note">불러오는 중…</p>;
   if (!ev) return <p className="muted-note">행사를 찾을 수 없습니다.</p>;
@@ -164,8 +171,9 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
           </p>
         </div>
         {canManage && (
-          <div style={{ display: "flex", gap: 8, flex: "none" }}>
+          <div style={{ display: "flex", gap: 8, flex: "none", flexWrap: "wrap" }}>
             <button className="btn btn-line btn-sm" onClick={() => setEditEvent(true)}>행사 수정</button>
+            <button className="btn btn-line btn-sm" onClick={duplicateEvent}>복제</button>
             <button className="btn btn-danger btn-sm" onClick={deleteEvent}>삭제</button>
           </div>
         )}

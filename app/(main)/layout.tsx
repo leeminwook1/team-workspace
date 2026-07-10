@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
+import Link from "next/link";
 import { canApproveUsers, canManageTeams, canUseDirectives, ROLE_LABEL, type SessionUser } from "@/lib/permissions";
 import LogoutButton from "@/components/LogoutButton";
 import NavLinks, { BottomNav, type NavItem } from "@/components/NavLinks";
@@ -36,13 +37,13 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         </div>
         <NavLinks items={navItems} />
         <div className="side-foot">
-          <div className="side-user">
+          <Link href="/settings" className="side-user" title="내 계정">
             <span className="avatar" aria-hidden>{user.name.slice(0, 1)}</span>
             <div className="side-user-info">
               <div className="side-user-name">{user.name}</div>
               <div className="side-user-role">{roleLabel}</div>
             </div>
-          </div>
+          </Link>
           <div style={{ display: "flex", gap: 8 }}>
             <ThemeToggle />
             <div style={{ flex: 1 }}><LogoutButton small /></div>
@@ -57,6 +58,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           <span className="word">Team<b>Cal</b></span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <Link href="/settings" className="avatar" aria-label="내 계정" style={{ textDecoration: "none" }}>{user.name.slice(0, 1)}</Link>
           <ThemeToggle />
           <LogoutButton small />
         </div>

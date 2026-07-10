@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import FullCalendar from "@fullcalendar/react";
+import timeGridPlugin from "@fullcalendar/timegrid";
+import koLocale from "@fullcalendar/core/locales/ko";
 import { useConfirm } from "@/components/ConfirmProvider";
 
 type ResourceOpt = { id: string; name: string; category: { id: string; name: string; order: number } | null };
@@ -30,6 +33,25 @@ export default function ReservationBoard({
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<"list" | "timeline">("list");
+  const [weekEvents, setWeekEvents] = useState<any[]>([]);
+  const [weekRange, setWeekRange] = useState<{ from: string; to: string } | null>(null);
+
+  const fetchWeek = useCallback(async (from: string, to: string) => {
+    setWeekRange({ from, to });
+    const res = await fetch(`/api/reservations?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    setWeekEvents((data.reservations ?? []).map((r: ReservationItem) => {
+      const color = r.team?.color ?? "#8b95a1";
+      return {
+        id: r.id, title: `${r.resource?.name ?? "?"}${r.team ? ` · ${r.team.name}` : ""}`,
+        start: r.startAt, end: r.endAt,
+        backgroundColor: color + "26", borderColor: color, textColor: color,
+        extendedProps: { resId: r.id, byId: r.reservedBy?.id, byName: r.reservedBy?.name ?? "?" },
+      };
+    }));
+  }, []);
 
   // 예약 가능한 팀 (팀장·부팀장 소속팀 / 전사 편집자는 전체)
   const isOrgEditor = ["admin", "manager", "deputy", "secretary"].includes(user?.role ?? "");
@@ -108,6 +130,16 @@ export default function ReservationBoard({
     const data = await res.json();
     if (!res.ok) { setErr(data.error ?? "취소 실패"); return; }
     load(selected);
+    if (weekRange) fetchWeek(weekRange.from, weekRange.to);
+  }
+
+  // 타임라인에서 예약 클릭 — 본인·admin이면 취소, 아니면 예약자 안내
+  async function onTimelineClick(resId: string, byId?: string, byName?: string) {
+    if (byId === user?.id || user?.role === "admin") {
+      await cancel(resId);
+    } else {
+      await confirm({ title: "예약 정보", message: `${byName ?? "다른 팀"} 님이 예약한 시간입니다.`, confirmText: "확인", alert: true });
+    }
   }
 
   // 분류별로 묶기 (분류 순서대로, 미분류는 맨 뒤)
@@ -133,26 +165,34 @@ export default function ReservationBoard({
   }
 
   return (
-    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "1fr", maxWidth: 860 }}>
-      {/* 장비 선택 — 분류별 그룹 */}
-      <div className="card" style={{ padding: 16 }}>
-        {groups.map((g) => (
-          <div className="rsv-group" key={g.id}>
-            <div className="rsv-group-head">{g.name} <span className="kb-count">{g.items.length}</span></div>
-            <div className="rsv-chips">
-              {g.items.map((r) => (
-                <button
-                  key={r.id}
-                  className={`chip chip-btn${selected === r.id ? " sel" : ""}`}
-                  onClick={() => setSelected(r.id)}
-                >
-                  {r.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
+    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "1fr", maxWidth: view === "timeline" ? 1080 : 860 }}>
+      {/* 뷰 전환 */}
+      <div className="seg" role="tablist" aria-label="보기 전환" style={{ alignSelf: "start" }}>
+        <button className={view === "list" ? "on" : ""} onClick={() => setView("list")}>리스트</button>
+        <button className={view === "timeline" ? "on" : ""} onClick={() => setView("timeline")}>타임라인</button>
       </div>
+
+      {/* 장비 선택 — 분류별 그룹 (리스트 뷰) */}
+      {view === "list" && (
+        <div className="card" style={{ padding: 16 }}>
+          {groups.map((g) => (
+            <div className="rsv-group" key={g.id}>
+              <div className="rsv-group-head">{g.name} <span className="kb-count">{g.items.length}</span></div>
+              <div className="rsv-chips">
+                {g.items.map((r) => (
+                  <button
+                    key={r.id}
+                    className={`chip chip-btn${selected === r.id ? " sel" : ""}`}
+                    onClick={() => setSelected(r.id)}
+                  >
+                    {r.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 예약 폼 */}
       {reservableTeams.length > 0 ? (
@@ -194,7 +234,32 @@ export default function ReservationBoard({
         </div>
       )}
 
-      {/* 예약 현황 */}
+      {/* 타임라인 뷰 — 그 주 전체 예약 (자원명·팀 색상) */}
+      {view === "timeline" && (
+        <div className="card cal-card" style={{ padding: 14 }}>
+          <FullCalendar
+            plugins={[timeGridPlugin]}
+            initialView="timeGridWeek"
+            locale={koLocale}
+            height="auto"
+            headerToolbar={{ left: "title", right: "prev,today,next" }}
+            buttonText={{ today: "오늘" }}
+            allDaySlot={false}
+            slotLabelFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
+            scrollTime="08:00:00"
+            nowIndicator
+            eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
+            events={weekEvents}
+            datesSet={(arg) => fetchWeek(arg.startStr, arg.endStr)}
+            eventClick={(arg) => onTimelineClick(arg.event.extendedProps.resId, arg.event.extendedProps.byId, arg.event.extendedProps.byName)}
+            noEventsContent="이 주에 예약이 없습니다"
+          />
+          <p className="rsv-tip">예약을 클릭하면 상세를 볼 수 있어요. (본인 예약은 취소 가능)</p>
+        </div>
+      )}
+
+      {/* 예약 현황 (리스트 뷰) */}
+      {view === "list" && (
       <div className="card" style={{ padding: 8 }}>
         {list.length === 0 ? (
           <p style={{ padding: 24, textAlign: "center", color: "var(--ink-faint)", fontSize: 14 }}>
@@ -232,6 +297,7 @@ export default function ReservationBoard({
           </table>
         )}
       </div>
+      )}
     </div>
   );
 }

@@ -89,6 +89,13 @@ export const directiveUpdateSchema = z.object({
   assignments: z.array(assignmentSchema).optional(),
 });
 
+// 내 계정 — 이름·비밀번호 변경 (이메일은 로그인 식별자라 수정 불가)
+export const meUpdateSchema = z.object({
+  name: z.string().min(2, "이름은 2자 이상").max(30).optional(),
+  currentPassword: z.string().optional(),
+  newPassword: z.string().min(8, "새 비밀번호는 8자 이상").max(100).optional(),
+});
+
 export const teamSchema = z.object({
   name: z.string().min(1, "팀 이름을 입력하세요").max(30),
   slug: z
