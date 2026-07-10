@@ -16,13 +16,13 @@ export default async function AdminResourcesPage() {
 
   await ensureResourceCategories();
   const [resources, categories] = await Promise.all([
-    Resource.find().populate("categoryId", "name").sort({ name: 1 }).lean(),
+    Resource.find().populate("categoryId", "name color").sort({ name: 1 }).lean(),
     ResourceCategory.find().sort({ order: 1, name: 1 }).lean(),
   ]);
 
   return (
     <ResourceManager
-      initialCategories={categories.map((c: any) => ({ id: String(c._id), name: c.name, isActive: c.isActive }))}
+      initialCategories={categories.map((c: any) => ({ id: String(c._id), name: c.name, color: c.color || "#8b95a1", isActive: c.isActive }))}
       initialResources={resources.map((r: any) => ({
         id: String(r._id),
         name: r.name,

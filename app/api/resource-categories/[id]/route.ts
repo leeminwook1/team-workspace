@@ -18,6 +18,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!c) return json({ error: "분류를 찾을 수 없습니다." }, 404);
 
   if (typeof body.name === "string" && body.name.trim()) c.name = body.name.trim();
+  if (typeof body.color === "string" && /^#[0-9a-fA-F]{6}$/.test(body.color)) c.color = body.color;
   if (typeof body.isActive === "boolean") c.isActive = body.isActive;
   try {
     await c.save();

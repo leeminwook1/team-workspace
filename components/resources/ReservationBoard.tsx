@@ -7,7 +7,7 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import koLocale from "@fullcalendar/core/locales/ko";
 import { useConfirm } from "@/components/ConfirmProvider";
 
-type ResourceOpt = { id: string; name: string; category: { id: string; name: string; order: number } | null };
+type ResourceOpt = { id: string; name: string; category: { id: string; name: string; color?: string; order: number } | null };
 type TeamOpt = { id: string; name: string; color: string };
 type ReservationItem = {
   id: string;
@@ -144,10 +144,10 @@ export default function ReservationBoard({
 
   // 분류별로 묶기 (분류 순서대로, 미분류는 맨 뒤)
   const groups = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; order: number; items: ResourceOpt[] }>();
+    const map = new Map<string, { id: string; name: string; color: string; order: number; items: ResourceOpt[] }>();
     for (const r of resources) {
       const key = r.category?.id ?? "__none";
-      if (!map.has(key)) map.set(key, { id: key, name: r.category?.name ?? "미분류", order: r.category?.order ?? 999, items: [] });
+      if (!map.has(key)) map.set(key, { id: key, name: r.category?.name ?? "미분류", color: r.category?.color ?? "#8b95a1", order: r.category?.order ?? 999, items: [] });
       map.get(key)!.items.push(r);
     }
     return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
@@ -177,7 +177,10 @@ export default function ReservationBoard({
         <div className="card" style={{ padding: 16 }}>
           {groups.map((g) => (
             <div className="rsv-group" key={g.id}>
-              <div className="rsv-group-head">{g.name} <span className="kb-count">{g.items.length}</span></div>
+              <div className="rsv-group-head">
+                <span className="dot" style={{ background: g.color, width: 9, height: 9 }} />
+                {g.name} <span className="kb-count">{g.items.length}</span>
+              </div>
               <div className="rsv-chips">
                 {g.items.map((r) => (
                   <button

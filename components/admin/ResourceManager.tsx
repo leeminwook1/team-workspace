@@ -4,8 +4,9 @@ import { ModalClose } from "@/components/ModalClose";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { ColorPicker } from "@/components/admin/ColorPicker";
 
-type Cat = { id: string; name: string; isActive: boolean };
+type Cat = { id: string; name: string; color: string; isActive: boolean };
 type ResourceRow = { id: string; name: string; category: { id: string; name: string } | null; isActive: boolean };
 
 export default function ResourceManager({
@@ -82,6 +83,7 @@ export default function ResourceManager({
             const count = initialResources.filter((r) => r.category?.id === c.id).length;
             return (
               <div className="rc-cat" key={c.id}>
+                <span className="dot" style={{ background: c.color, width: 10, height: 10 }} />
                 <span className="rc-cat-name">{c.name}</span>
                 <span className="rc-cat-count">{count}</span>
                 <button className="rc-cat-btn" onClick={() => setEditCat(c)} aria-label="수정">수정</button>
@@ -123,7 +125,10 @@ export default function ResourceManager({
         const items = initialResources.filter((r) => r.category?.id === c.id);
         return (
           <section key={c.id} className="rc-group">
-            <div className="rc-group-head"><span>{c.name}</span><span className="kb-count">{items.length}</span></div>
+            <div className="rc-group-head">
+              <span className="dot" style={{ background: c.color, width: 9, height: 9 }} />
+              <span>{c.name}</span><span className="kb-count">{items.length}</span>
+            </div>
             {items.length === 0 ? (
               <div className="rc-group-empty">이 분류에 등록된 장비가 없습니다.</div>
             ) : (
@@ -229,6 +234,7 @@ function EditModal({
 
 function CategoryEditModal({ cat, onClose, onSaved }: { cat: Cat; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState(cat.name);
+  const [color, setColor] = useState(cat.color);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -236,7 +242,7 @@ function CategoryEditModal({ cat, onClose, onSaved }: { cat: Cat; onClose: () =>
     e.preventDefault();
     setBusy(true); setErr("");
     const r = await fetch(`/api/resource-categories/${cat.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, color }),
     });
     const data = await r.json();
     setBusy(false);
@@ -253,6 +259,10 @@ function CategoryEditModal({ cat, onClose, onSaved }: { cat: Cat; onClose: () =>
           <div className="field">
             <label>분류 이름</label>
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={30} required autoFocus />
+          </div>
+          <div className="field">
+            <label>구분색</label>
+            <ColorPicker value={color} onChange={setColor} />
           </div>
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">

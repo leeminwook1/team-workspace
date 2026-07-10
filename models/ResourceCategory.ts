@@ -4,6 +4,7 @@ import { Schema, models, model } from "mongoose";
 const ResourceCategorySchema = new Schema(
   {
     name: { type: String, required: true, trim: true, unique: true },
+    color: { type: String, default: "" }, // 구분색 (#RRGGBB) — 비어 있으면 ensure에서 팔레트 자동 배정
     legacyKey: { type: String, default: "" }, // 기존 enum 마이그레이션용(studio/camera/…)
     order: { type: Number, default: 0 }, // 표시 순서
     isActive: { type: Boolean, default: true },

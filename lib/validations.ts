@@ -6,6 +6,9 @@ export const registerSchema = z.object({
   name: z.string().min(2, "이름은 2자 이상").max(30),
   email: z.string().email("올바른 이메일을 입력하세요"),
   password: z.string().min(8, "비밀번호는 8자 이상").max(100),
+  // 신청자가 희망 소속 팀·역할을 선택 (팀 역할만 — 전사 역할은 관리자가 승인 시 부여)
+  teamId: z.string().min(1).nullable().optional().default(null),
+  role: z.enum(["member", "vice_leader", "leader"]).optional().default("member"),
 });
 
 export const taskCreateSchema = z.object({
@@ -132,6 +135,7 @@ export const resourceSchema = z.object({
 });
 export const resourceCategorySchema = z.object({
   name: z.string().min(1, "분류 이름을 입력하세요").max(30),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "색상은 #RRGGBB 형식").optional(),
 });
 
 export const categorySchema = z.object({

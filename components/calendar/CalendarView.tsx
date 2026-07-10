@@ -41,6 +41,12 @@ const STATUS_LABEL: Record<string, [string, string]> = {
 const PRIORITY_LABEL: Record<string, string> = {
   low: "낮음", normal: "보통", high: "높음", urgent: "긴급",
 };
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const ymdStr = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
+// 일정 대표색 — 카테고리 색 우선, 없으면 첫 팀 색
+const taskColor = (t: TaskItem) => t.category?.color ?? t.teams[0]?.color ?? "#8b95a1";
 // 우선순위 배지: 높음/긴급만 색상 배지로 강조 (보통/낮음은 숨김)
 const PRIORITY_META: Record<string, { label: string; color: string; show: boolean }> = {
   low: { label: "낮음", color: "var(--ink-faint)", show: false },
@@ -69,6 +75,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   const [view, setView] = useState("dayGridMonth");
   const [maxEvents, setMaxEvents] = useState(4); // 하루 표시 최대 개수 (초과 시 +N개)
   const [isMobile, setIsMobile] = useState(false);
+  const [mSel, setMSel] = useState(() => ymdStr(new Date())); // 모바일 월간 뷰: 선택한 날짜
 
   // 화면 크기에 따라 하루 표시 개수·시간표시 조절 (셀 높이 고정과 맞춤)
   useEffect(() => {
@@ -101,7 +108,20 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   function changeView(v: string) {
     setView(v);
     api()?.changeView(v);
+    // 모바일 월간(커스텀 그리드) 동안 FullCalendar가 display:none이라 크기 0 → 다시 보일 때 재계산
+    setTimeout(() => api()?.updateSize(), 60);
   }
+
+  // 모바일 월간: 달을 넘기면 선택일을 그 달로 보정 (오늘이 있으면 오늘, 없으면 1일)
+  useEffect(() => {
+    if (!curStart) return;
+    const mk = `${curStart.getFullYear()}-${pad2(curStart.getMonth() + 1)}`;
+    if (!mSel.startsWith(mk)) {
+      const today = ymdStr(new Date());
+      setMSel(today.startsWith(mk) ? today : `${mk}-01`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curStart]);
 
   // 권한 (프론트 표시용, 실제 검증은 API에서 2중으로)
   const isOrgEditor = ["admin", "manager", "deputy", "secretary"].includes(user?.role ?? "");
@@ -125,13 +145,20 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
     if (range) fetchTasks(range.from, range.to);
   }, [range, fetchTasks]);
 
-  const events = useMemo(
+  // 필터 적용된 일정 — FullCalendar 이벤트와 모바일 월간 그리드가 공유
+  const filteredTasks = useMemo(
     () =>
       tasks
         .filter((t) => t.teams.some((tm) => visible.has(tm.id)))
         .filter((t) => !t.category || visibleCats.has(t.category.id))
         .filter((t) => visibleStatus.has(t.status))
-        .filter((t) => !mineOnly || t.assignees.some((a) => a.id === user?.id))
+        .filter((t) => !mineOnly || t.assignees.some((a) => a.id === user?.id)),
+    [tasks, visible, visibleCats, visibleStatus, mineOnly, user?.id]
+  );
+
+  const events = useMemo(
+    () =>
+      filteredTasks
         .map((t) => {
           // allDay 이벤트의 end는 exclusive → 하루 더해 표시
           let end = t.endDate;
@@ -156,7 +183,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
             extendedProps: { taskId: t.id, urgent: t.priority === "urgent", done: t.status === "done" },
           };
         }),
-    [tasks, visible, visibleCats, visibleStatus, mineOnly, user?.id]
+    [filteredTasks, visible]
   );
 
   function toggleStatus(id: string) {
@@ -186,13 +213,12 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
     });
   }
 
-  // 필터가 기본(전체 표시)에서 벗어났는지 → 버튼에 활성 표시 (팀은 인라인 칩이라 제외)
+  // 필터가 기본(전체 표시)에서 벗어났는지 → 버튼에 활성 표시
   const filtersActive =
     mineOnly ||
+    visible.size !== teams.length ||
     visibleCats.size !== categories.length ||
     visibleStatus.size !== 4;
-
-  const allTeamsOn = visible.size === teams.length;
 
   function resetFilters() {
     setVisible(new Set(teams.map((t) => t.id)));
@@ -224,6 +250,14 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           </button>
         </div>
         <button className="cal1c-today" onClick={() => api()?.today()}>오늘</button>
+        <button
+          className={`cal1c-today cal-filter-btn${filtersOpen ? " open" : ""}`}
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen((v) => !v)}
+        >
+          <Icon name="filter" size={13} /> 필터
+          {filtersActive && <span className="cal-filter-dot" aria-label="필터 적용됨" />}
+        </button>
         <div className="cal-spacer" />
         <div className="seg" role="tablist" aria-label="보기 전환">
           <button className={view === "dayGridMonth" ? "on" : ""} onClick={() => changeView("dayGridMonth")}>월</button>
@@ -244,38 +278,23 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
         )}
       </div>
 
-      {/* 팀 필터 칩 — 인라인 상시 노출 (1c) */}
-      <div className="cal1c-chips">
-        <button
-          className={`cal1c-chip cal1c-chip-all${allTeamsOn ? " on" : ""}`}
-          onClick={() => setVisible(new Set(teams.map((t) => t.id)))}
-        >
-          전체
-        </button>
-        {teams.map((t) => (
-          <button
-            key={t.id}
-            className={`cal1c-chip${visible.has(t.id) ? "" : " off"}`}
-            onClick={() => toggleTeam(t.id)}
-          >
-            <span className="dot" style={{ background: t.color }} />
-            {t.name}
-          </button>
-        ))}
-        <div className="cal-spacer" />
-        <button
-          className={`btn btn-ghost btn-sm cal-filter-btn${filtersOpen ? " open" : ""}`}
-          aria-expanded={filtersOpen}
-          onClick={() => setFiltersOpen((v) => !v)}
-        >
-          <Icon name="filter" size={15} /> 필터
-          {filtersActive && <span className="cal-filter-dot" aria-label="필터 적용됨" />}
-        </button>
-      </div>
-
-      {/* 필터 — 기본 접힘, '필터' 버튼으로 펼침 (분류·상태) */}
+      {/* 필터 — 기본 접힘, '필터' 버튼으로 펼침 (팀·분류·상태) */}
       {filtersOpen && (
         <div className="filter-panel">
+          <div className="filter-row">
+            <span className="filter-label">팀</span>
+            {teams.map((t) => (
+              <button
+                key={t.id}
+                className="chip chip-btn"
+                style={{ opacity: visible.has(t.id) ? 1 : 0.4 }}
+                onClick={() => toggleTeam(t.id)}
+              >
+                <span className="dot" style={{ background: t.color }} />
+                {t.name}
+              </button>
+            ))}
+          </div>
           {categories.length > 0 && (
             <div className="filter-row">
               <span className="filter-label">분류</span>
@@ -319,7 +338,18 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
         </div>
       )}
 
-      <div className="card cal-card" style={{ padding: 14, marginTop: 14 }}>
+      {/* 모바일 월간: 도트 그리드 + 선택일 아젠다 (1d) — FullCalendar는 숨기고 API(월 이동·조회)만 사용 */}
+      {isMobile && view === "dayGridMonth" && curStart && (
+        <MobileMonthCal
+          monthDate={curStart}
+          tasks={filteredTasks}
+          selected={mSel}
+          onSelect={setMSel}
+          onTaskClick={setDetail}
+        />
+      )}
+
+      <div className="card cal-card" style={{ padding: 14, marginTop: 14, display: isMobile && view === "dayGridMonth" ? "none" : undefined }}>
         <FullCalendar
           ref={calRef}
           plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
@@ -420,6 +450,98 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           }}
         />
       )}
+    </div>
+  );
+}
+
+/* ── 모바일 월간 뷰 — 도트 그리드 + 선택일 아젠다 (1d) ── */
+function MobileMonthCal({ monthDate, tasks, selected, onSelect, onTaskClick }: {
+  monthDate: Date; tasks: TaskItem[]; selected: string;
+  onSelect: (day: string) => void; onTaskClick: (t: TaskItem) => void;
+}) {
+  const today = ymdStr(new Date());
+  const y = monthDate.getFullYear(), m = monthDate.getMonth();
+  const days = new Date(y, m + 1, 0).getDate();
+  const offset = new Date(y, m, 1).getDay();
+  const total = Math.ceil((offset + days) / 7) * 7;
+  const cells = Array.from({ length: total }, (_, i) => {
+    const d = new Date(y, m, i - offset + 1);
+    return { day: ymdStr(d), num: d.getDate(), inMonth: d.getMonth() === m, wd: d.getDay() };
+  });
+
+  // 업무가 해당 날짜에 걸치는지 (allDay end는 inclusive)
+  const covers = (t: TaskItem, day: string) => ymdStr(new Date(t.startDate)) <= day && day <= ymdStr(new Date(t.endDate));
+  const dotsFor = (day: string) => {
+    const colors: string[] = [];
+    for (const t of tasks) {
+      if (!covers(t, day)) continue;
+      const c = taskColor(t);
+      if (!colors.includes(c)) colors.push(c);
+      if (colors.length >= 3) break;
+    }
+    return colors;
+  };
+
+  const fmtT = (iso: string) => new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const dayTasks = tasks.filter((t) => covers(t, selected))
+    .sort((a, b) => (a.allDay === b.allDay ? a.startDate.localeCompare(b.startDate) : a.allDay ? -1 : 1));
+  const selDate = new Date(selected);
+  const selLabel = `${selDate.getMonth() + 1}월 ${selDate.getDate()}일 ${WEEKDAYS_KO[selDate.getDay()]}요일`;
+
+  return (
+    <div className="card mcal-card">
+      <div className="mc-grid mc-week">
+        {WEEKDAYS_KO.map((w, i) => (
+          <span key={w} className={`mc-wd${i === 0 ? " sun" : i === 6 ? " sat" : ""}`}>{w}</span>
+        ))}
+      </div>
+      <div className="mc-grid">
+        {cells.map((c) => {
+          const dots = c.inMonth ? dotsFor(c.day) : [];
+          const isToday = c.day === today;
+          const isSel = c.day === selected;
+          return (
+            <button
+              key={c.day}
+              className={`mc-day${c.inMonth ? "" : " out"}${isToday ? " today" : isSel ? " sel" : ""}`}
+              onClick={() => onSelect(c.day)}
+            >
+              <span className={`mc-num${c.wd === 0 ? " sun" : c.wd === 6 ? " sat" : ""}`}>{c.num}</span>
+              <span className="mc-dots">
+                {dots.map((color) => <i key={color} style={{ background: color }} />)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="mc-agenda">
+        <div className="mc-agenda-head">
+          {selLabel} {selected === today && <b>오늘</b>}
+        </div>
+        {dayTasks.length === 0 && (
+          <div className="mc-empty">이 날짜엔 일정이 없어요.</div>
+        )}
+        {dayTasks.map((t) => {
+          const [stLabel] = STATUS_LABEL[t.status] ?? STATUS_LABEL.todo;
+          return (
+            <button key={t.id} className={`mc-item mc-item-btn${t.status === "done" ? " done" : ""}`} onClick={() => onTaskClick(t)}>
+              <span className="mc-bar" style={{ background: taskColor(t) }} />
+              <span className="mc-item-body">
+                <span className="mc-item-title">
+                  {t.title}
+                  {t.priority === "urgent" && t.status !== "done" && <b className="ev1c-urgent" style={{ marginLeft: 5 }}>긴급</b>}
+                </span>
+                <span className="mc-item-sub">
+                  {t.allDay ? "하루 종일" : `${fmtT(t.startDate)}–${fmtT(t.endDate)}`}
+                  {t.teams.length > 0 && ` · ${t.teams.map((tm) => tm.name).join("·")}`}
+                  {t.location && ` · ${t.location}`}
+                </span>
+              </span>
+              <span className={`wbadge${t.status === "in_progress" ? " prog" : t.status === "done" ? " done" : ""}`}>{stLabel}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

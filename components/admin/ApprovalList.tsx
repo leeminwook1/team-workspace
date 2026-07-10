@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useConfirm } from "@/components/ConfirmProvider";
 
-type PendingUser = { id: string; name: string; email: string; requestedAt: string };
+type PendingUser = {
+  id: string; name: string; email: string; requestedAt: string;
+  role?: string | null; teamId?: string | null; // 신청자가 희망한 역할·팀
+};
 type TeamOpt = { id: string; name: string; color: string };
 
 const TEAM_ROLE_VALUES = ["leader", "vice_leader", "member"];
@@ -42,12 +45,15 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
 
   useEffect(() => { load(); }, [load]);
 
-  function getSel(id: string) {
-    return sel[id] ?? { role: "member", teamId: teams[0]?.id ?? "" };
+  function getSel(u: PendingUser) {
+    // 관리자가 바꾸기 전에는 신청자가 희망한 역할·팀이 기본 선택
+    const wantedRole = u.role && TEAM_ROLE_VALUES.includes(u.role) ? u.role : "member";
+    const wantedTeam = u.teamId && teams.some((t) => t.id === u.teamId) ? u.teamId : (teams[0]?.id ?? "");
+    return sel[u.id] ?? { role: wantedRole, teamId: wantedTeam };
   }
 
   async function approve(u: PendingUser) {
-    const s = getSel(u.id);
+    const s = getSel(u);
     setBusy(u.id);
     setErr("");
     const body = { role: s.role, teamId: isTeamRole(s.role) ? s.teamId : null };
@@ -91,7 +97,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
   return (
     <div className="card table-wrap">
       {err && <p className="err-msg" style={{ padding: "8px 14px 0" }}>{err}</p>}
-      <table className="table">
+      <table className="table table-center">
         <thead>
           <tr>
             <th>이름</th><th>이메일</th><th>역할</th><th>소속 팀</th>
@@ -100,7 +106,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
         </thead>
         <tbody>
           {users.map((u) => {
-            const s = getSel(u.id);
+            const s = getSel(u);
             return (
               <tr key={u.id}>
                 <td>{u.name}</td>
@@ -128,7 +134,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
                   )}
                 </td>
                 <td className="td-actions">
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
                     <button className="btn btn-primary btn-sm" disabled={busy === u.id} onClick={() => approve(u)}>승인</button>
                     <button className="btn btn-danger btn-sm" disabled={busy === u.id} onClick={() => reject(u)}>거절</button>
                   </div>

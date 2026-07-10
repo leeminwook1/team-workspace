@@ -11,7 +11,7 @@ export async function GET() {
 
   await connectDB();
   const pending = await User.find({ status: "pending" })
-    .select("name email createdAt")
+    .select("name email createdAt role teamId")
     .sort({ createdAt: 1 })
     .lean();
 
@@ -21,6 +21,9 @@ export async function GET() {
       name: u.name,
       email: u.email,
       requestedAt: u.createdAt,
+      // 신청자가 희망한 역할·팀 — 승인 화면에 미리 선택된다
+      role: u.role ?? "member",
+      teamId: u.teamId ? String(u.teamId) : null,
     })),
   });
 }

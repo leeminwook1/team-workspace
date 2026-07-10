@@ -12,6 +12,9 @@ const DEFAULTS = [
   { name: "기타", legacyKey: "etc", order: 5 },
 ];
 
+// 분류 구분색 팔레트 — 색 미지정 분류에 order 순서로 자동 배정 (팀 ColorPicker 프리셋과 동일)
+export const RC_PALETTE = ["#3182f6", "#f0466e", "#8b5cf6", "#12b3a6", "#e8951b", "#f97316", "#22c55e", "#64748b"];
+
 // 기본 분류 시드(멱등·동시성 안전) + 레거시 자원(category enum)을 categoryId로 마이그레이션.
 // 페이지 로드마다 호출해도 안전하다.
 export async function ensureResourceCategories() {
@@ -30,6 +33,23 @@ export async function ensureResourceCategories() {
     } catch (e: any) {
       if (e?.code !== 11000) console.error("[resourceCat] 시드 실패:", e);
     }
+  }
+
+  // 색 미지정 분류 → 팔레트에서 순서대로 배정 (멱등)
+  const noColor = await ResourceCategory.find({ $or: [{ color: "" }, { color: { $exists: false } }] })
+    .select("order").sort({ order: 1, name: 1 }).lean();
+  if (noColor.length > 0) {
+    const used = new Set(
+      (await ResourceCategory.find({ color: { $nin: ["", null] } }).select("color").lean()).map((c: any) => c.color)
+    );
+    let cursor = 0;
+    const ops = noColor.map((c: any) => {
+      while (cursor < RC_PALETTE.length && used.has(RC_PALETTE[cursor])) cursor++;
+      const color = RC_PALETTE[cursor % RC_PALETTE.length];
+      cursor++;
+      return { updateOne: { filter: { _id: c._id }, update: { $set: { color } } } };
+    });
+    await ResourceCategory.bulkWrite(ops);
   }
 
   // categoryId 없는 레거시 자원 → legacyKey 매칭으로 채움
