@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 export type IconName =
   | "calendar" | "resources" | "admin" | "logout" | "plus" | "chevronL" | "chevronR"
-  | "check" | "clock" | "mapPin" | "userLine" | "inbox" | "filter";
+  | "check" | "clock" | "mapPin" | "userLine" | "inbox" | "filter" | "board";
 
 const PATHS: Record<IconName, ReactNode> = {
   calendar: (
@@ -60,6 +60,13 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   filter: <path d="M4 5.5h16l-6.2 7.2v5.3l-3.6 1.8v-7.1L4 5.5z" />,
+  board: (
+    <>
+      <rect x="3.5" y="4.5" width="4.5" height="15" rx="1.5" />
+      <rect x="9.75" y="4.5" width="4.5" height="11" rx="1.5" />
+      <rect x="16" y="4.5" width="4.5" height="14" rx="1.5" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 22, strokeWidth = 1.8 }: { name: IconName; size?: number; strokeWidth?: number }) {

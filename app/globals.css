@@ -283,6 +283,50 @@ a { color: inherit; text-decoration: none; }
 .assign-note { flex: 1; min-width: 0; padding: 7px 10px; font-size: 13px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); }
 .assign-note:disabled { opacity: 0.5; }
 
+/* ── 행사 관리 (칸반) ── */
+.kanban { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: start; }
+.kb-col { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px; min-width: 0; }
+.kb-col-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 10px; }
+.kb-col-title { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 800; color: var(--ink); }
+.kb-count { font-size: 12px; font-weight: 700; color: var(--ink-faint); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+.kb-cards { display: flex; flex-direction: column; gap: 8px; min-height: 40px; }
+.kb-empty { font-size: 12.5px; color: var(--ink-faint); text-align: center; padding: 14px 0; }
+
+.kb-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow); padding: 11px 12px; cursor: pointer; transition: border-color 0.15s, transform 0.1s; }
+.kb-card:hover { border-color: var(--line-strong); }
+.kb-card:active { transform: scale(0.99); }
+.kb-card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; min-height: 18px; }
+.kb-teams { display: flex; gap: 3px; }
+.kb-dday { font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; margin-left: auto; }
+.kb-dday.urgent { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+.kb-dday.soon { background: color-mix(in srgb, var(--st-prog) 16%, transparent); color: var(--st-prog); }
+.kb-dday.past { background: var(--surface-2); color: var(--ink-faint); }
+.kb-card-top .badge { margin-left: 4px; }
+.kb-card-title { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); line-height: 1.35; word-break: keep-all; }
+.kb-card-meta { display: flex; flex-wrap: wrap; gap: 5px; font-size: 12px; color: var(--ink-faint); margin-top: 5px; }
+
+.kb-check { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
+.kb-check-bar { flex: 1; height: 5px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.kb-check-bar span { display: block; height: 100%; background: var(--st-done); border-radius: 999px; transition: width 0.2s; }
+.kb-check-n { font-size: 11px; font-weight: 700; color: var(--ink-faint); }
+
+.kb-move { display: flex; gap: 6px; margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); }
+.kb-move-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; height: 28px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft); border-radius: var(--r-sm); cursor: pointer; transition: 0.15s; }
+.kb-move-btn:hover:not(:disabled) { background: var(--accent-soft); color: var(--primary); border-color: var(--primary); }
+.kb-move-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* 체크리스트 편집기 (모달) */
+.check-editor { display: flex; flex-direction: column; gap: 7px; }
+.check-row { display: flex; align-items: center; gap: 8px; }
+.check-del { flex: none; width: 26px; height: 26px; border: 0; background: transparent; color: var(--ink-faint); font-size: 20px; line-height: 1; cursor: pointer; border-radius: var(--r-sm); }
+.check-del:hover { background: var(--danger-soft); color: var(--danger); }
+
+@media (max-width: 880px) {
+  /* 칸반: 좁은 화면에서 가로 스크롤 (열 최소폭 확보) */
+  .kanban { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 6px; scroll-snap-type: x mandatory; }
+  .kb-col { flex: 0 0 78%; max-width: 300px; scroll-snap-align: start; }
+}
+
 /* 모바일 */
 @media (max-width: 880px) {
   .shell { display: block; } /* grid stretch로 짧은 페이지에서 위아래 빈공간 생기던 문제 해결 */

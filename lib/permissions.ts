@@ -65,6 +65,19 @@ export function canChangeStatus(u: SessionUser, teamId: string, assigneeIds: str
   return u.role === "member" && inTeam(u, teamId) && assigneeIds.includes(u.id);
 }
 
+// ── 행사 관리 (칸반) ──
+// 조회는 전체 활성 유저(공유 보드). 관리(등록·수정·단계이동)는 편집자 역할.
+// 팀 멤버십과 무관 — 팀은 태깅일 뿐이라 교차팀/무팀 403 함정을 피한다.
+const EVENT_MANAGERS: Role[] = ["admin", "manager", "deputy", "secretary", "leader", "vice_leader"];
+export function canManageEvents(u: SessionUser) {
+  return isActive(u) && EVENT_MANAGERS.includes(u.role);
+}
+export function canDeleteEvent(u: SessionUser, createdById: string) {
+  if (!isActive(u)) return false;
+  if (APPROVERS.includes(u.role)) return true; // admin·과장·부과장
+  return String(u.id) === String(createdById); // 그 외엔 본인이 만든 것만
+}
+
 // ── 지시(하달) ──
 // 발신: 전사 역할(전 팀 편집자). 수신: 대상 팀의 팀장.
 export function canCreateDirective(u: SessionUser) {

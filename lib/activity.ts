@@ -9,7 +9,7 @@ export async function logActivity(args: {
   actorName?: string | null;
   action: Action;
   targetTitle: string;
-  targetType?: "task" | "directive";
+  targetType?: "task" | "directive" | "event";
   meta?: Record<string, unknown>;
 }) {
   try {

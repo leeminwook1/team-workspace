@@ -6,7 +6,7 @@ type Log = {
   id: string;
   actorName: string;
   action: "create" | "update" | "delete" | "status" | "login";
-  targetType: "task" | "directive" | "auth";
+  targetType: "task" | "directive" | "auth" | "event";
   targetTitle: string;
   meta: { status?: string };
   createdAt: string;
@@ -21,6 +21,9 @@ const ACTION_META: Record<Log["action"], { label: string; color: string }> = {
 };
 const STATUS_LABEL: Record<string, string> = {
   todo: "예정", in_progress: "진행중", done: "완료", hold: "보류",
+};
+const STAGE_LABEL: Record<string, string> = {
+  planning: "기획", preparing: "준비", ongoing: "진행", done: "완료",
 };
 
 function when(iso: string) {
@@ -82,8 +85,10 @@ export default function ActivityLogView() {
                 </div>
               );
             }
-            const kind = l.targetType === "directive" ? "TODO" : "업무";
-            const statusLabel = l.action === "status" && l.meta?.status ? STATUS_LABEL[l.meta.status] : null;
+            const kind = l.targetType === "directive" ? "TODO" : l.targetType === "event" ? "행사" : "업무";
+            const statusLabel = l.action === "status" && l.meta?.status
+              ? (l.targetType === "event" ? STAGE_LABEL[l.meta.status] : STATUS_LABEL[l.meta.status])
+              : null;
             return (
               <div className="activity-item" key={l.id}>
                 <span className="activity-badge" style={{ background: `color-mix(in srgb, ${a.color} 14%, transparent)`, color: a.color }}>
@@ -93,7 +98,7 @@ export default function ActivityLogView() {
                   <div className="activity-text">
                     <strong>{l.actorName}</strong> 님이 {kind}
                     <span className="activity-target"> “{l.targetTitle || "제목 없음"}”</span>
-                    {statusLabel ? <> 상태를 <b>{statusLabel}</b>(으)로 변경</> : <> {a.label}</>}
+                    {statusLabel ? <> {l.targetType === "event" ? "단계를" : "상태를"} <b>{statusLabel}</b>(으)로 변경</> : <> {a.label}</>}
                   </div>
                   <div className="activity-time">{when(l.createdAt)}</div>
                 </div>
