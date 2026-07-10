@@ -24,9 +24,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div>
-      <h1 className="page-title">관리자</h1>
+      <div style={{ marginBottom: 18 }}>
+        <h1 className="page-title" style={{ margin: "0 0 4px" }}>관리자</h1>
+        <p className="page-sub">팀·자원·사용자와 활동 로그를 관리합니다.</p>
+      </div>
       <AdminTabs tabs={tabs} />
-      <div style={{ marginTop: 16 }}>{children}</div>
+      <div>{children}</div>
     </div>
   );
 }
