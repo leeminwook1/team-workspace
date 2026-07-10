@@ -47,8 +47,8 @@ export default function ConfirmProvider({ children }: { children: React.ReactNod
     <ConfirmCtx.Provider value={confirm}>
       {children}
       {state && (
-        <div className="modal-overlay" onClick={() => close(false)}>
-          <div className="modal modal-confirm" onClick={(e) => e.stopPropagation()} role="alertdialog" aria-modal="true">
+        <div className="modal-overlay">
+          <div className="modal modal-confirm" role="alertdialog" aria-modal="true">
             {state.opts.title && <h2>{state.opts.title}</h2>}
             <p className="confirm-msg">{state.opts.message}</p>
             <div className="modal-actions">

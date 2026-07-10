@@ -1,4 +1,5 @@
 "use client";
+import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useState } from "react";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -128,8 +129,9 @@ function EditModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
         <h2>{user.name} — 편집</h2>
 
         <div className="field">
@@ -165,7 +167,6 @@ function EditModal({
 
         {err && <p className="err-msg">{err}</p>}
         <div className="modal-actions">
-          <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
           <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? "저장 중…" : "저장"}</button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 "use client";
+import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -456,8 +457,9 @@ function TaskFormModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
         <h2>{isEdit ? "업무 수정" : "업무 추가"}</h2>
         <form onSubmit={onSubmit}>
           <div className="field">
@@ -574,7 +576,6 @@ function TaskFormModal({
           </div>
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
             <button className="btn btn-primary" disabled={loading}>
               {loading ? "저장 중…" : isEdit ? "저장" : "등록"}
             </button>
@@ -685,8 +686,9 @@ function TaskDetailModal({
   const prio = PRIORITY_META[task.priority] ?? PRIORITY_META.normal;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
         {/* 팀 · 카테고리 */}
         <div className="detail-teams">
           {task.teams.map((tm) => (
@@ -785,7 +787,6 @@ function TaskDetailModal({
             {canEdit && (
               <button className="btn btn-ghost btn-sm" onClick={() => onEdit(task)}>수정</button>
             )}
-            <button className="btn btn-primary btn-sm" onClick={onClose}>닫기</button>
           </div>
         </div>
       </div>

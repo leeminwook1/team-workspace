@@ -498,13 +498,20 @@ a { color: inherit; text-decoration: none; }
   animation: fade-in 0.18s ease;
 }
 .modal {
+  position: relative;
   width: 100%; max-width: 480px; max-height: 88vh; overflow-y: auto;
   background: var(--surface); border-radius: var(--r-lg); padding: 26px;
   box-shadow: var(--shadow-lift);
 }
-.modal h2 { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 18px; }
-.modal-actions { display: flex; gap: 8px; margin-top: 20px; }
-.modal-actions .btn { flex: 1; }
+.modal h2 { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 18px; padding-right: 34px; }
+.modal-actions { display: flex; gap: 8px; margin-top: 22px; justify-content: flex-end; }
+/* 닫기(X) 버튼 — 우측 상단 */
+.modal-x {
+  position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; z-index: 1;
+  border: 0; background: transparent; color: var(--ink-faint); border-radius: var(--r-sm);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.modal-x:hover { background: var(--surface-2); color: var(--ink); }
 .modal-confirm { max-width: 360px; }
 .modal-confirm h2 { margin-bottom: 8px; }
 .confirm-msg { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin: 0; white-space: pre-wrap; }

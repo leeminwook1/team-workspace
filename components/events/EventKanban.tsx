@@ -1,4 +1,5 @@
 "use client";
+import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -303,8 +304,9 @@ function ItemModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
         <h2>{item ? "할 일 수정" : "할 일 추가"}</h2>
         <form onSubmit={submit}>
           <div className="field">
@@ -348,7 +350,6 @@ function ItemModal({
           <div className="detail-actions">
             {onDelete && <button type="button" className="btn btn-danger btn-sm" onClick={onDelete}>삭제</button>}
             <div className="detail-actions-right">
-              <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>취소</button>
               <button className="btn btn-primary btn-sm">저장</button>
             </div>
           </div>

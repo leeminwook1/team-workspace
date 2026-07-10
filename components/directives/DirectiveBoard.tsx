@@ -1,4 +1,5 @@
 "use client";
+import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -237,8 +238,9 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
         <h2>TODO 내리기</h2>
         <form onSubmit={submit}>
           <div className="field">
@@ -278,7 +280,6 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
           </div>
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
             <button className="btn btn-primary" disabled={busy}>{busy ? "내리는 중…" : "TODO 내리기"}</button>
           </div>
         </form>
@@ -324,8 +325,9 @@ function AssignModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
         <h2>팀원 분배</h2>
         <p className="page-sub" style={{ marginTop: -4 }}>분배할 팀원을 고르고 담당 내용을 적어주세요.</p>
         {members.length === 0 ? (
@@ -350,7 +352,6 @@ function AssignModal({
           </div>
         )}
         <div className="modal-actions">
-          <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
           <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? "저장 중…" : "분배 저장"}</button>
         </div>
       </div>

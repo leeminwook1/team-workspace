@@ -1,4 +1,5 @@
 "use client";
+import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -149,8 +150,9 @@ export function EventFormModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
         <h2>{isEdit ? "행사 수정" : "행사 추가"}</h2>
         <form onSubmit={save}>
           <div className="field">
@@ -202,7 +204,6 @@ export function EventFormModal({
           </div>
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
             <button className="btn btn-primary" disabled={busy}>{busy ? "저장 중…" : isEdit ? "저장" : "등록"}</button>
           </div>
         </form>

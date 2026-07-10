@@ -1,4 +1,5 @@
 "use client";
+import { ModalClose } from "@/components/ModalClose";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -105,8 +106,9 @@ function EditModal({ cat, onClose, onSaved }: { cat: CatRow; onClose: () => void
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
         <h2>카테고리 수정</h2>
         <form onSubmit={save}>
           <div className="field">
@@ -127,7 +129,6 @@ function EditModal({ cat, onClose, onSaved }: { cat: CatRow; onClose: () => void
           </div>
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
             <button className="btn btn-primary" disabled={busy}>{busy ? "저장 중…" : "저장"}</button>
           </div>
         </form>

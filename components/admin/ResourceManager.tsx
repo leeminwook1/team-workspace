@@ -1,4 +1,5 @@
 "use client";
+import { ModalClose } from "@/components/ModalClose";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -193,8 +194,9 @@ function EditModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
         <h2>장비 수정</h2>
         <form onSubmit={save}>
           <div className="field">
@@ -217,7 +219,6 @@ function EditModal({
           </div>
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
             <button className="btn btn-primary" disabled={busy}>{busy ? "저장 중…" : "저장"}</button>
           </div>
         </form>
@@ -244,8 +245,9 @@ function CategoryEditModal({ cat, onClose, onSaved }: { cat: Cat; onClose: () =>
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
         <h2>분류 수정</h2>
         <form onSubmit={save}>
           <div className="field">
@@ -254,7 +256,6 @@ function CategoryEditModal({ cat, onClose, onSaved }: { cat: Cat; onClose: () =>
           </div>
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
             <button className="btn btn-primary" disabled={busy}>{busy ? "저장 중…" : "저장"}</button>
           </div>
         </form>
