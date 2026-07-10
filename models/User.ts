@@ -20,6 +20,11 @@ const UserSchema = new Schema(
       default: "pending", // 가입 = 승인 대기
       index: true,
     },
+    // 홈 위젯 배치 — 순서대로 렌더, size: 1(반폭)|2(전폭). 비어 있으면 기본 배치 사용
+    homeLayout: {
+      type: [{ _id: false, id: { type: String, required: true }, size: { type: Number, default: 1 } }],
+      default: undefined,
+    },
   },
   { timestamps: true }
 );

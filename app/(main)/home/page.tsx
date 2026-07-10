@@ -10,20 +10,13 @@ import { Reservation } from "@/models/Reservation";
 import { User } from "@/models/User";
 import "@/models/Team";
 import "@/models/Resource";
+import "@/models/Category";
 import {
   visibleTeamIds, canUseDirectives, canCreateDirective, canApproveUsers, type SessionUser,
 } from "@/lib/permissions";
-import { Icon, type IconName } from "@/components/icons";
-
-// 카드 빈 상태 — 아이콘 원 + 안내문
-function Empty({ icon, text }: { icon: IconName; text: string }) {
-  return (
-    <div className="dash-empty">
-      <span className="dash-empty-ico"><Icon name={icon} size={18} /></span>
-      <span>{text}</span>
-    </div>
-  );
-}
+import { Icon } from "@/components/icons";
+import HomeWidgets, { type WTask } from "@/components/home/HomeWidgets";
+import { DEFAULT_LAYOUT, type WidgetSlot } from "@/lib/widgets";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +29,6 @@ function kstToday() {
   const end = new Date(start.getTime() + 24 * 3600_000);
   return { start, end, kst };
 }
-const fmtTime = (d: Date) => new Date(d).toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
-const fmtMD = (d: Date | string) => new Date(d).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" });
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
@@ -103,6 +94,57 @@ export default async function HomePage() {
   // 5) 승인 대기 (승인권자만)
   const pendingUsers = canApproveUsers(user) ? await User.countDocuments({ status: "pending" }) : 0;
 
+  // ── 위젯 데이터 ──
+  const mapTask = (t: any): WTask => ({
+    id: String(t._id),
+    title: t.title,
+    startDate: new Date(t.startDate).toISOString(),
+    endDate: new Date(t.endDate).toISOString(),
+    allDay: !!t.allDay,
+    status: t.status,
+    priority: t.priority,
+    location: t.location ?? "",
+    teams: (t.teamIds ?? []).filter(Boolean).map((tm: any) => ({ id: String(tm._id), name: tm.name, color: tm.color })),
+    category: t.categoryId ? { name: t.categoryId.name ?? "", color: t.categoryId.color ?? "#8b95a1" } : null,
+  });
+
+  // 이번 달(KST) 업무 — 미니 달력 + 진행 현황
+  const kY = kst.getUTCFullYear(), kM = kst.getUTCMonth();
+  const monthStart = new Date(Date.UTC(kY, kM, 1) - 9 * 3600_000);
+  const monthEnd = new Date(Date.UTC(kY, kM + 1, 1) - 9 * 3600_000);
+  const monthQ: any = { startDate: { $lt: monthEnd }, endDate: { $gt: monthStart } };
+  if (scope !== "all") monthQ.teamIds = { $in: scope.length ? scope : [] };
+  const monthTasks: any[] = scope !== "all" && scope.length === 0 ? [] : await Task.find(monthQ)
+    .populate("teamIds", "name color").populate("categoryId", "name color").sort({ startDate: 1 }).limit(300).lean();
+
+  // 다가오는 일정 — 지금 이후 시작, 완료 제외
+  const upQ: any = { startDate: { $gt: new Date() }, status: { $ne: "done" } };
+  if (scope !== "all") upQ.teamIds = { $in: scope.length ? scope : [] };
+  const upcomingTasks: any[] = scope !== "all" && scope.length === 0 ? [] : await Task.find(upQ)
+    .populate("teamIds", "name color").populate("categoryId", "name color").sort({ startDate: 1 }).limit(5).lean();
+
+  // 내 위젯 배치 (없으면 기본 배치, 지시 권한 없으면 TODO 위젯 제외)
+  const meDoc: any = await User.findById(user.id).select("homeLayout").lean();
+  const savedLayout: WidgetSlot[] | null = meDoc?.homeLayout?.length ? meDoc.homeLayout.map((w: any) => ({ id: w.id, size: w.size === 2 ? 2 : 1 })) : null;
+  const layout = (savedLayout ?? DEFAULT_LAYOUT).filter((w) => (w.id === "todo" ? canUseDirectives(user) : true));
+
+  const widgetData = {
+    monthTasks: monthTasks.map(mapTask),
+    upcoming: upcomingTasks.map(mapTask),
+    todo: pendingDirs.map((d: any) => ({
+      id: String(d._id), title: d.title,
+      dueDate: d.dueDate ? new Date(d.dueDate).toISOString() : null,
+      teamColor: d.teamId?.color ?? null,
+    })),
+    reservations: todayResv.map((r: any) => ({
+      id: String(r._id),
+      start: new Date(r.startAt).toISOString(), end: new Date(r.endAt).toISOString(),
+      resource: r.resourceId?.name ?? "자원", teamColor: r.teamId?.color ?? null,
+    })),
+    duesoon: dueSoon.map((d) => ({ ...d, dueDate: new Date(d.dueDate).toISOString() })),
+    events: upcoming.map((e) => ({ id: e.id, title: e.title, total: e.total, pct: e.pct })),
+  };
+
   const dateLabel = kst.toLocaleDateString("ko-KR", { timeZone: "UTC", month: "long", day: "numeric", weekday: "long" });
   const hour = kst.getUTCHours();
   const greet = hour < 6 ? "늦은 밤이에요" : hour < 12 ? "좋은 아침이에요" : hour < 18 ? "좋은 오후예요" : "좋은 저녁이에요";
@@ -144,118 +186,8 @@ export default async function HomePage() {
         </Link>
       </div>
 
-      <div className="dash-grid">
-        {/* 오늘 일정 */}
-        <section className="card dash-card">
-          <div className="dash-card-head"><h2><span className="dash-h-ico" style={{ background: "color-mix(in srgb, var(--primary) 12%, transparent)", color: "var(--primary)" }}><Icon name="calendar" size={14} /></span>오늘 일정</h2><Link href="/calendar">달력 →</Link></div>
-          {todayTasks.length === 0 ? (
-            <Empty icon="calendar" text="오늘은 등록된 일정이 없어요." />
-          ) : (
-            <ul className="dash-list">
-              {todayTasks.map((t: any) => (
-                <li key={String(t._id)}>
-                  <Link href={`/calendar?task=${String(t._id)}`} className="dash-row">
-                    <span className="dash-time">{t.allDay ? "종일" : fmtTime(t.startDate)}</span>
-                    <span className="dash-row-title">{t.title}</span>
-                    <span className="dash-row-dots">
-                      {(t.teamIds ?? []).filter(Boolean).slice(0, 3).map((tm: any) => (
-                        <span className="dot" key={String(tm._id)} style={{ background: tm.color }} />
-                      ))}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* 마감 임박 */}
-        <section className="card dash-card">
-          <div className="dash-card-head"><h2><span className="dash-h-ico" style={{ background: "color-mix(in srgb, var(--danger) 11%, transparent)", color: "var(--danger)" }}><Icon name="clock" size={14} /></span>마감 임박 할 일</h2><Link href="/events">행사 →</Link></div>
-          {dueSoon.length === 0 ? (
-            <Empty icon="check" text="7일 내 마감인 할 일이 없어요." />
-          ) : (
-            <ul className="dash-list">
-              {dueSoon.map((d, i) => (
-                <li key={i}>
-                  <Link href={`/events/${d.eventId}`} className="dash-row">
-                    <span className={`dash-due${d.overdue ? " overdue" : ""}`}>{d.overdue ? "지연" : fmtMD(d.dueDate)}</span>
-                    <span className="dash-row-title">{d.title}</span>
-                    <span className="dash-row-sub">{d.eventTitle}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* 진행 중 행사 */}
-        <section className="card dash-card">
-          <div className="dash-card-head"><h2><span className="dash-h-ico" style={{ background: "color-mix(in srgb, #8b5cf6 13%, transparent)", color: "#8b5cf6" }}><Icon name="board" size={14} /></span>진행 중 행사</h2><Link href="/events">전체 →</Link></div>
-          {upcoming.length === 0 ? (
-            <Empty icon="board" text="진행 중인 행사가 없어요." />
-          ) : (
-            <ul className="dash-list">
-              {upcoming.map((e) => (
-                <li key={e.id}>
-                  <Link href={`/events/${e.id}`} className="dash-row dash-row-col">
-                    <span className="dash-row-between">
-                      <span className="dash-row-title">{e.title}</span>
-                      <span className="dash-pct">{e.total ? `${e.pct}%` : "—"}</span>
-                    </span>
-                    <span className="kb-check-bar"><span style={{ width: `${e.pct}%` }} /></span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* 대기 TODO / 오늘 예약 */}
-        {canUseDirectives(user) && (
-          <section className="card dash-card">
-            <div className="dash-card-head"><h2><span className="dash-h-ico" style={{ background: "color-mix(in srgb, var(--st-prog) 13%, transparent)", color: "var(--st-prog)" }}><Icon name="inbox" size={14} /></span>대기 중 TODO</h2><Link href="/directives">전체 →</Link></div>
-            {pendingDirs.length === 0 ? (
-              <Empty icon="check" text="대기 중인 TODO가 없어요." />
-            ) : (
-              <ul className="dash-list">
-                {pendingDirs.map((d: any) => (
-                  <li key={String(d._id)}>
-                    <Link href="/directives" className="dash-row">
-                      <span className="dash-row-dots">
-                        {d.teamId?.color && <span className="dot" style={{ background: d.teamId.color }} />}
-                      </span>
-                      <span className="dash-row-title">{d.title}</span>
-                      {d.dueDate && <span className="dash-row-sub">마감 {fmtMD(d.dueDate)}</span>}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
-
-        <section className="card dash-card">
-          <div className="dash-card-head"><h2><span className="dash-h-ico" style={{ background: "color-mix(in srgb, var(--st-done) 12%, transparent)", color: "var(--st-done)" }}><Icon name="resources" size={14} /></span>오늘 자원 예약</h2><Link href="/resources">예약 →</Link></div>
-          {todayResv.length === 0 ? (
-            <Empty icon="resources" text="오늘 예약된 장비·자원이 없어요." />
-          ) : (
-            <ul className="dash-list">
-              {todayResv.map((r: any) => (
-                <li key={String(r._id)}>
-                  <Link href="/resources" className="dash-row">
-                    <span className="dash-time">{fmtTime(r.startAt)}~{fmtTime(r.endAt)}</span>
-                    <span className="dash-row-title">{r.resourceId?.name ?? "자원"}</span>
-                    <span className="dash-row-dots">
-                      {r.teamId?.color && <span className="dot" style={{ background: r.teamId.color }} />}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
+      {/* 위젯 대시보드 — 추가·제거·순서·크기 커스터마이즈 (계정에 저장) */}
+      <HomeWidgets initialLayout={layout} canDirectives={canUseDirectives(user)} data={widgetData} />
     </div>
   );
 }

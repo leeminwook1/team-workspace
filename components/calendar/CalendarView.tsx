@@ -65,7 +65,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   const [createDate, setCreateDate] = useState("");
   const [detail, setDetail] = useState<TaskItem | null>(null);
   const [editing, setEditing] = useState<TaskItem | null>(null);
-  const [title, setTitle] = useState("");
+  const [curStart, setCurStart] = useState<Date | null>(null); // 현재 뷰의 기준 날짜 (큰 타이포 헤더용)
   const [view, setView] = useState("dayGridMonth");
   const [maxEvents, setMaxEvents] = useState(4); // 하루 표시 최대 개수 (초과 시 +N개)
   const [isMobile, setIsMobile] = useState(false);
@@ -140,9 +140,9 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
             d.setDate(d.getDate() + 1);
             end = d.toISOString();
           }
-          // 색상: 현재 보이는 팀 중 첫 팀 색 (Toss 틴트 배경 + 컬러 텍스트)
+          // 색상: 카테고리 색 우선, 없으면 팀 색 폴백
           const primary = t.teams.find((tm) => visible.has(tm.id)) ?? t.teams[0];
-          const color = primary?.color ?? "#8b95a1";
+          const color = t.category?.color ?? primary?.color ?? "#8b95a1";
           return {
             id: t.id,
             title: t.title,
@@ -150,10 +150,10 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
             end,
             allDay: t.allDay,
             backgroundColor: color + "26",
-            borderColor: color, // 리스트 뷰의 점 색상
+            borderColor: color, // 월간 도트·리스트 뷰의 점 색상
             textColor: color,
             classNames: t.status === "done" ? ["ev-done"] : [],
-            extendedProps: { taskId: t.id },
+            extendedProps: { taskId: t.id, urgent: t.priority === "urgent", done: t.status === "done" },
           };
         }),
     [tasks, visible, visibleCats, visibleStatus, mineOnly, user?.id]
@@ -186,12 +186,13 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
     });
   }
 
-  // 필터가 기본(전체 표시)에서 벗어났는지 → 버튼에 활성 표시
+  // 필터가 기본(전체 표시)에서 벗어났는지 → 버튼에 활성 표시 (팀은 인라인 칩이라 제외)
   const filtersActive =
     mineOnly ||
-    visible.size !== teams.length ||
     visibleCats.size !== categories.length ||
     visibleStatus.size !== 4;
+
+  const allTeamsOn = visible.size === teams.length;
 
   function resetFilters() {
     setVisible(new Set(teams.map((t) => t.id)));
@@ -200,26 +201,29 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
     setMineOnly(false);
   }
 
+  // 큰 타이포 헤더 — "7월" + "2026" (일 뷰는 "7월 10일")
+  const bigLabel = curStart
+    ? view === "timeGridDay"
+      ? `${curStart.getMonth() + 1}월 ${curStart.getDate()}일`
+      : `${curStart.getMonth() + 1}월`
+    : "";
+  const yearLabel = curStart ? String(curStart.getFullYear()) : "";
+
   return (
     <div className="cal-wrap">
-      {/* 커스텀 Toss 헤더 */}
-      <div className="cal-toolbar">
-        <button className="cal-arrow" aria-label="이전" onClick={() => api()?.prev()}>
-          <Icon name="chevronL" size={18} />
-        </button>
-        <h2 className="cal-title">{title}</h2>
-        <button className="cal-arrow" aria-label="다음" onClick={() => api()?.next()}>
-          <Icon name="chevronR" size={18} />
-        </button>
-        <button className="btn btn-ghost btn-sm" onClick={() => api()?.today()}>오늘</button>
-        <button
-          className={`btn btn-ghost btn-sm cal-filter-btn${filtersOpen ? " open" : ""}`}
-          aria-expanded={filtersOpen}
-          onClick={() => setFiltersOpen((v) => !v)}
-        >
-          <Icon name="filter" size={15} /> 필터
-          {filtersActive && <span className="cal-filter-dot" aria-label="필터 적용됨" />}
-        </button>
+      {/* 풀블리드 헤더 — 큰 월 타이포 + 원형 화살표 (1c) */}
+      <div className="cal-toolbar cal1c-head">
+        <h2 className="cal1c-month">{bigLabel}</h2>
+        <span className="cal1c-year">{yearLabel}</span>
+        <div className="cal1c-nav">
+          <button className="cal1c-arrow" aria-label="이전" onClick={() => api()?.prev()}>
+            <Icon name="chevronL" size={15} />
+          </button>
+          <button className="cal1c-arrow" aria-label="다음" onClick={() => api()?.next()}>
+            <Icon name="chevronR" size={15} />
+          </button>
+        </div>
+        <button className="cal1c-today" onClick={() => api()?.today()}>오늘</button>
         <div className="cal-spacer" />
         <div className="seg" role="tablist" aria-label="보기 전환">
           <button className={view === "dayGridMonth" ? "on" : ""} onClick={() => changeView("dayGridMonth")}>월</button>
@@ -229,34 +233,49 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
         </div>
         {editableTeams.length > 0 && (
           <button
-            className="btn btn-primary btn-sm"
+            className="cal1c-add"
             onClick={() => {
               setCreateDate(new Date().toISOString().slice(0, 10));
               setCreateOpen(true);
             }}
           >
-            <Icon name="plus" size={16} strokeWidth={2.4} /> 업무 추가
+            <Icon name="plus" size={15} strokeWidth={2.6} /> <span>업무 추가</span>
           </button>
         )}
       </div>
 
-      {/* 필터 — 기본 접힘, '필터' 버튼으로 펼침 */}
+      {/* 팀 필터 칩 — 인라인 상시 노출 (1c) */}
+      <div className="cal1c-chips">
+        <button
+          className={`cal1c-chip cal1c-chip-all${allTeamsOn ? " on" : ""}`}
+          onClick={() => setVisible(new Set(teams.map((t) => t.id)))}
+        >
+          전체
+        </button>
+        {teams.map((t) => (
+          <button
+            key={t.id}
+            className={`cal1c-chip${visible.has(t.id) ? "" : " off"}`}
+            onClick={() => toggleTeam(t.id)}
+          >
+            <span className="dot" style={{ background: t.color }} />
+            {t.name}
+          </button>
+        ))}
+        <div className="cal-spacer" />
+        <button
+          className={`btn btn-ghost btn-sm cal-filter-btn${filtersOpen ? " open" : ""}`}
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen((v) => !v)}
+        >
+          <Icon name="filter" size={15} /> 필터
+          {filtersActive && <span className="cal-filter-dot" aria-label="필터 적용됨" />}
+        </button>
+      </div>
+
+      {/* 필터 — 기본 접힘, '필터' 버튼으로 펼침 (분류·상태) */}
       {filtersOpen && (
         <div className="filter-panel">
-          <div className="filter-row">
-            <span className="filter-label">팀</span>
-            {teams.map((t) => (
-              <button
-                key={t.id}
-                className="chip chip-btn"
-                style={{ opacity: visible.has(t.id) ? 1 : 0.4 }}
-                onClick={() => toggleTeam(t.id)}
-              >
-                <span className="dot" style={{ background: t.color }} />
-                {t.name}
-              </button>
-            ))}
-          </div>
           {categories.length > 0 && (
             <div className="filter-row">
               <span className="filter-label">분류</span>
@@ -326,8 +345,20 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           allDayText="종일"
           nowIndicator
           events={events}
+          eventContent={(arg) => {
+            // 월간 뷰: 도트 + 제목 (1c) — 나머지 뷰는 기본 렌더링(true 반환)
+            if (arg.view.type !== "dayGridMonth") return true;
+            const p = arg.event.extendedProps as { urgent?: boolean; done?: boolean };
+            return (
+              <span className="ev1c">
+                <i className="ev1c-dot" style={{ background: arg.event.borderColor }} />
+                <span className="ev1c-t">{arg.event.title}</span>
+                {p.urgent && !p.done && <b className="ev1c-urgent">긴급</b>}
+              </span>
+            );
+          }}
           datesSet={(arg) => {
-            setTitle(arg.view.title);
+            setCurStart(arg.view.currentStart);
             setView(arg.view.type);
             setRange({ from: arg.startStr, to: arg.endStr });
             fetchTasks(arg.startStr, arg.endStr);

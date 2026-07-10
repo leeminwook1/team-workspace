@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 
@@ -74,7 +75,8 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
         </button>
       )}
 
-      {open && (
+      {/* sticky 사이드바 내부에서 z-index가 갇히지 않도록 body 포털로 렌더 */}
+      {open && createPortal(
         <div className="modal-overlay gs-overlay" onClick={close}>
           <div className="gs-panel" onClick={(e) => e.stopPropagation()}>
             <div className="gs-input-row">
@@ -144,7 +146,8 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
