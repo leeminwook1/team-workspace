@@ -3,27 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { ColorPicker, PRESET_COLORS } from "@/components/admin/ColorPicker";
 
 type CatRow = { id: string; name: string; color: string; isActive: boolean };
-
-const PRESET_COLORS = ["#3182f6", "#f0466e", "#8b5cf6", "#12b3a6", "#e8951b", "#f97316", "#22c55e", "#64748b"];
-
-function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
-  return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      {PRESET_COLORS.map((c) => (
-        <button
-          key={c} type="button" aria-label={c} onClick={() => onChange(c)}
-          style={{
-            width: 30, height: 30, borderRadius: 9, background: c, border: 0, cursor: "pointer",
-            outline: value === c ? "3px solid var(--accent-soft)" : "none",
-            boxShadow: value === c ? `0 0 0 2px ${c}` : "none",
-          }}
-        />
-      ))}
-    </div>
-  );
-}
 
 export default function CategoryManager({ initial }: { initial: CatRow[] }) {
   const router = useRouter();

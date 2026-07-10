@@ -3,32 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { ColorPicker, PRESET_COLORS } from "@/components/admin/ColorPicker";
 
 type TeamRow = { id: string; name: string; slug: string; color: string; isActive: boolean };
-
-const PRESET_COLORS = ["#e8951b", "#f0466e", "#8b5cf6", "#12b3a6", "#3182f6", "#f97316", "#22c55e", "#64748b"];
-
-function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
-  return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      {PRESET_COLORS.map((c) => (
-        <button
-          key={c} type="button" aria-label={c} onClick={() => onChange(c)}
-          style={{
-            width: 30, height: 30, borderRadius: 9, background: c, border: 0, cursor: "pointer",
-            outline: value === c ? "3px solid var(--accent-soft)" : "none",
-            boxShadow: value === c ? `0 0 0 2px ${c}` : "none",
-          }}
-        />
-      ))}
-    </div>
-  );
-}
 
 export default function TeamManager({ initialTeams }: { initialTeams: TeamRow[] }) {
   const router = useRouter();
   const confirm = useConfirm();
-  const [form, setForm] = useState({ name: "", slug: "", color: PRESET_COLORS[4], description: "" });
+  const [form, setForm] = useState({ name: "", slug: "", color: PRESET_COLORS[0], description: "" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<TeamRow | null>(null);
@@ -42,7 +24,7 @@ export default function TeamManager({ initialTeams }: { initialTeams: TeamRow[] 
     const data = await res.json();
     setLoading(false);
     if (!res.ok) { setErr(data.error ?? "팀 생성 실패"); return; }
-    setForm({ name: "", slug: "", color: PRESET_COLORS[4], description: "" });
+    setForm({ name: "", slug: "", color: PRESET_COLORS[0], description: "" });
     router.refresh();
   }
 
