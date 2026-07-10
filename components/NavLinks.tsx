@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "./icons";
 
-export type NavItem = { href: string; label: string; icon: IconName };
+export type NavItem = { href: string; label: string; icon: IconName; badge?: number };
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
@@ -19,6 +19,7 @@ export default function NavLinks({ items }: { items: NavItem[] }) {
         <Link key={item.href} href={item.href} className={isActive(pathname, item.href) ? "on" : undefined}>
           <Icon name={item.icon} size={20} />
           <span>{item.label}</span>
+          {!!item.badge && <span className="nav-badge">{item.badge > 99 ? "99+" : item.badge}</span>}
         </Link>
       ))}
     </nav>
@@ -32,7 +33,10 @@ export function BottomNav({ items }: { items: NavItem[] }) {
     <nav className="bottom-nav">
       {items.map((item) => (
         <Link key={item.href} href={item.href} className={isActive(pathname, item.href) ? "on" : undefined}>
-          <Icon name={item.icon} size={23} strokeWidth={2} />
+          <span className="bn-icon">
+            <Icon name={item.icon} size={23} strokeWidth={2} />
+            {!!item.badge && <span className="nav-badge dot-only" aria-label={`${item.badge}건`} />}
+          </span>
           <span>{item.label}</span>
         </Link>
       ))}

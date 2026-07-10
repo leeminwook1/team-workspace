@@ -3,6 +3,7 @@ import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -77,6 +78,24 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
   }, []);
+
+  // 검색 딥링크: /calendar?task=<id> → 상세 모달 열고 해당 날짜로 이동
+  const searchParams = useSearchParams();
+  const deepTaskId = searchParams.get("task");
+  useEffect(() => {
+    if (!deepTaskId) return;
+    let alive = true;
+    fetch(`/api/tasks/${deepTaskId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!alive || !d?.task) return;
+        setDetail(d.task);
+        api()?.gotoDate(d.task.startDate);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepTaskId]);
 
   const api = () => calRef.current?.getApi();
   function changeView(v: string) {

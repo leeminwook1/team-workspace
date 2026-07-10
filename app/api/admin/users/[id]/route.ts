@@ -4,6 +4,7 @@ import { Team } from "@/models/Team";
 import { requireActiveUser, json } from "@/lib/api";
 import { canApproveUsers, canManageTeams } from "@/lib/permissions";
 import { userUpdateSchema } from "@/lib/validations";
+import { logActivity } from "@/lib/activity";
 
 // PATCH /api/admin/users/:id — 활성 사용자의 팀·역할·전사역할·활성상태 변경 (설계 7장: 권한변경=Admin)
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -51,6 +52,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (d.status) target.status = d.status;
 
   await target.save();
+  await logActivity({
+    actorId: user.id, actorName: user.name, action: "update", targetType: "user",
+    targetTitle: target.name, meta: { detail: "역할·팀·상태 변경" },
+  });
   return json({ updated: true });
 }
 
@@ -72,5 +77,9 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   }
 
   await User.deleteOne({ _id: params.id });
+  await logActivity({
+    actorId: user.id, actorName: user.name, action: "delete", targetType: "user",
+    targetTitle: target.name, meta: { detail: target.status === "pending" ? "가입 거절" : "계정 삭제" },
+  });
   return json({ deleted: true });
 }

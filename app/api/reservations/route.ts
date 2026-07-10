@@ -6,6 +6,8 @@ import "@/models/Team";
 import { requireActiveUser, json } from "@/lib/api";
 import { canReserve } from "@/lib/permissions";
 import { reservationSchema } from "@/lib/validations";
+import { logActivity, reservationLabel } from "@/lib/activity";
+import { Resource } from "@/models/Resource";
 
 // GET /api/reservations?resource=&from=&to= — 예약 조회 (로그인)
 export async function GET(req: Request) {
@@ -93,6 +95,11 @@ export async function POST(req: Request) {
     startAt,
     endAt,
     note: d.note,
+  });
+  const res: any = await Resource.findById(d.resourceId).select("name").lean();
+  await logActivity({
+    actorId: user.id, actorName: user.name, action: "create", targetType: "reservation",
+    targetTitle: reservationLabel(res?.name ?? "자원", startAt, endAt),
   });
   return json({ id: String(r._id) }, 201);
 }

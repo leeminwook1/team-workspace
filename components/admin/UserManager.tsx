@@ -109,11 +109,35 @@ function EditModal({
 }: {
   user: UserRow; teams: TeamOpt[]; isSelf: boolean; onClose: () => void; onSaved: () => void;
 }) {
+  const confirm = useConfirm();
   const [role, setRole] = useState(user.role);
   const [teamId, setTeamId] = useState(user.team?.id ?? teams[0]?.id ?? "");
   const [active, setActive] = useState(user.status === "active");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [tempPw, setTempPw] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function resetPassword() {
+    const ok = await confirm({
+      title: "임시 비밀번호 발급",
+      message: `${user.name} 님의 비밀번호를 임시 비밀번호로 초기화할까요?\n기존 비밀번호는 즉시 사용할 수 없게 됩니다.`,
+      confirmText: "발급",
+    });
+    if (!ok) return;
+    setBusy(true); setErr("");
+    const res = await fetch(`/api/admin/users/${user.id}/reset-password`, { method: "POST" });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) { setErr(data.error ?? "발급 실패"); return; }
+    setTempPw(data.tempPassword);
+    setCopied(false);
+  }
+
+  async function copyTempPw() {
+    if (!tempPw) return;
+    try { await navigator.clipboard.writeText(tempPw); setCopied(true); } catch { /* http 환경 등 */ }
+  }
 
   async function save() {
     setBusy(true); setErr("");
@@ -164,6 +188,28 @@ function EditModal({
             </div>
           </div>
         )}
+
+        {/* 임시 비밀번호 발급 — 비밀번호를 잊은 사용자용 */}
+        <div className="pw-reset">
+          {tempPw ? (
+            <div className="pw-reset-result">
+              <div className="pw-reset-label">임시 비밀번호가 발급되었습니다. <b>지금 한 번만</b> 표시돼요.</div>
+              <div className="pw-reset-row">
+                <code className="pw-reset-code">{tempPw}</code>
+                <button type="button" className="btn btn-line btn-sm" onClick={copyTempPw}>{copied ? "복사됨 ✓" : "복사"}</button>
+              </div>
+              <div className="pw-reset-hint">본인에게 전달하고, 로그인 후 <b>내 계정</b>에서 비밀번호를 바꾸도록 안내하세요.</div>
+            </div>
+          ) : (
+            <div className="pw-reset-row between">
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink-soft)" }}>비밀번호를 잊었나요?</div>
+                <div className="pw-reset-hint">임시 비밀번호를 만들어 본인에게 전달할 수 있어요.</div>
+              </div>
+              <button type="button" className="btn btn-line btn-sm" disabled={busy} onClick={resetPassword}>임시 비밀번호 발급</button>
+            </div>
+          )}
+        </div>
 
         {err && <p className="err-msg">{err}</p>}
         <div className="modal-actions">

@@ -1,7 +1,7 @@
 import { connectDB } from "./mongodb";
 import { ActivityLog } from "@/models/ActivityLog";
 
-type Action = "create" | "update" | "delete" | "status" | "login";
+type Action = "create" | "update" | "delete" | "status" | "login" | "approve";
 
 // 활동 로그 기록. 실패해도 본래 작업(업무 생성·수정·삭제)을 절대 막지 않는다.
 export async function logActivity(args: {
@@ -9,7 +9,7 @@ export async function logActivity(args: {
   actorName?: string | null;
   action: Action;
   targetTitle: string;
-  targetType?: "task" | "directive" | "event";
+  targetType?: "task" | "directive" | "event" | "reservation" | "user";
   meta?: Record<string, unknown>;
 }) {
   try {
@@ -25,6 +25,13 @@ export async function logActivity(args: {
   } catch (e) {
     console.error("[activity] 기록 실패:", e);
   }
+}
+
+// 예약 로그 제목: "카메라 1호 · 7. 15. 10:00~12:00" (KST 기준)
+export function reservationLabel(resourceName: string, startAt: Date, endAt: Date) {
+  const d = (x: Date) => x.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" });
+  const t = (x: Date) => x.toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${resourceName} · ${d(startAt)} ${t(startAt)}~${t(endAt)}`;
 }
 
 // 로그인 기록 (로그인 로그 탭). 실패해도 로그인 흐름을 막지 않는다.

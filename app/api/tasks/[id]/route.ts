@@ -1,9 +1,51 @@
 import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
+import "@/models/Team";
+import "@/models/User";
+import "@/models/Category";
 import { requireActiveUser, json } from "@/lib/api";
-import { canEditTaskAny, canDeleteTaskAny, canChangeStatusAny, canCreateTaskInAll } from "@/lib/permissions";
+import { canEditTaskAny, canDeleteTaskAny, canChangeStatusAny, canCreateTaskInAll, visibleTeamIds } from "@/lib/permissions";
 import { taskUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
+
+// GET /api/tasks/:id — 단건 조회 (검색 딥링크용). 조회 범위(역할) 검증.
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const { user, error } = await requireActiveUser();
+  if (error) return error;
+
+  await connectDB();
+  const t: any = await Task.findById(params.id)
+    .populate("teamIds", "name color")
+    .populate("categoryId", "name color")
+    .populate("assignees", "name")
+    .populate("createdBy", "name")
+    .lean();
+  if (!t) return json({ error: "업무를 찾을 수 없습니다." }, 404);
+
+  const scope = visibleTeamIds(user);
+  if (scope !== "all") {
+    const ids = (t.teamIds ?? []).map((x: any) => String(x._id ?? x));
+    if (!ids.some((id: string) => scope.includes(id))) return json({ error: "조회 권한이 없습니다." }, 403);
+  }
+
+  return json({
+    task: {
+      id: String(t._id),
+      title: t.title,
+      description: t.description,
+      teams: (t.teamIds ?? []).filter(Boolean).map((tm: any) => ({ id: String(tm._id ?? tm), name: tm.name ?? "", color: tm.color ?? "#8b95a1" })),
+      category: t.categoryId ? { id: String(t.categoryId._id ?? t.categoryId), name: t.categoryId.name ?? "", color: t.categoryId.color ?? "#8b95a1" } : null,
+      assignees: (t.assignees ?? []).map((a: any) => ({ id: String(a._id ?? a), name: a.name ?? "" })),
+      createdBy: t.createdBy?.name ? { id: String(t.createdBy._id ?? t.createdBy), name: t.createdBy.name } : null,
+      startDate: t.startDate,
+      endDate: t.endDate,
+      allDay: t.allDay,
+      status: t.status,
+      priority: t.priority,
+      location: t.location,
+    },
+  });
+}
 
 // PATCH /api/tasks/:id — 수정(팀장·부팀장·과장·부과장) / 팀원은 본인 담당 업무의 status만
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {

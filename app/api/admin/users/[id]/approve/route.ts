@@ -3,6 +3,7 @@ import { User } from "@/models/User";
 import { requireActiveUser, json } from "@/lib/api";
 import { canApproveUsers } from "@/lib/permissions";
 import { approveSchema } from "@/lib/validations";
+import { logActivity } from "@/lib/activity";
 
 // POST /api/admin/users/:id/approve — 승인 + 팀·역할 배정 (설계 5.3)
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -32,5 +33,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   target.status = "active";
   await target.save();
 
+  await logActivity({ actorId: user.id, actorName: user.name, action: "approve", targetType: "user", targetTitle: target.name });
   return json({ approved: true });
 }
