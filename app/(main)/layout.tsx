@@ -19,7 +19,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   const navItems: NavItem[] = [
     { href: "/calendar", label: "달력", icon: "calendar" },
     { href: "/resources", label: "자원 예약", icon: "resources" },
-    ...(canUseDirectives(user) ? [{ href: "/directives", label: "지시함", icon: "inbox" as const }] : []),
+    ...(canUseDirectives(user) ? [{ href: "/directives", label: "TODO", icon: "inbox" as const }] : []),
     ...(showAdmin ? [{ href: "/admin", label: "관리자", icon: "admin" as const }] : []),
   ];
 

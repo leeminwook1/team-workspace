@@ -69,7 +69,7 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
     <div className="directives">
       <div className="page-head">
         <div>
-          <h1 className="page-title">지시함</h1>
+          <h1 className="page-title">TODO</h1>
           <p className="page-sub">
             {canCreate ? "팀장에게 할 일을 내려주고 진행 상황을 확인하세요." : "받은 지시를 확인하고 팀원에게 분배하세요."}
           </p>
