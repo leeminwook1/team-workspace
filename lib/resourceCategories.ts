@@ -17,13 +17,19 @@ const DEFAULTS = [
 export async function ensureResourceCategories() {
   await connectDB();
 
-  // upsert 시드 — name 유니크 기준, 동시 호출에도 중복 안 생김
-  for (const d of DEFAULTS) {
-    await ResourceCategory.updateOne(
-      { name: d.name },
-      { $setOnInsert: { legacyKey: d.legacyKey, order: d.order, isActive: true, createdBy: null } },
-      { upsert: true }
-    );
+  // 최초 1회만 시드 (컬렉션이 완전히 비었을 때). 이미 있으면 건너뜀 →
+  // 사용자가 기본 분류를 삭제해도 다시 생성되지 않는다.
+  // 동시성: name 유니크 인덱스 + ordered:false 로 중복은 무시.
+  const count = await ResourceCategory.countDocuments();
+  if (count === 0) {
+    try {
+      await ResourceCategory.insertMany(
+        DEFAULTS.map((d) => ({ name: d.name, legacyKey: d.legacyKey, order: d.order, isActive: true, createdBy: null })),
+        { ordered: false }
+      );
+    } catch (e: any) {
+      if (e?.code !== 11000) console.error("[resourceCat] 시드 실패:", e);
+    }
   }
 
   // categoryId 없는 레거시 자원 → legacyKey 매칭으로 채움
