@@ -19,6 +19,7 @@ type Directive = {
   priority: string;
   status: "todo" | "in_progress" | "done" | "hold";
   assignments: Assignment[];
+  converted: boolean;
   createdAt: string;
 };
 
@@ -129,14 +130,20 @@ function DirectiveCard({
     onChanged();
   }
   async function convert(assignmentId?: string) {
+    if (busy) return; // 중복 클릭 방지
     setBusy(true);
     const res = await fetch(`/api/directives/${dir.id}/convert`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(assignmentId ? { assignmentId } : {}),
     });
+    const data = await res.json().catch(() => ({}));
     setBusy(false);
-    if (res.ok) onChanged();
-    else { const e = await res.json().catch(() => ({})); console.error("convert:", e.error ?? res.status); onChanged(); }
+    onChanged();
+    if (res.ok) {
+      await confirm({ title: "등록 완료", message: "달력에 일정으로 등록되었습니다.", confirmText: "확인", alert: true });
+    } else {
+      await confirm({ title: "알림", message: data.error ?? "일정 등록에 실패했습니다.", confirmText: "확인", alert: true });
+    }
   }
   async function remove() {
     const ok = await confirm({ title: "TODO 삭제", message: "이 TODO를 삭제할까요?", confirmText: "삭제", danger: true });
@@ -195,7 +202,11 @@ function DirectiveCard({
             <Icon name="userLine" size={14} /> 팀원 분배
           </button>
           {dir.assignments.length === 0 && (
-            <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => convert()}>일정으로 등록</button>
+            dir.converted ? (
+              <span className="dir-conv-done"><Icon name="check" size={13} strokeWidth={2.6} /> 일정 등록됨</span>
+            ) : (
+              <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => convert()}>일정으로 등록</button>
+            )
           )}
         </div>
       )}

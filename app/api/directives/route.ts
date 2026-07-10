@@ -31,6 +31,7 @@ function serialize(d: any) {
       done: !!a.done,
       taskId: a.taskId ? String(a.taskId) : null,
     })),
+    converted: !!d.convertedTaskId, // 지시 전체가 일정으로 등록됐는지
     createdAt: d.createdAt,
   };
 }

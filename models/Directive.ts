@@ -23,6 +23,7 @@ const DirectiveSchema = new Schema(
     // 상태는 업무와 동일 어휘 재사용 (todo=대기, in_progress=진행중, done=완료, hold=보류)
     status: { type: String, enum: ["todo", "in_progress", "done", "hold"], default: "todo" },
     assignments: { type: [AssignmentSchema], default: [] }, // 팀장의 팀원 재분배
+    convertedTaskId: { type: Schema.Types.ObjectId, ref: "Task", default: null }, // 지시 전체를 일정으로 등록 시 연결(중복 방지)
   },
   { timestamps: true }
 );

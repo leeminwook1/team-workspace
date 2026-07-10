@@ -8,6 +8,7 @@ type ConfirmOptions = {
   confirmText?: string;
   cancelText?: string;
   danger?: boolean;
+  alert?: boolean; // true면 확인 버튼만 (안내용)
 };
 type ConfirmFn = (opts: ConfirmOptions) => Promise<boolean>;
 
@@ -52,9 +53,11 @@ export default function ConfirmProvider({ children }: { children: React.ReactNod
             {state.opts.title && <h2>{state.opts.title}</h2>}
             <p className="confirm-msg">{state.opts.message}</p>
             <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => close(false)}>
-                {state.opts.cancelText ?? "취소"}
-              </button>
+              {!state.opts.alert && (
+                <button className="btn btn-ghost" onClick={() => close(false)}>
+                  {state.opts.cancelText ?? "취소"}
+                </button>
+              )}
               <button
                 className={`btn ${state.opts.danger ? "btn-danger-solid" : "btn-primary"}`}
                 onClick={() => close(true)}

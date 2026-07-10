@@ -31,6 +31,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (assignment.taskId) return json({ error: "이미 일정으로 등록된 항목입니다." }, 409);
     if (assignment.note) title = `${dir.title} · ${assignment.note}`;
     assignees = [String(assignment.userId)];
+  } else {
+    // 지시 전체 등록: 이미 등록됐으면 중복 방지
+    if (dir.convertedTaskId) return json({ error: "이미 일정으로 등록된 지시입니다." }, 409);
   }
 
   // 마감일이 있으면 그 날, 없으면 오늘 (allDay 일정)
@@ -51,6 +54,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   if (assignment) {
     assignment.taskId = task._id;
+    await dir.save();
+  } else {
+    dir.convertedTaskId = task._id;
     await dir.save();
   }
 
