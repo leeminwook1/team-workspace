@@ -1,21 +1,25 @@
 import { connectDB } from "@/lib/mongodb";
 import { Resource } from "@/models/Resource";
+import "@/models/ResourceCategory";
 import { requireActiveUser, json } from "@/lib/api";
 import { canManageTeams } from "@/lib/permissions";
 import { resourceSchema } from "@/lib/validations";
+import { ensureResourceCategories } from "@/lib/resourceCategories";
 
 // GET /api/resources — 자원·장비 목록 (로그인)
 export async function GET() {
   const { error } = await requireActiveUser();
   if (error) return error;
 
-  await connectDB();
-  const resources = await Resource.find({ isActive: true }).sort({ category: 1, name: 1 }).lean();
+  await ensureResourceCategories();
+  const resources = await Resource.find({ isActive: true }).populate("categoryId", "name order").sort({ name: 1 }).lean();
   return json({
     resources: resources.map((r: any) => ({
       id: String(r._id),
       name: r.name,
-      category: r.category,
+      category: r.categoryId?.name
+        ? { id: String(r.categoryId._id ?? r.categoryId), name: r.categoryId.name, order: r.categoryId.order ?? 0 }
+        : null,
     })),
   });
 }

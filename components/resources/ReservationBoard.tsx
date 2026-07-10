@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useConfirm } from "@/components/ConfirmProvider";
 
-type ResourceOpt = { id: string; name: string; category: string };
+type ResourceOpt = { id: string; name: string; category: { id: string; name: string; order: number } | null };
 type TeamOpt = { id: string; name: string; color: string };
 type ReservationItem = {
   id: string;
@@ -14,11 +14,6 @@ type ReservationItem = {
   startAt: string;
   endAt: string;
   note: string;
-};
-
-const CATEGORY_LABEL: Record<string, string> = {
-  studio: "스튜디오", camera: "촬영장비", venue: "공연장",
-  audio: "음향장비", edit: "편집실", etc: "기타",
 };
 
 export default function ReservationBoard({
@@ -115,6 +110,17 @@ export default function ReservationBoard({
     load(selected);
   }
 
+  // 분류별로 묶기 (분류 순서대로, 미분류는 맨 뒤)
+  const groups = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; order: number; items: ResourceOpt[] }>();
+    for (const r of resources) {
+      const key = r.category?.id ?? "__none";
+      if (!map.has(key)) map.set(key, { id: key, name: r.category?.name ?? "미분류", order: r.category?.order ?? 999, items: [] });
+      map.get(key)!.items.push(r);
+    }
+    return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  }, [resources]);
+
   const fmt = (d: string) =>
     new Date(d).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
@@ -128,17 +134,23 @@ export default function ReservationBoard({
 
   return (
     <div style={{ display: "grid", gap: 18, gridTemplateColumns: "1fr", maxWidth: 860 }}>
-      {/* 자원 선택 칩 */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {resources.map((r) => (
-          <button
-            key={r.id}
-            className={`chip chip-btn${selected === r.id ? " sel" : ""}`}
-            onClick={() => setSelected(r.id)}
-          >
-            {r.name}
-            <span style={{ color: "var(--ink-faint)", fontWeight: 500 }}>· {CATEGORY_LABEL[r.category] ?? "기타"}</span>
-          </button>
+      {/* 장비 선택 — 분류별 그룹 */}
+      <div className="card" style={{ padding: 16 }}>
+        {groups.map((g) => (
+          <div className="rsv-group" key={g.id}>
+            <div className="rsv-group-head">{g.name} <span className="kb-count">{g.items.length}</span></div>
+            <div className="rsv-chips">
+              {g.items.map((r) => (
+                <button
+                  key={r.id}
+                  className={`chip chip-btn${selected === r.id ? " sel" : ""}`}
+                  onClick={() => setSelected(r.id)}
+                >
+                  {r.name}
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
 

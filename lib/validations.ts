@@ -121,7 +121,10 @@ export const userUpdateSchema = z.object({
 
 export const resourceSchema = z.object({
   name: z.string().min(1, "자원 이름을 입력하세요").max(60),
-  category: z.enum(["studio", "camera", "venue", "audio", "edit", "etc"]),
+  categoryId: z.string().min(1, "분류를 선택하세요"),
+});
+export const resourceCategorySchema = z.object({
+  name: z.string().min(1, "분류 이름을 입력하세요").max(30),
 });
 
 export const categorySchema = z.object({

@@ -18,7 +18,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!r) return json({ error: "자원을 찾을 수 없습니다." }, 404);
 
   if (typeof body.name === "string" && body.name.trim()) r.name = body.name.trim();
-  if (typeof body.category === "string") r.category = body.category;
+  if (typeof body.categoryId === "string" && body.categoryId) r.categoryId = body.categoryId;
   if (typeof body.isActive === "boolean") r.isActive = body.isActive;
   await r.save();
 

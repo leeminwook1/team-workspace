@@ -283,6 +283,27 @@ a { color: inherit; text-decoration: none; }
 .assign-note { flex: 1; min-width: 0; padding: 7px 10px; font-size: 13px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); }
 .assign-note:disabled { opacity: 0.5; }
 
+/* ── 장비 분류(자원 예약) ── */
+.rc-cats { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.rc-cat { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); }
+.rc-cat-name { font-size: 14px; font-weight: 700; color: var(--ink); }
+.rc-cat-count { font-size: 12px; font-weight: 700; color: var(--ink-faint); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+.rc-cat-btn { margin-left: auto; border: 0; background: transparent; color: var(--ink-soft); font-size: 12.5px; font-weight: 700; cursor: pointer; padding: 4px 8px; border-radius: var(--r-sm); }
+.rc-cat-btn:hover { background: var(--paper); }
+.rc-cat-btn.danger { margin-left: 0; color: var(--danger); }
+.rc-cat-btn.danger:hover { background: var(--danger-soft); }
+.rc-add { display: flex; gap: 8px; }
+.rc-add input { flex: 1; }
+
+.rc-group { margin-bottom: 16px; }
+.rc-group-head { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; color: var(--ink); margin: 0 2px 8px; }
+.rc-group-empty { font-size: 13px; color: var(--ink-faint); padding: 10px 4px; }
+
+.rsv-group { padding: 10px 4px; border-bottom: 1px solid var(--line); }
+.rsv-group:last-child { border-bottom: 0; }
+.rsv-group-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 800; color: var(--ink-soft); margin-bottom: 8px; }
+.rsv-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+
 /* ── 행사 관리 ── */
 /* 행사 목록 (카드 그리드) */
 .ev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
