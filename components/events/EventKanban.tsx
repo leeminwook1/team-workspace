@@ -152,6 +152,11 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
   if (!ev) return <p className="muted-note">행사를 찾을 수 없습니다.</p>;
 
   const dday = ddayOf(ev.eventDate);
+  // 진행률 요약 (전체 items 기준 — 필터와 무관)
+  const totalCount = ev.items.length;
+  const doneCount = ev.items.filter((i) => i.status === "done").length;
+  const pct = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;
+  const countOf = (k: Item["status"]) => ev.items.filter((i) => i.status === k).length;
 
   return (
     <div className="events">
@@ -178,6 +183,29 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
           </div>
         )}
       </div>
+
+      {/* 진행률 요약 (Toss 스타일 숫자 강조) */}
+      {totalCount > 0 && (
+        <div className="ev-progress card">
+          <div className="ev-progress-main">
+            <span className="ev-progress-pct">{pct}<small>%</small></span>
+            <div className="ev-progress-body">
+              <div className="ev-progress-label">
+                {pct === 100 ? "모든 준비가 끝났어요 🎉" : `${totalCount}개 중 ${doneCount}개 완료`}
+              </div>
+              <div className="kb-check-bar big"><span style={{ width: `${pct}%` }} /></div>
+            </div>
+          </div>
+          <div className="ev-progress-stats">
+            {COLS.map((c) => (
+              <span className="ev-stat" key={c.key}>
+                <span className="dot" style={{ background: c.color }} />
+                {c.label} <b>{countOf(c.key)}</b>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 필터 + 뷰 전환 */}
       <div className="ev-controls">
@@ -216,7 +244,12 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
             >
               <div className="kb-col-head">
                 <span className="kb-col-title"><span className="dot" style={{ background: c.color }} />{c.label}</span>
-                <span className="kb-count">{byCol[c.key].length}</span>
+                <span
+                  className="kb-count"
+                  style={byCol[c.key].length > 0 ? { background: `color-mix(in srgb, ${c.color} 13%, transparent)`, borderColor: "transparent", color: c.color } : undefined}
+                >
+                  {byCol[c.key].length}
+                </span>
               </div>
               <div className="kb-cards">
                 {byCol[c.key].length === 0 && <div className="kb-empty">{dragOver === c.key ? "여기에 놓기" : "비어 있음"}</div>}

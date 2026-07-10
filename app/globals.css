@@ -333,9 +333,14 @@ a { color: inherit; text-decoration: none; }
 /* ── 행사 관리 ── */
 /* 행사 목록 (카드 그리드) */
 .ev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
-.ev-item { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow); padding: 16px; transition: border-color 0.15s, transform 0.1s; }
-.ev-item:hover { border-color: var(--line-strong); }
+.ev-item { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow); padding: 16px; transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s; }
+.ev-item:hover { border-color: var(--line-strong); transform: translateY(-2px); box-shadow: var(--shadow-lift); }
 .ev-item:active { transform: scale(0.995); }
+.ev-item-count b { color: var(--primary); font-weight: 800; }
+.ev-item-count.done { color: var(--st-done); font-weight: 800; }
+/* 지난 행사 — 은은하게 가라앉힘 */
+.ev-grid-past .ev-item { opacity: 0.62; }
+.ev-grid-past .ev-item:hover { opacity: 1; }
 .ev-item-top { display: flex; align-items: center; gap: 6px; min-height: 20px; margin-bottom: 9px; }
 .ev-item-top .kb-dday { margin-left: auto; }
 .ev-item-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); line-height: 1.35; word-break: keep-all; }
@@ -348,6 +353,18 @@ a { color: inherit; text-decoration: none; }
 .ev-back:hover { color: var(--primary); }
 .ev-detail-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .ev-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+
+/* 행사 진행률 요약 스트립 */
+.ev-progress { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 18px 20px; margin-bottom: 16px; }
+.ev-progress-main { display: flex; align-items: center; gap: 16px; flex: 1 1 300px; min-width: 0; }
+.ev-progress-pct { font-size: 34px; font-weight: 800; letter-spacing: -0.03em; color: var(--primary); font-variant-numeric: tabular-nums; line-height: 1; flex: none; }
+.ev-progress-pct small { font-size: 18px; font-weight: 800; margin-left: 1px; }
+.ev-progress-body { flex: 1; min-width: 0; }
+.ev-progress-label { font-size: 13.5px; font-weight: 700; color: var(--ink-soft); margin-bottom: 7px; }
+.kb-check-bar.big { height: 8px; }
+.ev-progress-stats { display: flex; gap: 14px; flex-wrap: wrap; flex: none; }
+.ev-stat { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink-faint); }
+.ev-stat b { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
 .due-badge { font-size: 11px; font-weight: 700; color: var(--ink-faint); }
 .due-badge.overdue { color: var(--danger); }
 .due-badge.soon { color: var(--st-prog); }
@@ -371,8 +388,8 @@ a { color: inherit; text-decoration: none; }
 .kb-cards { display: flex; flex-direction: column; gap: 8px; min-height: 40px; }
 .kb-empty { font-size: 12.5px; color: var(--ink-faint); text-align: center; padding: 14px 0; }
 
-.kb-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow); padding: 11px 12px; cursor: pointer; transition: border-color 0.15s, transform 0.1s; }
-.kb-card:hover { border-color: var(--line-strong); }
+.kb-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow); padding: 11px 12px; cursor: pointer; transition: border-color 0.15s, transform 0.12s, box-shadow 0.15s; }
+.kb-card:hover { border-color: var(--line-strong); transform: translateY(-1px); box-shadow: var(--shadow-lift); }
 .kb-card:active { transform: scale(0.99); }
 .kb-card[draggable="true"] { cursor: grab; }
 .kb-card.dragging { opacity: 0.4; }

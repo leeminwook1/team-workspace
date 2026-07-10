@@ -68,11 +68,17 @@ export default function EventList({ teams, canManage }: { teams: Team[]; canMana
       ) : events.length === 0 ? (
         <p className="muted-note">아직 등록된 행사가 없습니다.</p>
       ) : (
-        <div className="ev-grid">
-          {events.map((ev) => {
+        (() => {
+          // 지난 행사(행사일이 지난 것)는 아래 섹션으로 분리
+          const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+          const isPast = (ev: EventSummary) => !!ev.eventDate && new Date(ev.eventDate).getTime() < t0.getTime();
+          const ongoing = events.filter((e) => !isPast(e));
+          const past = events.filter(isPast);
+          const renderCard = (ev: EventSummary) => {
             const dday = ddayOf(ev.eventDate);
             const prio = PRIO[ev.priority] ?? PRIO.normal;
             const pct = ev.itemsTotal ? Math.round((ev.itemsDone / ev.itemsTotal) * 100) : 0;
+            const allDone = ev.itemsTotal > 0 && ev.itemsDone === ev.itemsTotal;
             return (
               <Link href={`/events/${ev.id}`} key={ev.id} className="ev-item">
                 <div className="ev-item-top">
@@ -92,12 +98,30 @@ export default function EventList({ teams, canManage }: { teams: Team[]; canMana
                 </div>
                 <div className="ev-item-foot">
                   <div className="kb-check-bar"><span style={{ width: `${pct}%` }} /></div>
-                  <span className="ev-item-count">{ev.itemsTotal ? `${ev.itemsDone}/${ev.itemsTotal}` : "할 일 없음"}</span>
+                  {ev.itemsTotal ? (
+                    <span className={`ev-item-count${allDone ? " done" : ""}`}>
+                      {allDone ? "완료" : <><b>{pct}%</b> · {ev.itemsDone}/{ev.itemsTotal}</>}
+                    </span>
+                  ) : (
+                    <span className="ev-item-count">할 일 없음</span>
+                  )}
                 </div>
               </Link>
             );
-          })}
-        </div>
+          };
+          return (
+            <>
+              <div className="ev-grid">{ongoing.map(renderCard)}</div>
+              {ongoing.length === 0 && <p className="muted-note">진행 중인 행사가 없습니다.</p>}
+              {past.length > 0 && (
+                <>
+                  <div className="admin-section-title" style={{ marginTop: 28 }}>지난 행사 {past.length}</div>
+                  <div className="ev-grid ev-grid-past">{past.map(renderCard)}</div>
+                </>
+              )}
+            </>
+          );
+        })()
       )}
 
       {createOpen && (
