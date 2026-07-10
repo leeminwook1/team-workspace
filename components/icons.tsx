@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 export type IconName =
   | "calendar" | "resources" | "admin" | "logout" | "plus" | "chevronL" | "chevronR"
-  | "check" | "clock" | "mapPin" | "userLine";
+  | "check" | "clock" | "mapPin" | "userLine" | "inbox";
 
 const PATHS: Record<IconName, ReactNode> = {
   calendar: (
@@ -51,6 +51,12 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <circle cx="12" cy="8" r="4" />
       <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+    </>
+  ),
+  inbox: (
+    <>
+      <rect x="3.5" y="4" width="17" height="16" rx="3" />
+      <path d="M12 7.5v6M12 13.5l-2.6-2.6M12 13.5l2.6-2.6" />
     </>
   ),
 };

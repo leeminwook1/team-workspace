@@ -6,6 +6,7 @@ type Log = {
   id: string;
   actorName: string;
   action: "create" | "update" | "delete" | "status";
+  targetType: "task" | "directive";
   targetTitle: string;
   meta: { status?: string };
   createdAt: string;
@@ -50,6 +51,7 @@ export default function ActivityLogView() {
     <div className="activity-list">
       {logs.map((l) => {
         const a = ACTION_META[l.action] ?? ACTION_META.update;
+        const kind = l.targetType === "directive" ? "지시" : "업무";
         const statusLabel = l.action === "status" && l.meta?.status ? STATUS_LABEL[l.meta.status] : null;
         return (
           <div className="activity-item" key={l.id}>
@@ -58,7 +60,7 @@ export default function ActivityLogView() {
             </span>
             <div className="activity-body">
               <div className="activity-text">
-                <strong>{l.actorName}</strong> 님이 업무
+                <strong>{l.actorName}</strong> 님이 {kind}
                 <span className="activity-target"> “{l.targetTitle || "제목 없음"}”</span>
                 {statusLabel ? <> 상태를 <b>{statusLabel}</b>(으)로 변경</> : <> {a.label}</>}
               </div>

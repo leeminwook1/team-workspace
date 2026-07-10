@@ -35,6 +35,30 @@ export const taskUpdateSchema = z.object({
   location: z.string().max(120).optional(),
 });
 
+// 지시(하달) — 발신은 전사 역할, 대상은 팀(그 팀장이 수신)
+export const directiveCreateSchema = z.object({
+  title: z.string().min(1, "지시 제목을 입력하세요").max(200),
+  body: z.string().max(2000).optional().default(""),
+  teamId: z.string().min(1, "대상 팀을 선택하세요"),
+  dueDate: z.string().nullable().optional(), // ISO date 또는 null
+  priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
+});
+
+const assignmentSchema = z.object({
+  userId: z.string().min(1),
+  note: z.string().max(300).optional().default(""),
+  done: z.boolean().optional().default(false),
+});
+
+export const directiveUpdateSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  body: z.string().max(2000).optional(),
+  dueDate: z.string().nullable().optional(),
+  priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  status: z.enum(["todo", "in_progress", "done", "hold"]).optional(),
+  assignments: z.array(assignmentSchema).optional(),
+});
+
 export const teamSchema = z.object({
   name: z.string().min(1, "팀 이름을 입력하세요").max(30),
   slug: z

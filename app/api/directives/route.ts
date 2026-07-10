@@ -1,0 +1,85 @@
+import { connectDB } from "@/lib/mongodb";
+import { Directive } from "@/models/Directive";
+import "@/models/Team";
+import "@/models/User";
+import "@/models/Task";
+import { requireActiveUser, json } from "@/lib/api";
+import { canCreateDirective, canUseDirectives } from "@/lib/permissions";
+import { directiveCreateSchema } from "@/lib/validations";
+import { logActivity } from "@/lib/activity";
+
+function serialize(d: any) {
+  return {
+    id: String(d._id),
+    title: d.title,
+    body: d.body,
+    team: d.teamId
+      ? { id: String(d.teamId._id ?? d.teamId), name: d.teamId.name ?? "", color: d.teamId.color ?? "#8b95a1" }
+      : null,
+    createdBy: d.createdBy?.name
+      ? { id: String(d.createdBy._id ?? d.createdBy), name: d.createdBy.name }
+      : (d.createdBy ? { id: String(d.createdBy), name: "" } : null),
+    dueDate: d.dueDate,
+    priority: d.priority,
+    status: d.status,
+    assignments: (d.assignments ?? []).map((a: any) => ({
+      id: String(a._id),
+      user: a.userId?.name
+        ? { id: String(a.userId._id ?? a.userId), name: a.userId.name }
+        : (a.userId ? { id: String(a.userId), name: "" } : null),
+      note: a.note ?? "",
+      done: !!a.done,
+      taskId: a.taskId ? String(a.taskId) : null,
+    })),
+    createdAt: d.createdAt,
+  };
+}
+
+// GET /api/directives — 지시함 조회 (발신 그룹=전체, 팀장=소속 팀만)
+export async function GET() {
+  const { user, error } = await requireActiveUser();
+  if (error) return error;
+  if (!canUseDirectives(user)) return json({ directives: [] });
+
+  await connectDB();
+  const q: any = {};
+  // 발신 그룹(admin·과장·부과장·서기)이 아니면 팀장 → 소속 팀 지시만
+  if (!canCreateDirective(user)) {
+    if (!user.teamId) return json({ directives: [] });
+    q.teamId = user.teamId;
+  }
+
+  const list = await Directive.find(q)
+    .populate("teamId", "name color")
+    .populate("createdBy", "name")
+    .populate("assignments.userId", "name")
+    .sort({ createdAt: -1 })
+    .limit(200)
+    .lean();
+
+  return json({ directives: list.map(serialize) });
+}
+
+// POST /api/directives — 지시 내리기 (전사 역할)
+export async function POST(req: Request) {
+  const { user, error } = await requireActiveUser();
+  if (error) return error;
+  if (!canCreateDirective(user)) return json({ error: "지시를 내릴 권한이 없습니다." }, 403);
+
+  const body = await req.json().catch(() => null);
+  const parsed = directiveCreateSchema.safeParse(body);
+  if (!parsed.success) return json({ error: parsed.error.issues[0].message }, 400);
+
+  const d = parsed.data;
+  await connectDB();
+  const created = await Directive.create({
+    title: d.title,
+    body: d.body,
+    teamId: d.teamId,
+    priority: d.priority,
+    dueDate: d.dueDate ? new Date(d.dueDate) : null,
+    createdBy: user.id,
+  });
+  await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetType: "directive", targetTitle: created.title });
+  return json({ id: String(created._id) }, 201);
+}

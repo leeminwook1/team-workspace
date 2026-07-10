@@ -9,6 +9,7 @@ export async function logActivity(args: {
   actorName?: string | null;
   action: Action;
   targetTitle: string;
+  targetType?: "task" | "directive";
   meta?: Record<string, unknown>;
 }) {
   try {
@@ -17,7 +18,7 @@ export async function logActivity(args: {
       actorId: args.actorId,
       actorName: args.actorName || "알 수 없음",
       action: args.action,
-      targetType: "task",
+      targetType: args.targetType ?? "task",
       targetTitle: args.targetTitle,
       meta: args.meta ?? {},
     });

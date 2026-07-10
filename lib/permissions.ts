@@ -65,6 +65,37 @@ export function canChangeStatus(u: SessionUser, teamId: string, assigneeIds: str
   return u.role === "member" && inTeam(u, teamId) && assigneeIds.includes(u.id);
 }
 
+// ── 지시(하달) ──
+// 발신: 전사 역할(전 팀 편집자). 수신: 대상 팀의 팀장.
+export function canCreateDirective(u: SessionUser) {
+  return isActive(u) && ALL_TEAM_EDITORS.includes(u.role);
+}
+// 지시를 받는 사람(대상 팀의 팀장)인가
+export function isDirectiveLeader(u: SessionUser, teamId: string) {
+  return isActive(u) && u.role === "leader" && inTeam(u, teamId);
+}
+// 지시함에서 이 지시를 볼 수 있는가 (발신 그룹은 전체, 그 외엔 대상 팀 팀장만)
+export function canViewDirective(u: SessionUser, teamId: string) {
+  if (!isActive(u)) return false;
+  if (ALL_TEAM_EDITORS.includes(u.role)) return true;
+  return isDirectiveLeader(u, teamId);
+}
+// 상태 변경·팀원 재분배 (팀장 또는 admin)
+export function canManageDirective(u: SessionUser, teamId: string) {
+  if (!isActive(u)) return false;
+  if (u.role === "admin") return true;
+  return isDirectiveLeader(u, teamId);
+}
+// 지시 삭제·본문 수정 (발신자 본인 또는 admin)
+export function canEditDirective(u: SessionUser, createdById: string) {
+  if (!isActive(u)) return false;
+  return u.role === "admin" || String(u.id) === String(createdById);
+}
+// 지시함 메뉴 노출 대상 (발신 가능하거나 팀장)
+export function canUseDirectives(u: SessionUser) {
+  return isActive(u) && (ALL_TEAM_EDITORS.includes(u.role) || u.role === "leader");
+}
+
 export function canApproveUsers(u: SessionUser) {
   return isActive(u) && APPROVERS.includes(u.role); // admin·과장·부과장 (서기 ✕)
 }

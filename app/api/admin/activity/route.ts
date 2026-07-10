@@ -17,6 +17,7 @@ export async function GET() {
       id: String(l._id),
       actorName: l.actorName ?? "알 수 없음",
       action: l.action,
+      targetType: l.targetType ?? "task",
       targetTitle: l.targetTitle ?? "",
       meta: l.meta ?? {},
       createdAt: l.createdAt,

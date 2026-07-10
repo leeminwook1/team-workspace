@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
-import { canApproveUsers, canManageTeams, ROLE_LABEL, type SessionUser } from "@/lib/permissions";
+import { canApproveUsers, canManageTeams, canUseDirectives, ROLE_LABEL, type SessionUser } from "@/lib/permissions";
 import LogoutButton from "@/components/LogoutButton";
 import NavLinks, { BottomNav, type NavItem } from "@/components/NavLinks";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -19,6 +19,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   const navItems: NavItem[] = [
     { href: "/calendar", label: "달력", icon: "calendar" },
     { href: "/resources", label: "자원 예약", icon: "resources" },
+    ...(canUseDirectives(user) ? [{ href: "/directives", label: "지시함", icon: "inbox" as const }] : []),
     ...(showAdmin ? [{ href: "/admin", label: "관리자", icon: "admin" as const }] : []),
   ];
 
