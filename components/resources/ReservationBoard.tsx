@@ -37,7 +37,7 @@ export default function ReservationBoard({
   const [busy, setBusy] = useState(false);
 
   // 예약 가능한 팀 (팀장·부팀장 소속팀 / 전사 편집자는 전체)
-  const isOrgEditor = ["admin", "manager", "deputy"].includes(user?.role ?? "");
+  const isOrgEditor = ["admin", "manager", "deputy", "secretary"].includes(user?.role ?? "");
   const canReserveOwn = user?.role === "leader" || user?.role === "vice_leader";
   const reservableTeams = useMemo(() => {
     if (!user) return [];

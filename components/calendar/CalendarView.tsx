@@ -83,7 +83,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   }
 
   // 권한 (프론트 표시용, 실제 검증은 API에서 2중으로)
-  const isOrgEditor = ["admin", "manager", "deputy"].includes(user?.role ?? "");
+  const isOrgEditor = ["admin", "manager", "deputy", "secretary"].includes(user?.role ?? "");
   const canEditOwnTeam = user?.role === "leader" || user?.role === "vice_leader";
   const editableTeams = useMemo(() => {
     if (!user) return [];
@@ -576,7 +576,7 @@ function TaskDetailModal({
 
   const teamIds = task.teams.map((t) => t.id);
   const role = user?.role;
-  const isOrgEditor = ["admin", "manager", "deputy"].includes(role ?? "");
+  const isOrgEditor = ["admin", "manager", "deputy", "secretary"].includes(role ?? "");
   const inTaskTeam = user?.teamId != null && teamIds.includes(user.teamId);
   const canEdit = isOrgEditor || ((role === "leader" || role === "vice_leader") && inTaskTeam);
   const canDelete = role === "admin" || (role === "leader" && inTaskTeam);

@@ -1,7 +1,7 @@
 // 단일 역할 체계 (1인 1팀)
 // - admin(최고관리자): 시스템 관리·전체 삭제·전체 조회 (최상위)
 // - manager(과장)·deputy(부과장): 모든 팀 조회 + 전 팀 등록·수정 + 가입 승인 (삭제 ✕)
-// - secretary(서기): 모든 팀 조회 (읽기 전용)
+// - secretary(서기): 모든 팀 조회 + 전 팀 등록·수정 (가입 승인·삭제 ✕)
 // - leader(팀장): 소속 팀 등록·수정·삭제
 // - vice_leader(부팀장): 소속 팀 등록·수정 (삭제 ✕)
 // - member(팀원): 소속 팀 조회 + 본인 담당 업무 상태 변경
@@ -17,7 +17,8 @@ export type SessionUser = {
 };
 
 const ORG_ROLES: Role[] = ["admin", "manager", "deputy", "secretary"]; // 전체 팀 조회
-const ORG_EDITORS: Role[] = ["admin", "manager", "deputy"]; // 전 팀 등록·수정 + 가입 승인
+const ALL_TEAM_EDITORS: Role[] = ["admin", "manager", "deputy", "secretary"]; // 전 팀 등록·수정
+const APPROVERS: Role[] = ["admin", "manager", "deputy"]; // 가입 승인
 const TEAM_EDITORS: Role[] = ["leader", "vice_leader"]; // 소속 팀 등록·수정
 
 export const ROLE_LABEL: Record<Role, string> = {
@@ -49,7 +50,7 @@ export function visibleTeamIds(u: SessionUser): string[] | "all" {
 
 export function canCreateTask(u: SessionUser, teamId: string) {
   if (!isActive(u)) return false;
-  if (ORG_EDITORS.includes(u.role)) return true;
+  if (ALL_TEAM_EDITORS.includes(u.role)) return true;
   return TEAM_EDITORS.includes(u.role) && inTeam(u, teamId);
 }
 export const canEditTask = canCreateTask; // 등록 = 수정 권한 동일
@@ -65,7 +66,7 @@ export function canChangeStatus(u: SessionUser, teamId: string, assigneeIds: str
 }
 
 export function canApproveUsers(u: SessionUser) {
-  return isActive(u) && ORG_EDITORS.includes(u.role); // admin·과장·부과장
+  return isActive(u) && APPROVERS.includes(u.role); // admin·과장·부과장 (서기 ✕)
 }
 export function canManageTeams(u: SessionUser) {
   return isActive(u) && u.role === "admin"; // 시스템 관리 = 최고관리자만
