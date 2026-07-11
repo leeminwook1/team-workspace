@@ -4,6 +4,7 @@ import { Comment } from "@/models/Comment";
 import "@/models/User";
 import { requireActiveUser, json } from "@/lib/api";
 import { canViewAllTeams, type SessionUser } from "@/lib/permissions";
+import { notify } from "@/lib/notify";
 
 // 업무 열람 권한: 전사 역할이거나, 업무의 팀에 소속(1인 1팀)
 function canViewTask(user: SessionUser, teamIds: string[]) {
@@ -48,11 +49,22 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (content.length > 1000) return json({ error: "댓글은 1000자 이내로 입력하세요." }, 400);
 
   await connectDB();
-  const task: any = await Task.findById(params.id).select("teamIds").lean();
+  const task: any = await Task.findById(params.id).select("teamIds title assignees createdBy").lean();
   if (!task) return json({ error: "업무를 찾을 수 없습니다." }, 404);
   const teamIds = (task.teamIds ?? []).map((t: any) => String(t));
   if (!canViewTask(user, teamIds)) return json({ error: "댓글 권한이 없습니다." }, 403);
 
   const c = await Comment.create({ taskId: params.id, authorId: user.id, content });
+
+  // 담당자 + 등록자에게 알림 (작성자 본인 제외)
+  const targets = [...(task.assignees ?? []).map(String), task.createdBy ? String(task.createdBy) : ""]
+    .filter((id) => id && id !== user.id);
+  await notify(targets, {
+    type: "comment",
+    title: `${user.name} 님이 댓글을 남겼어요`,
+    body: `${task.title} — ${content.length > 40 ? content.slice(0, 40) + "…" : content}`,
+    link: `/calendar?task=${params.id}`,
+  });
+
   return json({ id: String(c._id) }, 201);
 }

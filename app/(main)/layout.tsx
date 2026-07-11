@@ -58,21 +58,23 @@ export default async function MainLayout({ children }: { children: React.ReactNo
             <span className="glyph">T</span>
             <span className="word">Team<b>Cal</b></span>
           </Link>
-          <NotificationBell />
+          <div className="side-brand-actions">
+            <ThemeToggle />
+            <NotificationBell />
+          </div>
         </div>
         <GlobalSearch />
         <NavLinks items={navItems} />
         <div className="side-foot">
-          <Link href="/settings" className="side-user" title="내 계정">
-            <span className="avatar" aria-hidden>{user.name.slice(0, 1)}</span>
-            <div className="side-user-info">
-              <div className="side-user-name">{user.name}</div>
-              <div className="side-user-role">{roleLabel}</div>
-            </div>
-          </Link>
-          <div style={{ display: "flex", gap: 8 }}>
-            <ThemeToggle />
-            <div style={{ flex: 1 }}><LogoutButton small /></div>
+          <div className="side-user-row">
+            <Link href="/settings" className="side-user" title="내 계정">
+              <span className="avatar" aria-hidden>{user.name.slice(0, 1)}</span>
+              <div className="side-user-info">
+                <div className="side-user-name">{user.name}</div>
+                <div className="side-user-role">{roleLabel}</div>
+              </div>
+            </Link>
+            <LogoutButton small />
           </div>
         </div>
       </aside>
