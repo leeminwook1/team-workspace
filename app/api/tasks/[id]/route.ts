@@ -7,6 +7,7 @@ import { requireActiveUser, json } from "@/lib/api";
 import { canEditTaskAny, canDeleteTaskAny, canChangeStatusAny, canCreateTaskInAll, visibleTeamIds } from "@/lib/permissions";
 import { taskUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
+import { notify } from "@/lib/notify";
 
 // GET /api/tasks/:id — 단건 조회 (검색 딥링크용). 조회 범위(역할) 검증.
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -83,6 +84,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (d.description !== undefined) task.description = d.description;
   if (d.teamIds !== undefined) task.teamIds = d.teamIds;
   if (d.categoryId !== undefined) task.categoryId = d.categoryId || null;
+  // 새로 추가된 담당자에게 알림 (본인 제외)
+  const addedAssignees =
+    d.assignees !== undefined ? d.assignees.filter((a) => !assigneeIds.includes(a) && a !== user.id) : [];
   if (d.assignees !== undefined) task.assignees = d.assignees;
   if (d.startDate !== undefined) task.startDate = new Date(d.startDate);
   if (d.endDate !== undefined) task.endDate = new Date(d.endDate);
@@ -103,11 +107,20 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     targetTitle: task.title,
     meta: statusOnly ? { status: task.status } : undefined,
   });
+  if (addedAssignees.length > 0) {
+    await notify(addedAssignees, {
+      type: "task_assigned",
+      title: "업무 담당자로 지정됐어요",
+      body: task.title,
+      link: `/calendar?task=${String(task._id)}`,
+    });
+  }
   return json({ id: String(task._id) });
 }
 
 // DELETE /api/tasks/:id — 삭제는 팀장·Admin만 (설계 확정)
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+// ?scope=series : 이 업무가 속한 반복 전체 삭제
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
@@ -118,6 +131,16 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const teamIds = (task.teamIds ?? []).map((t: any) => String(t));
   if (!canDeleteTaskAny(user, teamIds)) {
     return json({ error: "삭제는 팀장 또는 최고관리자만 가능합니다." }, 403);
+  }
+
+  const scope = new URL(req.url).searchParams.get("scope");
+  if (scope === "series" && task.recurrenceId) {
+    const r = await Task.deleteMany({ recurrenceId: task.recurrenceId });
+    await logActivity({
+      actorId: user.id, actorName: user.name, action: "delete",
+      targetTitle: `${task.title} (반복 ${r.deletedCount}건)`,
+    });
+    return json({ deleted: true, count: r.deletedCount });
   }
 
   await Task.deleteOne({ _id: params.id });

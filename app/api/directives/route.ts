@@ -7,6 +7,8 @@ import { requireActiveUser, json } from "@/lib/api";
 import { canCreateDirective, canUseDirectives } from "@/lib/permissions";
 import { directiveCreateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
+import { notify } from "@/lib/notify";
+import { User } from "@/models/User";
 
 function serialize(d: any) {
   return {
@@ -82,5 +84,17 @@ export async function POST(req: Request) {
     createdBy: user.id,
   });
   await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetType: "directive", targetTitle: created.title });
+
+  // 대상 팀의 팀장·부팀장에게 알림
+  const leads: any[] = await User.find({
+    teamId: d.teamId, role: { $in: ["leader", "vice_leader"] }, status: "active",
+  }).select("_id").lean();
+  await notify(leads.map((l) => String(l._id)).filter((id) => id !== user.id), {
+    type: "directive",
+    title: "새 TODO 지시가 도착했어요",
+    body: created.title,
+    link: "/directives",
+  });
+
   return json({ id: String(created._id) }, 201);
 }

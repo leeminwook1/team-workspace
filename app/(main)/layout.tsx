@@ -9,6 +9,7 @@ import LogoutButton from "@/components/LogoutButton";
 import NavLinks, { BottomNav, type NavItem } from "@/components/NavLinks";
 import ThemeToggle from "@/components/ThemeToggle";
 import GlobalSearch from "@/components/GlobalSearch";
+import NotificationBell from "@/components/NotificationBell";
 
 export const dynamic = "force-dynamic";
 
@@ -52,10 +53,13 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     <div className="shell">
       {/* ── 데스크톱 사이드바 ── */}
       <aside className="side">
-        <Link href="/home" className="brand" aria-label="홈으로">
-          <span className="glyph">T</span>
-          <span className="word">Team<b>Cal</b></span>
-        </Link>
+        <div className="side-brand-row">
+          <Link href="/home" className="brand" aria-label="홈으로">
+            <span className="glyph">T</span>
+            <span className="word">Team<b>Cal</b></span>
+          </Link>
+          <NotificationBell />
+        </div>
         <GlobalSearch />
         <NavLinks items={navItems} />
         <div className="side-foot">
@@ -81,6 +85,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         </Link>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <GlobalSearch compact />
+          <NotificationBell />
           <Link href="/settings" className="avatar" aria-label="내 계정" style={{ textDecoration: "none" }}>{user.name.slice(0, 1)}</Link>
           <ThemeToggle />
           <LogoutButton small />

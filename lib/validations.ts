@@ -22,6 +22,9 @@ export const taskCreateSchema = z.object({
   allDay: z.boolean().optional().default(true),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
   location: z.string().max(120).optional().default(""),
+  // 반복 일정 — 생성 시에만. repeatUntil까지 오커런스를 미리 생성(최대 60개)
+  repeat: z.enum(["none", "daily", "weekly", "biweekly", "monthly"]).optional().default("none"),
+  repeatUntil: z.string().optional(),
 });
 
 export const taskUpdateSchema = z.object({

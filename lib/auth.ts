@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { connectDB } from "./mongodb";
 import { User } from "@/models/User";
 import { logLogin } from "./activity";
+import { isBlocked, recordFailure, clearFailures, clientIp } from "./rateLimit";
 
 // 설계 5장 — Credentials 로그인 + JWT 세션.
 // jwt 콜백에서 매번 DB의 최신 역할/상태를 반영 → 승인 즉시 세션에 반영됨.
@@ -25,14 +26,22 @@ export const authOptions: NextAuthOptions = {
         email: { label: "이메일", type: "email" },
         password: { label: "비밀번호", type: "password" },
       },
-      async authorize(creds) {
+      async authorize(creds, req) {
         if (!creds?.email || !creds?.password) return null;
+
+        // 무차별 대입 방어 — 같은 IP에서 15분 내 실패 10회면 차단 (성공 시 초기화)
+        const key = `login:${clientIp((req?.headers ?? {}) as Record<string, string | undefined>)}`;
+        const FAIL_LIMIT = 10, FAIL_WINDOW = 15 * 60 * 1000;
+        if (isBlocked(key, FAIL_LIMIT)) return null;
+
         await connectDB();
         const user: any = await User.findOne({ email: creds.email.toLowerCase() }).lean();
-        if (!user) return null;
-        const ok = await bcrypt.compare(creds.password, user.passwordHash);
-        if (!ok) return null;
-        if (user.status === "disabled") return null; // 비활성 계정 차단
+        const ok = user ? await bcrypt.compare(creds.password, user.passwordHash) : false;
+        if (!user || !ok || user.status === "disabled") {
+          recordFailure(key, FAIL_WINDOW);
+          return null;
+        }
+        clearFailures(key);
         return { id: String(user._id), name: user.name, email: user.email };
       },
     }),

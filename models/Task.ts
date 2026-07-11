@@ -14,6 +14,9 @@ const TaskSchema = new Schema(
     endDate: { type: Date, required: true },
     allDay: { type: Boolean, default: true },
 
+    // 반복 일정 — 같은 반복 묶음의 오커런스들이 공유하는 id (생성 시 확정, null = 단건)
+    recurrenceId: { type: Schema.Types.ObjectId, default: null, index: true },
+
     status: { type: String, enum: ["todo", "in_progress", "done", "hold"], default: "todo" },
     priority: { type: String, enum: ["low", "normal", "high", "urgent"], default: "normal" },
 

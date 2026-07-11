@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
 import "@/models/Team";
@@ -7,6 +8,7 @@ import { requireActiveUser, json } from "@/lib/api";
 import { canCreateTaskInAll, visibleTeamIds } from "@/lib/permissions";
 import { taskCreateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
+import { notify } from "@/lib/notify";
 
 function serialize(t: any) {
   return {
@@ -32,7 +34,19 @@ function serialize(t: any) {
     status: t.status,
     priority: t.priority,
     location: t.location,
+    recurrenceId: t.recurrenceId ? String(t.recurrenceId) : null,
   };
+}
+
+// 반복 오커런스 시작일 계산 — monthly는 말일 클램프 (1/31 → 2/28)
+function addInterval(d: Date, repeat: string, n: number): Date {
+  if (repeat === "daily") return new Date(d.getTime() + n * 86_400_000);
+  if (repeat === "weekly") return new Date(d.getTime() + n * 7 * 86_400_000);
+  if (repeat === "biweekly") return new Date(d.getTime() + n * 14 * 86_400_000);
+  // monthly
+  const y = d.getUTCFullYear(), m = d.getUTCMonth(), day = d.getUTCDate();
+  const lastDay = new Date(Date.UTC(y, m + n + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m + n, Math.min(day, lastDay), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()));
 }
 
 // GET /api/tasks?from=&to=&team= — 기간·팀별 업무 조회 (조회 범위는 역할에 따름)
@@ -90,13 +104,51 @@ export async function POST(req: Request) {
   }
 
   await connectDB();
-  const task = await Task.create({
-    ...d,
+  const { repeat, repeatUntil, ...fields } = d;
+  const base = {
+    ...fields,
     categoryId: d.categoryId || null,
-    startDate: new Date(d.startDate),
-    endDate: new Date(d.endDate),
     createdBy: user.id,
+  };
+  const start = new Date(d.startDate);
+  const end = new Date(d.endDate);
+
+  // 담당자로 지정된 사람에게 알림 (등록자 본인 제외)
+  const notifyAssignees = (taskId: string) =>
+    notify((d.assignees ?? []).filter((a) => a !== user.id), {
+      type: "task_assigned",
+      title: "새 업무에 담당자로 지정됐어요",
+      body: d.title,
+      link: `/calendar?task=${taskId}`,
+    });
+
+  // 단건
+  if (!repeat || repeat === "none") {
+    const task = await Task.create({ ...base, startDate: start, endDate: end });
+    await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetTitle: task.title });
+    await notifyAssignees(String(task._id));
+    return json({ id: String(task._id) }, 201);
+  }
+
+  // 반복 — repeatUntil까지 오커런스 생성 (기본 3개월, 최대 60개)
+  const until = repeatUntil ? new Date(repeatUntil) : addInterval(start, "monthly", 3);
+  if (isNaN(until.getTime()) || until < start) {
+    return json({ error: "반복 종료일이 시작일보다 빠를 수 없습니다." }, 400);
+  }
+  const untilEnd = new Date(until.getTime() + 86_400_000); // 종료일 그날까지 포함
+  const duration = end.getTime() - start.getTime();
+  const recurrenceId = new mongoose.Types.ObjectId();
+  const docs: any[] = [];
+  for (let i = 0; docs.length < 60; i++) {
+    const s = addInterval(start, repeat, i);
+    if (s >= untilEnd) break;
+    docs.push({ ...base, recurrenceId, startDate: s, endDate: new Date(s.getTime() + duration) });
+  }
+  const created = await Task.insertMany(docs);
+  await logActivity({
+    actorId: user.id, actorName: user.name, action: "create",
+    targetTitle: `${d.title} (반복 ${created.length}회)`,
   });
-  await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetTitle: task.title });
-  return json({ id: String(task._id) }, 201);
+  await notifyAssignees(String(created[0]._id));
+  return json({ id: String(created[0]._id), count: created.length }, 201);
 }

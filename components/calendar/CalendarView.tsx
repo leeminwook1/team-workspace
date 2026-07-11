@@ -30,6 +30,7 @@ type TaskItem = {
   status: "todo" | "in_progress" | "done" | "hold";
   priority: string;
   location: string;
+  recurrenceId?: string | null;
 };
 
 const STATUS_LABEL: Record<string, [string, string]> = {
@@ -156,6 +157,13 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
     [tasks, visible, visibleCats, visibleStatus, mineOnly, user?.id]
   );
 
+  // 이 업무를 수정(드래그 이동)할 수 있는지 — 상세 모달과 동일 규칙 (실제 검증은 API에서)
+  const canEditTask = useCallback(
+    (t: TaskItem) =>
+      isOrgEditor || (canEditOwnTeam && !!user?.teamId && t.teams.some((tm) => tm.id === user.teamId)),
+    [isOrgEditor, canEditOwnTeam, user?.teamId]
+  );
+
   const events = useMemo(
     () =>
       filteredTasks
@@ -180,11 +188,36 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
             borderColor: color, // 월간 도트·리스트 뷰의 점 색상
             textColor: color,
             classNames: t.status === "done" ? ["ev-done"] : [],
+            editable: canEditTask(t), // 권한 있는 일정만 드래그 이동·리사이즈
             extendedProps: { taskId: t.id, urgent: t.priority === "urgent", done: t.status === "done" },
           };
         }),
-    [filteredTasks, visible]
+    [filteredTasks, visible, canEditTask]
   );
+
+  // 드래그 이동/리사이즈 → 기간 PATCH (실패 시 원위치)
+  async function onEventMove(arg: { event: any; revert: () => void }) {
+    const ev = arg.event;
+    const taskId = ev.extendedProps.taskId as string;
+    let startDate: string, endDate: string;
+    if (ev.allDay) {
+      const s: Date = ev.start;
+      // FullCalendar의 allDay end는 exclusive → inclusive로 하루 빼서 저장
+      const e = ev.end ? new Date(ev.end.getTime() - 86_400_000) : s;
+      startDate = ymdStr(s);
+      endDate = ymdStr(e < s ? s : e);
+    } else {
+      startDate = ev.start.toISOString();
+      endDate = (ev.end ?? new Date(ev.start.getTime() + 3_600_000)).toISOString();
+    }
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ startDate, endDate, allDay: ev.allDay }),
+    });
+    if (!res.ok) { arg.revert(); return; }
+    refetch();
+  }
 
   function toggleStatus(id: string) {
     setVisibleStatus((prev) => {
@@ -374,6 +407,8 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           scrollTime="09:00:00"
           allDayText="종일"
           nowIndicator
+          eventDrop={onEventMove}
+          eventResize={onEventMove}
           events={events}
           eventContent={(arg) => {
             // 월간 뷰: 도트 + 제목 (1c) — 나머지 뷰는 기본 렌더링(true 반환)
@@ -569,6 +604,8 @@ function TaskFormModal({
   const [priority, setPriority] = useState(task?.priority ?? "normal");
   const [categoryId, setCategoryId] = useState(task?.category?.id ?? "");
   const [location, setLocation] = useState(task?.location ?? "");
+  const [repeat, setRepeat] = useState("none"); // 반복 — 생성 시에만
+  const [repeatUntil, setRepeatUntil] = useState("");
   const [description, setDescription] = useState(task?.description ?? "");
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
   const [assignees, setAssignees] = useState<Set<string>>(new Set(task ? task.assignees.map((a) => a.id) : []));
@@ -620,6 +657,7 @@ function TaskFormModal({
       body: JSON.stringify({
         title, teamIds, categoryId: categoryId || null, assignees: Array.from(assignees),
         priority, location, description, ...when,
+        ...(isEdit ? {} : { repeat, repeatUntil: repeat !== "none" && repeatUntil ? repeatUntil : undefined }),
       }),
     });
     const data = await res.json();
@@ -698,6 +736,27 @@ function TaskFormModal({
                 </div>
               </div>
             </>
+          )}
+
+          {!isEdit && (
+            <div className="form-grid-2">
+              <div className="field">
+                <label>반복</label>
+                <select value={repeat} onChange={(e) => setRepeat(e.target.value)}>
+                  <option value="none">반복 없음</option>
+                  <option value="daily">매일</option>
+                  <option value="weekly">매주</option>
+                  <option value="biweekly">격주</option>
+                  <option value="monthly">매월</option>
+                </select>
+              </div>
+              {repeat !== "none" && (
+                <div className="field">
+                  <label>반복 종료일 (기본 3개월)</label>
+                  <input type="date" value={repeatUntil} min={startDate} onChange={(e) => setRepeatUntil(e.target.value)} />
+                </div>
+              )}
+            </div>
           )}
 
           <div className="form-grid-2">
@@ -816,16 +875,18 @@ function TaskDetailModal({
     onChanged();
   }
 
-  async function remove() {
+  async function remove(scope?: "series") {
     const ok = await confirm({
-      title: "업무 삭제",
-      message: "이 업무를 삭제할까요? 삭제하면 되돌릴 수 없습니다.",
+      title: scope === "series" ? "반복 전체 삭제" : "업무 삭제",
+      message: scope === "series"
+        ? "이 반복 일정 전체를 삭제할까요? 모든 반복 회차가 삭제되며 되돌릴 수 없습니다."
+        : "이 업무를 삭제할까요? 삭제하면 되돌릴 수 없습니다.",
       confirmText: "삭제",
       danger: true,
     });
     if (!ok) return;
     setBusy(true);
-    const res = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/tasks/${task.id}${scope === "series" ? "?scope=series" : ""}`, { method: "DELETE" });
     const data = await res.json();
     setBusy(false);
     if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
@@ -886,6 +947,11 @@ function TaskDetailModal({
           {prio.show && (
             <span className="badge" style={{ background: `color-mix(in srgb, ${prio.color} 14%, transparent)`, color: prio.color }}>
               {prio.label}
+            </span>
+          )}
+          {task.recurrenceId && (
+            <span className="badge" style={{ background: "var(--accent-soft)", color: "var(--primary)" }}>
+              반복 일정
             </span>
           )}
         </div>
@@ -953,7 +1019,14 @@ function TaskDetailModal({
         {err && <p className="err-msg">{err}</p>}
         <div className="detail-actions">
           {canDelete && (
-            <button className="btn btn-danger btn-sm" disabled={busy} onClick={remove}>삭제</button>
+            <button className="btn btn-danger btn-sm" disabled={busy} onClick={() => remove()}>
+              {task.recurrenceId ? "이 일정만 삭제" : "삭제"}
+            </button>
+          )}
+          {canDelete && task.recurrenceId && (
+            <button className="btn btn-danger btn-sm" style={{ marginLeft: 6 }} disabled={busy} onClick={() => remove("series")}>
+              전체 반복 삭제
+            </button>
           )}
           <div className="detail-actions-right">
             {canEdit && (

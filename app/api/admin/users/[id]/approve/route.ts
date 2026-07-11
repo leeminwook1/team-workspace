@@ -4,6 +4,8 @@ import { requireActiveUser, json } from "@/lib/api";
 import { canApproveUsers } from "@/lib/permissions";
 import { approveSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
+import { notify } from "@/lib/notify";
+import { ROLE_LABEL } from "@/lib/permissions";
 
 // POST /api/admin/users/:id/approve — 승인 + 팀·역할 배정 (설계 5.3)
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -34,5 +36,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   await target.save();
 
   await logActivity({ actorId: user.id, actorName: user.name, action: "approve", targetType: "user", targetTitle: target.name });
+  await notify([String(target._id)], {
+    type: "approved",
+    title: "가입이 승인되었어요",
+    body: `${ROLE_LABEL[role] ?? role} 역할로 활동을 시작할 수 있어요.`,
+    link: "/home",
+  });
   return json({ approved: true });
 }
