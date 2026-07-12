@@ -25,6 +25,8 @@ export const taskCreateSchema = z.object({
   // 반복 일정 — 생성 시에만. repeatUntil까지 오커런스를 미리 생성(최대 60개)
   repeat: z.enum(["none", "daily", "weekly", "biweekly", "monthly"]).optional().default("none"),
   repeatUntil: z.string().optional(),
+  // 대여 장비 — 선택 시 업무 기간에 자원 예약 자동 생성 (반복 일정과는 함께 불가)
+  resourceIds: z.array(z.string().min(1)).max(10).optional().default([]),
 });
 
 export const taskUpdateSchema = z.object({
@@ -39,6 +41,7 @@ export const taskUpdateSchema = z.object({
   status: z.enum(["todo", "in_progress", "done", "hold"]).optional(),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
   location: z.string().max(120).optional(),
+  resourceIds: z.array(z.string().min(1)).max(10).optional(), // undefined = 장비 변경 없음
 });
 
 // 행사 관리 — 행사(컨테이너) + 그 안의 투두(items) 칸반
@@ -135,6 +138,8 @@ export const userUpdateSchema = z.object({
 export const resourceSchema = z.object({
   name: z.string().min(1, "자원 이름을 입력하세요").max(60),
   categoryId: z.string().min(1, "분류를 선택하세요"),
+  ownerTeamId: z.string().nullable().optional().default(null), // 관리 팀 (null = 공용)
+  managerId: z.string().nullable().optional().default(null), // 관리 담당자
 });
 export const resourceCategorySchema = z.object({
   name: z.string().min(1, "분류 이름을 입력하세요").max(30),

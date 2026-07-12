@@ -16,7 +16,12 @@ export default async function ResourcesPage() {
 
   await ensureResourceCategories();
   const [resources, teams] = await Promise.all([
-    Resource.find({ isActive: true }).populate("categoryId", "name color order").sort({ name: 1 }).lean(),
+    Resource.find({ isActive: true })
+      .populate("categoryId", "name color order")
+      .populate("ownerTeamId", "name color")
+      .populate("managerId", "name")
+      .sort({ name: 1 })
+      .lean(),
     Team.find({ isActive: true }).sort({ createdAt: 1 }).lean(),
   ]);
 
@@ -30,6 +35,8 @@ export default async function ResourcesPage() {
           category: r.categoryId?.name
             ? { id: String(r.categoryId._id ?? r.categoryId), name: r.categoryId.name, color: r.categoryId.color || "#8b95a1", order: r.categoryId.order ?? 0 }
             : null,
+          ownerTeam: r.ownerTeamId?.name ? { name: r.ownerTeamId.name, color: r.ownerTeamId.color } : null,
+          manager: r.managerId?.name ? { name: r.managerId.name } : null,
         }))}
         teams={teams.map((t: any) => ({ id: String(t._id), name: t.name, color: t.color }))}
       />

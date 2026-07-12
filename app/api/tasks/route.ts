@@ -9,9 +9,12 @@ import { canCreateTaskInAll, visibleTeamIds } from "@/lib/permissions";
 import { taskCreateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
+import { Reservation } from "@/models/Reservation";
+import { taskWindow, findConflicts, conflictMessage, syncTaskReservations } from "@/lib/taskReservations";
 
-function serialize(t: any) {
+function serialize(t: any, resourcesByTask?: Map<string, { id: string; name: string }[]>) {
   return {
+    resources: resourcesByTask?.get(String(t._id)) ?? [],
     id: String(t._id),
     title: t.title,
     description: t.description,
@@ -83,7 +86,20 @@ export async function GET(req: Request) {
     .sort({ startDate: 1 })
     .lean();
 
-  return json({ tasks: tasks.map(serialize) });
+  // 연동 장비 — 일괄 조회로 taskId → 자원 목록 매핑
+  const linked: any[] = await Reservation.find({
+    relatedTaskId: { $in: tasks.map((t: any) => t._id) },
+    status: "booked",
+  }).populate("resourceId", "name").select("relatedTaskId resourceId").lean();
+  const resourcesByTask = new Map<string, { id: string; name: string }[]>();
+  for (const r of linked) {
+    if (!r.resourceId) continue;
+    const key = String(r.relatedTaskId);
+    if (!resourcesByTask.has(key)) resourcesByTask.set(key, []);
+    resourcesByTask.get(key)!.push({ id: String(r.resourceId._id), name: r.resourceId.name });
+  }
+
+  return json({ tasks: tasks.map((t: any) => serialize(t, resourcesByTask)) });
 }
 
 // POST /api/tasks — 업무 등록 (팀장·부팀장·과장·부과장·Admin)
@@ -104,7 +120,7 @@ export async function POST(req: Request) {
   }
 
   await connectDB();
-  const { repeat, repeatUntil, ...fields } = d;
+  const { repeat, repeatUntil, resourceIds, ...fields } = d;
   const base = {
     ...fields,
     categoryId: d.categoryId || null,
@@ -112,6 +128,17 @@ export async function POST(req: Request) {
   };
   const start = new Date(d.startDate);
   const end = new Date(d.endDate);
+
+  // 대여 장비 — 반복 일정과는 함께 불가, 충돌 시 업무 생성 전에 거절
+  const equip = resourceIds ?? [];
+  if (equip.length > 0 && repeat && repeat !== "none") {
+    return json({ error: "반복 일정에는 장비 예약을 함께 설정할 수 없습니다." }, 400);
+  }
+  const window = taskWindow({ startDate: start, endDate: end, allDay: d.allDay });
+  if (equip.length > 0) {
+    const conflicts = await findConflicts(equip, window);
+    if (conflicts.length > 0) return json({ error: conflictMessage(conflicts) }, 409);
+  }
 
   // 담당자로 지정된 사람에게 알림 (등록자 본인 제외)
   const notifyAssignees = (taskId: string) =>
@@ -125,6 +152,7 @@ export async function POST(req: Request) {
   // 단건
   if (!repeat || repeat === "none") {
     const task = await Task.create({ ...base, startDate: start, endDate: end });
+    if (equip.length > 0) await syncTaskReservations(task, equip, window, user.id);
     await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetTitle: task.title });
     await notifyAssignees(String(task._id));
     return json({ id: String(task._id) }, 201);

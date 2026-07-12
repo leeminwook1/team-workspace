@@ -10,7 +10,8 @@ const ResourceSchema = new Schema(
       default: "etc",
     }, // (레거시) 마이그레이션 후 categoryId 사용
     categoryId: { type: Schema.Types.ObjectId, ref: "ResourceCategory", default: null },
-    ownerTeamId: { type: Schema.Types.ObjectId, ref: "Team", default: null }, // null = 공용
+    ownerTeamId: { type: Schema.Types.ObjectId, ref: "Team", default: null }, // 관리 팀 (null = 공용)
+    managerId: { type: Schema.Types.ObjectId, ref: "User", default: null }, // 관리 담당자 (선택)
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

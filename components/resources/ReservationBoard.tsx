@@ -7,7 +7,12 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import koLocale from "@fullcalendar/core/locales/ko";
 import { useConfirm } from "@/components/ConfirmProvider";
 
-type ResourceOpt = { id: string; name: string; category: { id: string; name: string; color?: string; order: number } | null };
+type ResourceOpt = {
+  id: string; name: string;
+  category: { id: string; name: string; color?: string; order: number } | null;
+  ownerTeam?: { name: string; color: string } | null; // 관리 팀
+  manager?: { name: string } | null; // 관리 담당자
+};
 type TeamOpt = { id: string; name: string; color: string };
 type ReservationItem = {
   id: string;
@@ -194,6 +199,17 @@ export default function ReservationBoard({
               </div>
             </div>
           ))}
+          {/* 선택한 장비의 관리 팀·담당자 — 수령·반납 문의처 */}
+          {(() => {
+            const sel = resources.find((r) => r.id === selected);
+            if (!sel?.ownerTeam) return null;
+            return (
+              <p className="rsv-owner">
+                <span className="dot" style={{ background: sel.ownerTeam.color }} />
+                <b>{sel.name}</b> 관리: {sel.ownerTeam.name}{sel.manager ? ` · ${sel.manager.name}` : ""}
+              </p>
+            );
+          })()}
         </div>
       )}
 

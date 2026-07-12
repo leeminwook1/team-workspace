@@ -8,6 +8,8 @@ import { canEditTaskAny, canDeleteTaskAny, canChangeStatusAny, canCreateTaskInAl
 import { taskUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
+import { Reservation } from "@/models/Reservation";
+import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, cancelTaskReservations } from "@/lib/taskReservations";
 
 // GET /api/tasks/:id — 단건 조회 (검색 딥링크용). 조회 범위(역할) 검증.
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -29,8 +31,12 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     if (!ids.some((id: string) => scope.includes(id))) return json({ error: "조회 권한이 없습니다." }, 403);
   }
 
+  const linked: any[] = await Reservation.find({ relatedTaskId: t._id, status: "booked" })
+    .populate("resourceId", "name").select("resourceId").lean();
+
   return json({
     task: {
+      resources: linked.filter((r) => r.resourceId).map((r) => ({ id: String(r.resourceId._id), name: r.resourceId.name })),
       id: String(t._id),
       title: t.title,
       description: t.description,
@@ -99,7 +105,23 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return json({ error: "종료일이 시작일보다 빠를 수 없습니다." }, 400);
   }
 
+  // 장비 연동 동기화 — 장비 목록이 오거나, 기간이 바뀌어 기존 연동 예약을 옮겨야 할 때
+  const timeChanged = d.startDate !== undefined || d.endDate !== undefined || d.allDay !== undefined;
+  let equipTarget: string[] | null = null;
+  if (d.resourceIds !== undefined) {
+    equipTarget = d.resourceIds;
+  } else if (timeChanged) {
+    const cur: any[] = await Reservation.find({ relatedTaskId: task._id, status: "booked" }).select("resourceId").lean();
+    if (cur.length > 0) equipTarget = cur.map((r) => String(r.resourceId));
+  }
+  const window = taskWindow(task);
+  if (equipTarget && equipTarget.length > 0) {
+    const conflicts = await findConflicts(equipTarget, window, String(task._id));
+    if (conflicts.length > 0) return json({ error: conflictMessage(conflicts) }, 409);
+  }
+
   await task.save();
+  if (equipTarget !== null) await syncTaskReservations(task, equipTarget, window, user.id);
   await logActivity({
     actorId: user.id,
     actorName: user.name,
@@ -135,7 +157,9 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
   const scope = new URL(req.url).searchParams.get("scope");
   if (scope === "series" && task.recurrenceId) {
+    const ids = (await Task.find({ recurrenceId: task.recurrenceId }).select("_id").lean()).map((t: any) => t._id);
     const r = await Task.deleteMany({ recurrenceId: task.recurrenceId });
+    await cancelTaskReservations(ids); // 연동 장비 예약도 취소
     await logActivity({
       actorId: user.id, actorName: user.name, action: "delete",
       targetTitle: `${task.title} (반복 ${r.deletedCount}건)`,
@@ -144,6 +168,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   }
 
   await Task.deleteOne({ _id: params.id });
+  await cancelTaskReservations([task._id]); // 연동 장비 예약도 취소
   await logActivity({ actorId: user.id, actorName: user.name, action: "delete", targetTitle: task.title });
   return json({ deleted: true });
 }

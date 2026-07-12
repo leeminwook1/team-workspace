@@ -31,7 +31,10 @@ type TaskItem = {
   priority: string;
   location: string;
   recurrenceId?: string | null;
+  resources?: { id: string; name: string }[]; // 연동된 대여 장비
 };
+
+type ResourceOpt = { id: string; name: string; category: { id: string; name: string; color?: string; order?: number } | null };
 
 const STATUS_LABEL: Record<string, [string, string]> = {
   todo: ["예정", "var(--st-todo)"],
@@ -606,6 +609,60 @@ function TaskFormModal({
   const [location, setLocation] = useState(task?.location ?? "");
   const [repeat, setRepeat] = useState("none"); // 반복 — 생성 시에만
   const [repeatUntil, setRepeatUntil] = useState("");
+  const [allResources, setAllResources] = useState<ResourceOpt[]>([]);
+  const [resourceIds, setResourceIds] = useState<string[]>(task?.resources?.map((r) => r.id) ?? []);
+  const [equipQuery, setEquipQuery] = useState("");
+  const [equipTab, setEquipTab] = useState(""); // "" = 전체, 그 외 = 분류 id
+
+  // 탭 목록 — 등록된 장비가 있는 분류만 (분류 순서대로)
+  const equipTabs = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; color: string; order: number }>();
+    for (const r of allResources) {
+      const key = r.category?.id ?? "__none";
+      if (!map.has(key)) {
+        map.set(key, { id: key, name: r.category?.name ?? "미분류", color: r.category?.color ?? "#8b95a1", order: r.category?.order ?? 999 });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  }, [allResources]);
+
+  // 탭 + 검색어 필터 → 분류별 그룹 (분류 순서 → 이름순)
+  const equipGroups = useMemo(() => {
+    const q = equipQuery.trim().toLowerCase();
+    let filtered = q ? allResources.filter((r) => r.name.toLowerCase().includes(q)) : allResources;
+    if (equipTab) filtered = filtered.filter((r) => (r.category?.id ?? "__none") === equipTab);
+    const map = new Map<string, { name: string; color: string; order: number; items: ResourceOpt[] }>();
+    for (const r of filtered) {
+      const key = r.category?.id ?? "__none";
+      if (!map.has(key)) {
+        map.set(key, {
+          name: r.category?.name ?? "미분류",
+          color: r.category?.color ?? "#8b95a1",
+          order: r.category?.order ?? 999,
+          items: [],
+        });
+      }
+      map.get(key)!.items.push(r);
+    }
+    return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  }, [allResources, equipQuery, equipTab]);
+
+  const selectedResources = useMemo(
+    () => allResources.filter((r) => resourceIds.includes(r.id)),
+    [allResources, resourceIds]
+  );
+
+  // 대여 장비 목록 로드 (활성 자원)
+  useEffect(() => {
+    fetch("/api/resources")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.resources) setAllResources(d.resources); })
+      .catch(() => {});
+  }, []);
+
+  function toggleResource(id: string) {
+    setResourceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
   const [description, setDescription] = useState(task?.description ?? "");
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
   const [assignees, setAssignees] = useState<Set<string>>(new Set(task ? task.assignees.map((a) => a.id) : []));
@@ -657,6 +714,7 @@ function TaskFormModal({
       body: JSON.stringify({
         title, teamIds, categoryId: categoryId || null, assignees: Array.from(assignees),
         priority, location, description, ...when,
+        resourceIds: repeat !== "none" ? [] : resourceIds,
         ...(isEdit ? {} : { repeat, repeatUntil: repeat !== "none" && repeatUntil ? repeatUntil : undefined }),
       }),
     });
@@ -794,6 +852,83 @@ function TaskFormModal({
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {allResources.length > 0 && (
+            <div className="field">
+              <label>대여 장비 (선택) · 선택하면 이 시간에 자원 예약이 함께 잡혀요</label>
+              {repeat !== "none" ? (
+                <p className="equip-hint">반복 일정에는 장비 예약을 함께 설정할 수 없어요.</p>
+              ) : (
+                <div className="equip-box">
+                  {selectedResources.length > 0 && (
+                    <div className="equip-selected">
+                      {selectedResources.map((r) => (
+                        <button type="button" key={r.id} className="equip-tag" onClick={() => toggleResource(r.id)}>
+                          {r.name} <span aria-hidden>✕</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="equip-search">
+                    <Icon name="search" size={15} />
+                    <input
+                      value={equipQuery}
+                      onChange={(e) => setEquipQuery(e.target.value)}
+                      placeholder="장비 이름 검색"
+                      aria-label="장비 검색"
+                    />
+                    {equipQuery && (
+                      <button type="button" className="equip-clear" onClick={() => setEquipQuery("")} aria-label="검색 지우기">✕</button>
+                    )}
+                  </div>
+                  {equipTabs.length > 1 && (
+                    <div className="equip-tabs" role="tablist" aria-label="장비 분류">
+                      <button
+                        type="button" role="tab" aria-selected={equipTab === ""}
+                        className={`equip-tab${equipTab === "" ? " on" : ""}`}
+                        onClick={() => setEquipTab("")}
+                      >
+                        전체
+                      </button>
+                      {equipTabs.map((t) => (
+                        <button
+                          type="button" role="tab" key={t.id} aria-selected={equipTab === t.id}
+                          className={`equip-tab${equipTab === t.id ? " on" : ""}`}
+                          onClick={() => setEquipTab(t.id)}
+                        >
+                          <span className="dot" style={{ background: t.color }} />
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="equip-list">
+                    {equipGroups.length === 0 && <p className="equip-hint" style={{ padding: "14px 12px" }}>“{equipQuery}” 검색 결과가 없어요.</p>}
+                    {equipGroups.map((g) => (
+                      <div key={g.name}>
+                        <div className="equip-group">
+                          <span className="dot" style={{ background: g.color }} />
+                          {g.name}
+                          <span className="equip-group-n">{g.items.length}</span>
+                        </div>
+                        {g.items.map((r) => {
+                          const on = resourceIds.includes(r.id);
+                          return (
+                            <button type="button" key={r.id} className={`equip-row${on ? " on" : ""}`} onClick={() => toggleResource(r.id)}>
+                              <span className="equip-check" aria-hidden>
+                                {on && <Icon name="check" size={12} strokeWidth={3} />}
+                              </span>
+                              {r.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -966,6 +1101,12 @@ function TaskDetailModal({
             <div className="meta">
               <div className="k">담당자</div>
               <div className="v">{task.assignees.map((a) => a.name).join(", ")}</div>
+            </div>
+          )}
+          {(task.resources?.length ?? 0) > 0 && (
+            <div className="meta">
+              <div className="k">대여 장비</div>
+              <div className="v">{task.resources!.map((r) => r.name).join(", ")}</div>
             </div>
           )}
           <div className="meta"><div className="k">등록자</div><div className="v">{task.createdBy?.name || "—"}</div></div>

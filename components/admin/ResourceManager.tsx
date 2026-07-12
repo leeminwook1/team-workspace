@@ -1,22 +1,43 @@
 "use client";
 import { ModalClose } from "@/components/ModalClose";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { ColorPicker } from "@/components/admin/ColorPicker";
 
 type Cat = { id: string; name: string; color: string; isActive: boolean };
-type ResourceRow = { id: string; name: string; category: { id: string; name: string } | null; isActive: boolean };
+type TeamOpt = { id: string; name: string; color: string };
+type Member = { id: string; name: string };
+type ResourceRow = {
+  id: string; name: string; category: { id: string; name: string } | null;
+  ownerTeam: TeamOpt | null; manager: Member | null; // 관리 팀 · 담당자
+  isActive: boolean;
+};
+
+// 팀별 활성 멤버 로드 (담당자 선택용)
+async function fetchMembers(teamId: string): Promise<Member[]> {
+  if (!teamId) return [];
+  const res = await fetch(`/api/users?team=${teamId}`).catch(() => null);
+  if (!res?.ok) return [];
+  const d = await res.json();
+  return (d.users ?? []).map((u: any) => ({ id: u.id, name: u.name }));
+}
 
 export default function ResourceManager({
-  initialResources, initialCategories,
+  initialResources, initialCategories, teams,
 }: {
-  initialResources: ResourceRow[]; initialCategories: Cat[];
+  initialResources: ResourceRow[]; initialCategories: Cat[]; teams: TeamOpt[];
 }) {
   const router = useRouter();
   const confirm = useConfirm();
-  const [form, setForm] = useState({ name: "", categoryId: initialCategories[0]?.id ?? "" });
+  const [form, setForm] = useState({ name: "", categoryId: initialCategories[0]?.id ?? "", ownerTeamId: "", managerId: "" });
+  const [formMembers, setFormMembers] = useState<Member[]>([]);
+
+  async function onFormTeamChange(teamId: string) {
+    setForm((f) => ({ ...f, ownerTeamId: teamId, managerId: "" }));
+    setFormMembers(await fetchMembers(teamId));
+  }
   const [newCat, setNewCat] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
@@ -49,12 +70,13 @@ export default function ResourceManager({
     e.preventDefault();
     setErr(""); setLoading(true);
     const res = await fetch("/api/resources", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...form, ownerTeamId: form.ownerTeamId || null, managerId: form.managerId || null }),
     });
     const data = await res.json();
     setLoading(false);
     if (!res.ok) { setErr(data.error ?? "등록 실패"); return; }
-    setForm({ name: "", categoryId: form.categoryId });
+    setForm({ ...form, name: "" }); // 팀·담당자는 유지 — 연속 등록 편의
     router.refresh();
   }
 
@@ -114,6 +136,26 @@ export default function ResourceManager({
               </select>
             </div>
           </div>
+          <div className="form-grid-2">
+            <div className="field">
+              <label>관리 팀 (선택)</label>
+              <select value={form.ownerTeamId} onChange={(e) => onFormTeamChange(e.target.value)}>
+                <option value="">공용 (팀 없음)</option>
+                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>담당자 (선택)</label>
+              <select
+                value={form.managerId}
+                onChange={(e) => setForm({ ...form, managerId: e.target.value })}
+                disabled={!form.ownerTeamId}
+              >
+                <option value="">{form.ownerTeamId ? "없음" : "관리 팀을 먼저 선택"}</option>
+                {formMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+          </div>
           {err && <p className="err-msg">{err}</p>}
           <button className="btn btn-primary" disabled={loading || initialCategories.length === 0}>{loading ? "등록 중…" : "등록"}</button>
         </form>
@@ -137,6 +179,12 @@ export default function ResourceManager({
                   <div className={`admin-item${r.isActive ? "" : " off"}`} key={r.id}>
                     <div className="admin-item-main">
                       <span className="admin-item-title">{r.name}</span>
+                      {r.ownerTeam && (
+                        <span className="rc-owner">
+                          <span className="dot" style={{ background: r.ownerTeam.color }} />
+                          {r.ownerTeam.name}{r.manager ? ` · ${r.manager.name}` : ""}
+                        </span>
+                      )}
                       {!r.isActive && <span className="status-pill pill-off">비활성</span>}
                     </div>
                     <div className="admin-item-actions">
@@ -169,28 +217,40 @@ export default function ResourceManager({
         </section>
       )}
 
-      {editing && <EditModal res={editing} categories={initialCategories} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); router.refresh(); }} />}
+      {editing && <EditModal res={editing} categories={initialCategories} teams={teams} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); router.refresh(); }} />}
       {editCat && <CategoryEditModal cat={editCat} onClose={() => setEditCat(null)} onSaved={() => { setEditCat(null); router.refresh(); }} />}
     </div>
   );
 }
 
 function EditModal({
-  res, categories, onClose, onSaved,
+  res, categories, teams, onClose, onSaved,
 }: {
-  res: ResourceRow; categories: Cat[]; onClose: () => void; onSaved: () => void;
+  res: ResourceRow; categories: Cat[]; teams: TeamOpt[]; onClose: () => void; onSaved: () => void;
 }) {
   const [name, setName] = useState(res.name);
   const [categoryId, setCategoryId] = useState(res.category?.id ?? categories[0]?.id ?? "");
+  const [ownerTeamId, setOwnerTeamId] = useState(res.ownerTeam?.id ?? "");
+  const [managerId, setManagerId] = useState(res.manager?.id ?? "");
+  const [members, setMembers] = useState<Member[]>([]);
   const [active, setActive] = useState(res.isActive);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // 관리 팀의 멤버 목록 로드 (초기 팀 포함)
+  useEffect(() => {
+    if (!ownerTeamId) { setMembers([]); return; }
+    let alive = true;
+    fetchMembers(ownerTeamId).then((m) => { if (alive) setMembers(m); });
+    return () => { alive = false; };
+  }, [ownerTeamId]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr("");
     const r = await fetch(`/api/resources/${res.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, categoryId, isActive: active }),
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, categoryId, ownerTeamId: ownerTeamId || null, managerId: managerId || null, isActive: active }),
     });
     const data = await r.json();
     setBusy(false);
@@ -213,6 +273,22 @@ function EditModal({
             <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+          </div>
+          <div className="form-grid-2">
+            <div className="field">
+              <label>관리 팀</label>
+              <select value={ownerTeamId} onChange={(e) => { setOwnerTeamId(e.target.value); setManagerId(""); }}>
+                <option value="">공용 (팀 없음)</option>
+                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>담당자</label>
+              <select value={managerId} onChange={(e) => setManagerId(e.target.value)} disabled={!ownerTeamId}>
+                <option value="">{ownerTeamId ? "없음" : "관리 팀을 먼저 선택"}</option>
+                {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
           </div>
           <div className="field">
             <div className="switch-row">

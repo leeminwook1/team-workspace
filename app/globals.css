@@ -314,6 +314,8 @@ a { color: inherit; text-decoration: none; }
 .rc-cat-name { font-size: 14px; font-weight: 700; color: var(--ink); }
 .rc-cat-count { font-size: 12px; font-weight: 700; color: var(--ink-faint); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
 .rc-cat-btn { margin-left: auto; border: 0; background: transparent; color: var(--ink-soft); font-size: 12.5px; font-weight: 700; cursor: pointer; padding: 4px 8px; border-radius: var(--r-sm); }
+.rc-owner { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--ink-faint); }
+.rc-owner .dot { width: 7px; height: 7px; }
 .rc-cat-btn:hover { background: var(--paper); }
 .rc-cat-btn.danger { margin-left: 0; color: var(--danger); }
 .rc-cat-btn.danger:hover { background: var(--danger-soft); }
@@ -329,6 +331,12 @@ a { color: inherit; text-decoration: none; }
 .rsv-group-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 800; color: var(--ink-soft); margin-bottom: 8px; }
 .rsv-chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .rsv-tip { font-size: 12px; color: var(--ink-faint); margin: 12px 4px 2px; text-align: center; }
+.rsv-owner {
+  display: flex; align-items: center; gap: 6px; margin: 10px 4px 2px;
+  font-size: 12.5px; color: var(--ink-faint);
+}
+.rsv-owner b { color: var(--ink-soft); font-weight: 700; }
+.rsv-owner .dot { width: 7px; height: 7px; }
 
 /* ── 행사 관리 ── */
 /* 행사 목록 (카드 그리드) */
@@ -703,6 +711,64 @@ a { color: inherit; text-decoration: none; }
   font-size: 12.5px; font-weight: 700; cursor: pointer; padding: 4px 6px; border-radius: var(--r-sm);
 }
 .filter-reset:hover { background: var(--accent-soft); }
+.equip-hint { font-size: 12.5px; color: var(--ink-faint); margin: 2px 0 0; }
+
+/* 대여 장비 피커 — 검색 + 분류 그룹 + 스크롤 목록 */
+.equip-box { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); overflow: hidden; }
+.equip-selected {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.equip-tag {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; cursor: pointer;
+  font-size: 12px; font-weight: 700; color: var(--primary); background: var(--accent-soft);
+  padding: 5px 10px; border-radius: 999px; transition: opacity 0.12s;
+}
+.equip-tag span { font-size: 10px; opacity: 0.65; }
+.equip-tag:hover { opacity: 0.75; }
+.equip-search {
+  display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+  border-bottom: 1px solid var(--line); color: var(--ink-faint);
+}
+.equip-search input {
+  flex: 1; border: 0; background: transparent; font-size: 13.5px; color: var(--ink);
+  font-family: inherit; outline: none; padding: 0;
+}
+.equip-search input::placeholder { color: var(--ink-faint); }
+.equip-clear { border: 0; background: transparent; color: var(--ink-faint); font-size: 11px; cursor: pointer; padding: 3px 5px; border-radius: 6px; }
+.equip-clear:hover { color: var(--ink); background: var(--line); }
+.equip-tabs {
+  display: flex; gap: 4px; padding: 8px 10px 0; overflow-x: auto; scrollbar-width: none;
+}
+.equip-tabs::-webkit-scrollbar { display: none; }
+.equip-tab {
+  display: inline-flex; align-items: center; gap: 5px; flex: none; border: 0; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--ink-soft); background: var(--surface);
+  padding: 6px 11px; border-radius: 999px; transition: background 0.12s, color 0.12s;
+}
+.equip-tab .dot { width: 6px; height: 6px; }
+.equip-tab:hover { background: var(--line); }
+.equip-tab.on { background: var(--ink); color: var(--paper); font-weight: 700; }
+.equip-list { max-height: 216px; overflow-y: auto; padding: 6px; }
+.equip-group {
+  position: sticky; top: -6px; z-index: 1; display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.03em; color: var(--ink-faint);
+  padding: 8px 8px 5px; margin-top: 2px; background: var(--surface-2);
+}
+.equip-group .dot { width: 7px; height: 7px; }
+.equip-group-n { font-weight: 700; color: var(--ink-faint); opacity: 0.7; }
+.equip-row {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; border: 0; cursor: pointer;
+  background: transparent; font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--ink-soft);
+  padding: 8px 8px; border-radius: 9px; transition: background 0.1s;
+}
+.equip-row:hover { background: var(--surface); }
+.equip-row.on { color: var(--primary); font-weight: 700; }
+.equip-check {
+  width: 18px; height: 18px; flex: none; border-radius: 6px; border: 1.6px solid var(--line-strong);
+  background: var(--surface); display: inline-grid; place-items: center; color: #fff;
+}
+.equip-row.on .equip-check { background: var(--primary); border-color: var(--primary); }
 
 /* ── 달력 1c — 풀블리드 몰입형 헤더 (큰 타이포 + 원형 화살표 + 다크 필 버튼) ── */
 .cal1c-head { align-items: flex-end; margin-bottom: 12px; }
