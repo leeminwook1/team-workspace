@@ -3,6 +3,9 @@ import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useState } from "react";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { Pagination } from "@/components/Pagination";
+
+const PAGE_SIZE = 10;
 
 type TeamOpt = { id: string; name: string; color: string };
 type UserRow = {
@@ -36,6 +39,7 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
   const [loaded, setLoaded] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [err, setErr] = useState("");
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/users");
@@ -59,12 +63,17 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
 
   if (!loaded) return <p style={{ color: "var(--ink-faint)" }}>불러오는 중…</p>;
 
+  // 10명씩 페이지네이션 — 삭제로 마지막 페이지가 비면 자동으로 앞 페이지로
+  const totalPages = Math.max(1, Math.ceil(users.length / PAGE_SIZE));
+  const cur = Math.min(page, totalPages);
+  const pageUsers = users.slice((cur - 1) * PAGE_SIZE, cur * PAGE_SIZE);
+
   return (
     <div style={{ maxWidth: 720 }}>
       {err && <p className="err-msg">{err}</p>}
       <div className="admin-section-title">사용자 {users.length}명</div>
       <div className="admin-list">
-        {users.map((u) => (
+        {pageUsers.map((u) => (
           <div className={`admin-item${u.status === "active" ? "" : " off"}`} key={u.id}>
             <div className="admin-item-main">
               <span className="avatar avatar-sm" aria-hidden>{u.name.slice(0, 1)}</span>
@@ -90,6 +99,7 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
           <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--ink-faint)" }}>사용자가 없습니다.</div>
         )}
       </div>
+      <Pagination page={cur} totalPages={totalPages} onPage={setPage} />
 
       {editing && (
         <EditModal
