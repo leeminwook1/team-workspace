@@ -6,6 +6,7 @@ import { requireActiveUser, json } from "@/lib/api";
 import { canManageEvents } from "@/lib/permissions";
 import { eventCreateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
+import { notify } from "@/lib/notify";
 
 // 목록용 요약 (투두 진행률 포함, items 본문은 제외)
 function serializeSummary(e: any) {
@@ -65,5 +66,14 @@ export async function POST(req: Request) {
     createdBy: user.id,
   });
   await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetType: "event", targetTitle: created.title });
+  // 행사 담당자로 지정된 사람에게 알림 (본인 제외)
+  if (created.managerId && String(created.managerId) !== user.id) {
+    await notify([String(created.managerId)], {
+      type: "event_assigned",
+      title: "행사 담당자로 지정됐어요",
+      body: created.title,
+      link: `/events/${String(created._id)}`,
+    });
+  }
   return json({ id: String(created._id) }, 201);
 }

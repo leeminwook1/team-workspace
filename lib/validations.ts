@@ -107,6 +107,16 @@ export const meUpdateSchema = z.object({
   telegramChatId: z.string().max(32).regex(/^-?\d*$/, "챗 ID는 숫자만 입력하세요").optional(),
 });
 
+// 개인 캘린더 일정
+export const personalEventSchema = z.object({
+  title: z.string().min(1, "제목을 입력하세요").max(120),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
+  allDay: z.boolean().optional().default(true),
+  memo: z.string().max(1000).optional().default(""),
+  location: z.string().max(120).optional().default(""),
+});
+
 export const teamSchema = z.object({
   name: z.string().min(1, "팀 이름을 입력하세요").max(30),
   slug: z

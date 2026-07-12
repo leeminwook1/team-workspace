@@ -7,6 +7,7 @@ import { requireActiveUser, json } from "@/lib/api";
 import { canManageEvents, canDeleteEvent } from "@/lib/permissions";
 import { eventUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
+import { notify } from "@/lib/notify";
 
 function serializeFull(e: any) {
   return {
@@ -63,6 +64,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!ev) return json({ error: "행사를 찾을 수 없습니다." }, 404);
 
   const d = parsed.data;
+  const prevManager = ev.managerId ? String(ev.managerId) : "";
   if (d.title !== undefined) ev.title = d.title;
   if (d.description !== undefined) ev.description = d.description;
   if (d.teamIds !== undefined) ev.teamIds = d.teamIds;
@@ -70,7 +72,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (d.eventDate !== undefined) ev.eventDate = d.eventDate ? new Date(d.eventDate) : null;
   if (d.location !== undefined) ev.location = d.location;
   if (d.priority !== undefined) ev.priority = d.priority;
+
+  // 할 일 담당자가 새로 지정된 사람 수집 (본인 제외) — 저장 후 알림
+  const newlyAssigned = new Map<string, string[]>();
   if (d.items !== undefined) {
+    const before = new Map((ev.items ?? []).map((it: any) => [String(it._id), it.assigneeId ? String(it.assigneeId) : ""]));
     // 기존 _id는 유지하고, 새 항목만 생성 (id 안정성)
     ev.items = d.items.map((it) => ({
       ...(it.id && mongoose.isValidObjectId(it.id) ? { _id: it.id } : {}),
@@ -81,9 +87,33 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       dueDate: it.dueDate ? new Date(it.dueDate) : null,
       note: it.note ?? "",
     }));
+    for (const it of d.items) {
+      const a = it.assigneeId ? String(it.assigneeId) : "";
+      if (!a || a === user.id) continue;
+      const prev = it.id ? (before.get(String(it.id)) ?? "") : "";
+      if (a !== prev) {
+        if (!newlyAssigned.has(a)) newlyAssigned.set(a, []);
+        newlyAssigned.get(a)!.push(it.title);
+      }
+    }
   }
 
   await ev.save();
+
+  // 알림 — 행사 담당자 변경 + 할 일 담당자 신규 지정
+  if (d.managerId !== undefined && ev.managerId && String(ev.managerId) !== prevManager && String(ev.managerId) !== user.id) {
+    await notify([String(ev.managerId)], {
+      type: "event_assigned", title: "행사 담당자로 지정됐어요", body: ev.title, link: `/events/${String(ev._id)}`,
+    });
+  }
+  for (const [uid, titles] of Array.from(newlyAssigned.entries())) {
+    await notify([uid], {
+      type: "event_assigned",
+      title: "행사 할 일 담당자로 지정됐어요",
+      body: `${ev.title} — ${titles.slice(0, 3).join(", ")}${titles.length > 3 ? ` 외 ${titles.length - 3}건` : ""}`,
+      link: `/events/${String(ev._id)}`,
+    });
+  }
 
   // 행사 필드 수정만 로그 (투두 이동/편집만 있는 경우는 로그 스팸 방지)
   const keys = Object.keys(d);

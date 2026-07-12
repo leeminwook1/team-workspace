@@ -1,6 +1,7 @@
 import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
 import { Directive } from "@/models/Directive";
+import { Event } from "@/models/Event";
 import { User } from "@/models/User";
 import { json } from "@/lib/api";
 import { notify } from "@/lib/notify";
@@ -56,5 +57,34 @@ export async function GET(req: Request) {
     dirNotified += ids.length;
   }
 
-  return json({ tasksDue: tasks.length, taskNotified, directivesDue: dirs.length, dirNotified });
+  // 3) 오늘 마감인 행사 할 일 → 담당자 (없으면 행사 담당자, 그것도 없으면 등록자)
+  const events: any[] = await Event.find({ items: { $elemMatch: { dueDate: { $gte: start, $lt: end }, status: { $ne: "done" } } } })
+    .select("title items managerId createdBy")
+    .lean();
+  let eventNotified = 0;
+  for (const ev of events) {
+    // 수신자별로 할 일 제목을 묶어 1회 알림
+    const byUser = new Map<string, string[]>();
+    for (const it of ev.items ?? []) {
+      if (!it.dueDate || it.status === "done") continue;
+      const due = new Date(it.dueDate);
+      if (due < start || due >= end) continue;
+      const target = it.assigneeId ?? ev.managerId ?? ev.createdBy;
+      if (!target) continue;
+      const key = String(target);
+      if (!byUser.has(key)) byUser.set(key, []);
+      byUser.get(key)!.push(it.title);
+    }
+    for (const [uid, titles] of Array.from(byUser.entries())) {
+      await notify([uid], {
+        type: "due",
+        title: "오늘 마감인 행사 할 일이 있어요",
+        body: `${ev.title} — ${titles.slice(0, 3).join(", ")}${titles.length > 3 ? ` 외 ${titles.length - 3}건` : ""}`,
+        link: `/events/${String(ev._id)}`,
+      });
+      eventNotified += 1;
+    }
+  }
+
+  return json({ tasksDue: tasks.length, taskNotified, directivesDue: dirs.length, dirNotified, eventItemsDue: events.length, eventNotified });
 }
