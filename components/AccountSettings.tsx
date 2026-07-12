@@ -4,14 +4,34 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 
 export default function AccountSettings({
-  initialName, email, roleLabel, teamName,
+  initialName, email, roleLabel, teamName, initialTelegramChatId,
 }: {
-  initialName: string; email: string; roleLabel: string; teamName: string | null;
+  initialName: string; email: string; roleLabel: string; teamName: string | null; initialTelegramChatId?: string;
 }) {
   const { update } = useSession();
   const [name, setName] = useState(initialName);
   const [nameBusy, setNameBusy] = useState(false);
   const [nameMsg, setNameMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const [tgId, setTgId] = useState(initialTelegramChatId ?? "");
+  const [tgBusy, setTgBusy] = useState(false);
+  const [tgMsg, setTgMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function saveTelegram(e: React.FormEvent) {
+    e.preventDefault();
+    setTgMsg(null);
+    setTgBusy(true);
+    const res = await fetch("/api/me", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ telegramChatId: tgId.trim() }),
+    });
+    const data = await res.json();
+    setTgBusy(false);
+    if (!res.ok) { setTgMsg({ ok: false, text: data.error ?? "저장 실패" }); return; }
+    if (!tgId.trim()) setTgMsg({ ok: true, text: "텔레그램 연동이 해제되었습니다." });
+    else if (data.telegramTest) setTgMsg({ ok: true, text: "연동 완료! 텔레그램으로 테스트 메시지를 보냈어요." });
+    else setTgMsg({ ok: true, text: "저장되었습니다. (테스트 메시지 전송 실패 — 챗 ID 또는 서버 봇 설정을 확인하세요)" });
+  }
 
   const [curPw, setCurPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -99,6 +119,31 @@ export default function AccountSettings({
           {pwMsg && <p className={pwMsg.ok ? "ok-msg" : "err-msg"}>{pwMsg.text}</p>}
           <div className="modal-actions" style={{ marginTop: 16 }}>
             <button className="btn btn-primary btn-sm" disabled={pwBusy}>{pwBusy ? "변경 중…" : "비밀번호 변경"}</button>
+          </div>
+        </form>
+      </div>
+
+      {/* 텔레그램 알림 연동 */}
+      <div className="card" style={{ padding: 22, marginTop: 16 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px" }}>텔레그램 알림</h2>
+        <p className="page-sub" style={{ margin: "0 0 14px" }}>
+          챗 ID를 등록하면 승인·담당자 배정·마감 알림을 텔레그램으로도 받아요.
+          <br />팀 알림봇과 대화를 시작한 뒤 챗 ID를 입력하세요. (챗 ID 자동 연동은 준비 중)
+        </p>
+        <form onSubmit={saveTelegram}>
+          <div className="field">
+            <label>텔레그램 챗 ID</label>
+            <input
+              value={tgId}
+              onChange={(e) => setTgId(e.target.value)}
+              placeholder="예: 123456789 (비우면 연동 해제)"
+              inputMode="numeric"
+              maxLength={32}
+            />
+          </div>
+          {tgMsg && <p className={tgMsg.ok ? "ok-msg" : "err-msg"}>{tgMsg.text}</p>}
+          <div className="modal-actions" style={{ marginTop: 16 }}>
+            <button className="btn btn-primary btn-sm" disabled={tgBusy}>{tgBusy ? "저장 중…" : "저장"}</button>
           </div>
         </form>
       </div>

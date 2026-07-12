@@ -25,6 +25,8 @@ const UserSchema = new Schema(
       type: [{ _id: false, id: { type: String, required: true }, size: { type: Number, default: 1 } }],
       default: undefined,
     },
+    // 텔레그램 알림 — 봇과 대화하는 챗 ID (빈 문자열 = 미연동)
+    telegramChatId: { type: String, default: "" },
   },
   { timestamps: true }
 );

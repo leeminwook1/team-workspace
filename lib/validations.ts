@@ -103,6 +103,8 @@ export const meUpdateSchema = z.object({
   name: z.string().min(2, "이름은 2자 이상").max(30).optional(),
   currentPassword: z.string().optional(),
   newPassword: z.string().min(8, "새 비밀번호는 8자 이상").max(100).optional(),
+  // 텔레그램 챗 ID — 숫자(그룹은 음수 허용), 빈 문자열 = 연동 해제
+  telegramChatId: z.string().max(32).regex(/^-?\d*$/, "챗 ID는 숫자만 입력하세요").optional(),
 });
 
 export const teamSchema = z.object({
