@@ -6,7 +6,7 @@ import { Task } from "@/models/Task";
 import { Resource } from "@/models/Resource";
 import { Reservation } from "@/models/Reservation";
 import { canCreateTaskInAll, canReserve, visibleTeamIds, type SessionUser, type Role } from "./permissions";
-import { findConflicts, conflictMessage } from "./taskReservations";
+import { taskWindow, findConflicts, conflictMessage, syncTaskReservations } from "./taskReservations";
 import { logActivity, reservationLabel } from "./activity";
 
 // 텔레그램 인바운드 명령 v1 — /일정 /예약 /오늘 /내일 /예약현황 /연동 /도움말
@@ -16,11 +16,12 @@ const KST = 9 * 3600_000;
 
 const HELP = `📖 사용법
 
-/일정 제목 날짜 [시간] [옵션]
+/일정 제목 날짜 [시간] [옵션] [장비:이름,이름2]
   · 날짜: 7/20, 2026-07-20, 오늘, 내일, 7/20-7/22(기간)
   · 시간: 14:00-16:00 또는 14-16 (없으면 종일)
   · 옵션: @팀이름 #카테고리 !긴급 !높음 장소:내용
-  예) /일정 노방활동 7/20 14:00-16:00 #촬영 장소:신촌역
+  · 장비: 는 맨 뒤에 — 일정과 연동된 예약이 함께 잡혀요
+  예) /일정 노방활동 7/20 14:00-16:00 #촬영 장비:캐논 R6(7-1), 배터리(7-1)
 
 /예약 장비명[, 장비명2] 날짜 [시간]
   예) /예약 캐논 R6, 배터리(7-1) 내일 14-16
@@ -74,6 +75,26 @@ const kstDate = (d: { y: number; m: number; d: number }, h: number, min: number)
 
 const fmtT = (dt: Date) =>
   new Date(dt).toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
+
+// 장비 이름 매칭 (부분 일치, 대소문자 무시) — /일정 장비: 와 /예약 이 공유
+async function matchResources(names: string[]): Promise<{ picked: { id: string; name: string }[] } | { error: string }> {
+  const all: any[] = await Resource.find({ isActive: true }).select("name").lean();
+  const picked: { id: string; name: string }[] = [];
+  for (const q of names) {
+    const hits = all.filter((r) => r.name.toLowerCase().includes(q.toLowerCase()));
+    if (hits.length === 0) return { error: `❌ "${q}" 와 일치하는 장비가 없어요.` };
+    if (hits.length > 1) {
+      const exact = hits.find((r) => r.name.toLowerCase() === q.toLowerCase());
+      if (!exact) {
+        return { error: `"${q}" 가 여러 개와 일치해요 — 더 구체적으로 써주세요:\n${hits.slice(0, 8).map((r) => `· ${r.name}`).join("\n")}` };
+      }
+      picked.push({ id: String(exact._id), name: exact.name });
+      continue;
+    }
+    picked.push({ id: String(hits[0]._id), name: hits[0].name });
+  }
+  return { picked };
+}
 
 function toSessionUser(u: any): SessionUser {
   return { id: String(u._id), name: u.name, role: (u.role ?? "member") as Role, teamId: u.teamId ? String(u.teamId) : null, status: u.status };
@@ -132,8 +153,17 @@ async function linkAccount(chatId: string, code: string): Promise<string> {
 
 // ── /일정 ──
 async function createTask(user: SessionUser, args: string): Promise<string> {
-  if (!args) return "사용법: /일정 제목 날짜 [시간] [옵션]\n예) /일정 주간회의 내일 14:00-15:00";
+  if (!args) return "사용법: /일정 제목 날짜 [시간] [옵션] [장비:이름,이름2]\n예) /일정 주간회의 내일 14:00-15:00";
   const now = new Date();
+
+  // 장비: 는 이름에 공백·쉼표가 들어가므로 맨 뒤에서 통째로 추출 (마지막 옵션으로 쓸 것)
+  let equipNames: string[] = [];
+  const em = args.match(/(?:^|\s)장비:(.+)$/);
+  if (em) {
+    equipNames = em[1].split(",").map((s) => s.trim()).filter(Boolean);
+    args = args.slice(0, em.index).trim();
+  }
+
   const tokens = args.split(/\s+/);
 
   let date: DateRange | null = null;
@@ -183,10 +213,24 @@ async function createTask(user: SessionUser, args: string): Promise<string> {
   const startDate = allDay ? new Date(ymd(date.start)) : kstDate(date.start, time!.sh, time!.sm);
   const endDate = allDay ? new Date(ymd(date.end)) : kstDate(date.start, time!.eh, time!.em);
 
+  // 장비 연동 — 웹과 동일하게 일정 생성 전에 충돌 검사, 생성 후 연동 예약
+  let equipment: { id: string; name: string }[] = [];
+  const window = taskWindow({ startDate, endDate, allDay });
+  if (equipNames.length > 0) {
+    const m = await matchResources(equipNames);
+    if ("error" in m) return m.error;
+    equipment = m.picked;
+    const conflicts = await findConflicts(equipment.map((p) => p.id), window);
+    if (conflicts.length > 0) return `❌ ${conflictMessage(conflicts)}`;
+  }
+
   const task = await Task.create({
     title, teamIds: [teamId], categoryId, assignees: [], createdBy: user.id,
     startDate, endDate, allDay, priority, location,
   });
+  if (equipment.length > 0) {
+    await syncTaskReservations(task, equipment.map((p) => p.id), window, user.id);
+  }
   await logActivity({ actorId: user.id, actorName: user.name ?? "", action: "create", targetTitle: `${task.title} (텔레그램)` });
 
   const when = date.start.m === date.end.m && date.start.d === date.end.d
@@ -194,7 +238,8 @@ async function createTask(user: SessionUser, args: string): Promise<string> {
     : `${date.start.m}/${date.start.d}~${date.end.m}/${date.end.d}`;
   const timeStr = allDay ? "종일" : `${String(time!.sh).padStart(2, "0")}:${String(time!.sm).padStart(2, "0")}-${String(time!.eh).padStart(2, "0")}:${String(time!.em).padStart(2, "0")}`;
   const extras = [catName && `#${catName}`, priority === "urgent" && "🔴긴급", priority === "high" && "🟠높음", location && `📍${location}`].filter(Boolean).join(" ");
-  return `✅ 일정 등록: ${title}\n${when} ${timeStr} · ${teamLabel}${extras ? `\n${extras}` : ""}`;
+  const equipLine = equipment.length > 0 ? `\n📦 장비 예약: ${equipment.map((p) => p.name).join(", ")}` : "";
+  return `✅ 일정 등록: ${title}\n${when} ${timeStr} · ${teamLabel}${extras ? `\n${extras}` : ""}${equipLine}`;
 }
 
 // ── /예약 ──
@@ -232,22 +277,9 @@ async function createReservation(user: SessionUser, args: string): Promise<strin
   if (!teamId) return "❌ 소속 팀이 없어요. @팀이름 으로 팀을 지정해주세요. 예) /예약 캐논 R6 내일 14-16 @사진";
   if (!canReserve(user, teamId)) return "❌ 예약 권한이 없어요.";
 
-  // 장비 이름 매칭 (부분 일치, 대소문자 무시)
-  const all: any[] = await Resource.find({ isActive: true }).select("name").lean();
-  const picked: { id: string; name: string }[] = [];
-  for (const q of names) {
-    const hits = all.filter((r) => r.name.toLowerCase().includes(q.toLowerCase()));
-    if (hits.length === 0) return `❌ "${q}" 와 일치하는 장비가 없어요.`;
-    if (hits.length > 1) {
-      const exact = hits.find((r) => r.name.toLowerCase() === q.toLowerCase());
-      if (!exact) {
-        return `"${q}" 가 여러 개와 일치해요 — 더 구체적으로 써주세요:\n${hits.slice(0, 8).map((r) => `· ${r.name}`).join("\n")}`;
-      }
-      picked.push({ id: String(exact._id), name: exact.name });
-      continue;
-    }
-    picked.push({ id: String(hits[0]._id), name: hits[0].name });
-  }
+  const m = await matchResources(names);
+  if ("error" in m) return m.error;
+  const picked = m.picked;
 
   // 시간창 — 시간 없으면 그 날짜 전체(KST)
   const startAt = time ? kstDate(date.start, time.sh, time.sm) : kstDate(date.start, 0, 0);
