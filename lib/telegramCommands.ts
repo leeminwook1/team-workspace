@@ -106,9 +106,9 @@ export async function handleTelegramCommand(chatId: string, text: string): Promi
     switch (cmd) {
       case "/일정": return await createTask(user, args);
       case "/예약": return await createReservation(user, args);
-      case "/오늘": return await listDay(user, 0);
-      case "/내일": return await listDay(user, 1);
-      case "/예약현황": return await listReservations(rest[0] ?? "오늘");
+      case "/오늘": case "/today": return await listDay(user, 0);
+      case "/내일": case "/tomorrow": return await listDay(user, 1);
+      case "/예약현황": case "/reservations": return await listReservations(rest[0] ?? "오늘");
       default:
         return `모르는 명령이에요: ${cmd}\n\n${HELP}`;
     }
