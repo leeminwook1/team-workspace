@@ -27,6 +27,9 @@ const UserSchema = new Schema(
     },
     // 텔레그램 알림 — 봇과 대화하는 챗 ID (빈 문자열 = 미연동)
     telegramChatId: { type: String, default: "" },
+    // 텔레그램 연동 코드 — 설정에서 발급, 봇에게 /연동 <코드> 전송으로 챗 ID 자동 연결 (10분 유효)
+    tgLinkCode: { type: String, default: "" },
+    tgLinkCodeExp: { type: Date, default: null },
   },
   { timestamps: true }
 );

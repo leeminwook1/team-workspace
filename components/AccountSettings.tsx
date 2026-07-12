@@ -16,6 +16,18 @@ export default function AccountSettings({
   const [tgId, setTgId] = useState(initialTelegramChatId ?? "");
   const [tgBusy, setTgBusy] = useState(false);
   const [tgMsg, setTgMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [linkCode, setLinkCode] = useState<string | null>(null);
+  const [codeBusy, setCodeBusy] = useState(false);
+
+  async function issueLinkCode() {
+    setCodeBusy(true);
+    setTgMsg(null);
+    const res = await fetch("/api/me/telegram-code", { method: "POST" });
+    const data = await res.json();
+    setCodeBusy(false);
+    if (!res.ok) { setTgMsg({ ok: false, text: data.error ?? "코드 발급 실패" }); return; }
+    setLinkCode(data.code);
+  }
 
   async function saveTelegram(e: React.FormEvent) {
     e.preventDefault();
@@ -127,12 +139,30 @@ export default function AccountSettings({
       <div className="card" style={{ padding: 22, marginTop: 16 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px" }}>텔레그램 알림</h2>
         <p className="page-sub" style={{ margin: "0 0 14px" }}>
-          챗 ID를 등록하면 승인·담당자 배정·마감 알림을 텔레그램으로도 받아요.
-          <br />팀 알림봇과 대화를 시작한 뒤 챗 ID를 입력하세요. (챗 ID 자동 연동은 준비 중)
+          연동하면 승인·담당자 배정·마감 알림을 텔레그램으로 받고, /일정 /예약 명령으로 등록도 할 수 있어요.
         </p>
+
+        {/* 방법 1 — 연동 코드 (추천) */}
+        <div className="tg-link-box">
+          <div className="tg-link-head">
+            <b>간편 연동 (추천)</b>
+            <button type="button" className="btn btn-line btn-sm" onClick={issueLinkCode} disabled={codeBusy}>
+              {codeBusy ? "발급 중…" : linkCode ? "코드 재발급" : "연동 코드 발급"}
+            </button>
+          </div>
+          {linkCode ? (
+            <p className="tg-link-guide">
+              텔레그램에서 <b>@teamcal_noti_bot</b> 대화방에 아래를 보내세요 (10분 유효):
+              <span className="tg-link-code">/연동 {linkCode}</span>
+            </p>
+          ) : (
+            <p className="tg-link-guide">코드를 발급하고 봇에게 <b>/연동 코드</b>를 보내면 자동으로 연결돼요.</p>
+          )}
+        </div>
+
         <form onSubmit={saveTelegram}>
           <div className="field">
-            <label>텔레그램 챗 ID</label>
+            <label>또는 챗 ID 직접 입력</label>
             <input
               value={tgId}
               onChange={(e) => setTgId(e.target.value)}

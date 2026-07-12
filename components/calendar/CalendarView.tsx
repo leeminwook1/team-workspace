@@ -130,12 +130,14 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   // 권한 (프론트 표시용, 실제 검증은 API에서 2중으로)
   const isOrgEditor = ["admin", "manager", "deputy", "secretary"].includes(user?.role ?? "");
   const canEditOwnTeam = user?.role === "leader" || user?.role === "vice_leader";
+  const isTeamMember = ["leader", "vice_leader", "member"].includes(user?.role ?? "");
+  // 일정 등록 가능한 팀 — 팀원 포함 (소속 팀이면 등록 가능)
   const editableTeams = useMemo(() => {
     if (!user) return [];
     if (isOrgEditor) return teams;
-    if (canEditOwnTeam && user.teamId) return teams.filter((t) => t.id === user.teamId);
+    if (isTeamMember && user.teamId) return teams.filter((t) => t.id === user.teamId);
     return [];
-  }, [teams, user, isOrgEditor, canEditOwnTeam]);
+  }, [teams, user, isOrgEditor, isTeamMember]);
 
   const fetchTasks = useCallback(async (from: string, to: string) => {
     const res = await fetch(`/api/tasks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
@@ -163,8 +165,10 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   // 이 업무를 수정(드래그 이동)할 수 있는지 — 상세 모달과 동일 규칙 (실제 검증은 API에서)
   const canEditTask = useCallback(
     (t: TaskItem) =>
-      isOrgEditor || (canEditOwnTeam && !!user?.teamId && t.teams.some((tm) => tm.id === user.teamId)),
-    [isOrgEditor, canEditOwnTeam, user?.teamId]
+      isOrgEditor ||
+      (canEditOwnTeam && !!user?.teamId && t.teams.some((tm) => tm.id === user.teamId)) ||
+      (!!user?.id && t.createdBy?.id === user.id), // 본인이 만든 일정
+    [isOrgEditor, canEditOwnTeam, user?.teamId, user?.id]
   );
 
   const events = useMemo(
@@ -991,8 +995,9 @@ function TaskDetailModal({
   const role = user?.role;
   const isOrgEditor = ["admin", "manager", "deputy", "secretary"].includes(role ?? "");
   const inTaskTeam = user?.teamId != null && teamIds.includes(user.teamId);
-  const canEdit = isOrgEditor || ((role === "leader" || role === "vice_leader") && inTaskTeam);
-  const canDelete = role === "admin" || (role === "leader" && inTaskTeam);
+  const isCreator = !!user?.id && task.createdBy?.id === user.id; // 본인이 만든 일정은 수정·삭제 가능
+  const canEdit = isOrgEditor || ((role === "leader" || role === "vice_leader") && inTaskTeam) || isCreator;
+  const canDelete = role === "admin" || (role === "leader" && inTaskTeam) || isCreator;
   const isAssignee = task.assignees.some((a) => a.id === user?.id);
   const canStatus = canEdit || (role === "member" && inTaskTeam && isAssignee);
 

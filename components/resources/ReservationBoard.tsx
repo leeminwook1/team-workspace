@@ -58,9 +58,9 @@ export default function ReservationBoard({
     }));
   }, []);
 
-  // 예약 가능한 팀 (팀장·부팀장 소속팀 / 전사 편집자는 전체)
+  // 예약 가능한 팀 (팀 소속이면 팀원 포함 누구나 / 전사 편집자는 전체)
   const isOrgEditor = ["admin", "manager", "deputy", "secretary"].includes(user?.role ?? "");
-  const canReserveOwn = user?.role === "leader" || user?.role === "vice_leader";
+  const canReserveOwn = ["leader", "vice_leader", "member"].includes(user?.role ?? "");
   const reservableTeams = useMemo(() => {
     if (!user) return [];
     if (isOrgEditor) return teams;

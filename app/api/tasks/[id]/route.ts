@@ -4,7 +4,7 @@ import "@/models/Team";
 import "@/models/User";
 import "@/models/Category";
 import { requireActiveUser, json } from "@/lib/api";
-import { canEditTaskAny, canDeleteTaskAny, canChangeStatusAny, canCreateTaskInAll, visibleTeamIds } from "@/lib/permissions";
+import { canEditTaskDoc, canDeleteTaskDoc, canChangeStatusAny, canCreateTaskInAll, visibleTeamIds } from "@/lib/permissions";
 import { taskUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
@@ -73,8 +73,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const keys = Object.keys(d);
   const statusOnly = keys.length === 1 && keys[0] === "status";
 
-  if (canEditTaskAny(user, teamIds)) {
-    // 전체 필드 수정 가능 (업무의 팀 중 하나라도 편집 권한)
+  if (canEditTaskDoc(user, teamIds, task.createdBy ? String(task.createdBy) : null)) {
+    // 전체 필드 수정 가능 (역할 권한 또는 본인이 만든 일정)
   } else if (statusOnly && canChangeStatusAny(user, teamIds, assigneeIds)) {
     // 팀원: 본인 담당 업무의 상태만 (설계 3.2)
   } else {
@@ -151,8 +151,8 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   if (!task) return json({ error: "업무를 찾을 수 없습니다." }, 404);
 
   const teamIds = (task.teamIds ?? []).map((t: any) => String(t));
-  if (!canDeleteTaskAny(user, teamIds)) {
-    return json({ error: "삭제는 팀장 또는 최고관리자만 가능합니다." }, 403);
+  if (!canDeleteTaskDoc(user, teamIds, task.createdBy ? String(task.createdBy) : null)) {
+    return json({ error: "삭제는 팀장·최고관리자 또는 본인이 만든 일정만 가능합니다." }, 403);
   }
 
   const scope = new URL(req.url).searchParams.get("scope");

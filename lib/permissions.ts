@@ -4,7 +4,7 @@
 // - secretary(서기): 모든 팀 조회 + 전 팀 등록·수정 (가입 승인·삭제 ✕)
 // - leader(팀장): 소속 팀 등록·수정·삭제
 // - vice_leader(부팀장): 소속 팀 등록·수정 (삭제 ✕)
-// - member(팀원): 소속 팀 조회 + 본인 담당 업무 상태 변경
+// - member(팀원): 소속 팀 조회·일정 등록·자원 예약 + 본인이 만든 일정 수정·삭제 + 본인 담당 업무 상태 변경
 
 export type Role = "admin" | "manager" | "deputy" | "secretary" | "leader" | "vice_leader" | "member";
 
@@ -51,9 +51,15 @@ export function visibleTeamIds(u: SessionUser): string[] | "all" {
 export function canCreateTask(u: SessionUser, teamId: string) {
   if (!isActive(u)) return false;
   if (ALL_TEAM_EDITORS.includes(u.role)) return true;
+  // 팀원 포함 — 소속 팀이면 누구나 일정 등록 가능
+  return isTeamRole(u.role) && inTeam(u, teamId);
+}
+// 수정: 전사 편집자·팀장·부팀장 (팀원은 본인이 만든 일정만 — canEditTaskDoc에서 처리)
+export function canEditTask(u: SessionUser, teamId: string) {
+  if (!isActive(u)) return false;
+  if (ALL_TEAM_EDITORS.includes(u.role)) return true;
   return TEAM_EDITORS.includes(u.role) && inTeam(u, teamId);
 }
-export const canEditTask = canCreateTask; // 등록 = 수정 권한 동일
 
 export function canDeleteTask(u: SessionUser, teamId: string) {
   if (!isActive(u)) return false;
@@ -128,6 +134,13 @@ export function canEditTaskAny(u: SessionUser, teamIds: string[]) {
 }
 export function canDeleteTaskAny(u: SessionUser, teamIds: string[]) {
   return teamIds.some((id) => canDeleteTask(u, id));
+}
+// 문서 단위 수정·삭제 — 역할 권한 또는 본인이 만든 일정 (팀원의 자기 일정 관리)
+export function canEditTaskDoc(u: SessionUser, teamIds: string[], createdById: string | null) {
+  return canEditTaskAny(u, teamIds) || (isActive(u) && createdById != null && String(createdById) === String(u.id));
+}
+export function canDeleteTaskDoc(u: SessionUser, teamIds: string[], createdById: string | null) {
+  return canDeleteTaskAny(u, teamIds) || (isActive(u) && createdById != null && String(createdById) === String(u.id));
 }
 export function canChangeStatusAny(u: SessionUser, teamIds: string[], assigneeIds: string[]) {
   return teamIds.some((id) => canChangeStatus(u, id, assigneeIds));

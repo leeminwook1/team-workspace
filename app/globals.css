@@ -713,6 +713,17 @@ a { color: inherit; text-decoration: none; }
 .filter-reset:hover { background: var(--accent-soft); }
 .equip-hint { font-size: 12.5px; color: var(--ink-faint); margin: 2px 0 0; }
 
+/* 텔레그램 연동 코드 박스 */
+.tg-link-box { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px; margin-bottom: 14px; }
+.tg-link-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; font-size: 13.5px; }
+.tg-link-guide { font-size: 12.5px; color: var(--ink-soft); margin: 0; line-height: 1.6; }
+.tg-link-code {
+  display: block; margin-top: 8px; padding: 9px 12px; text-align: center;
+  font-family: ui-monospace, monospace; font-size: 16px; font-weight: 700; letter-spacing: 0.04em;
+  background: var(--surface); border: 1px dashed var(--primary); color: var(--primary);
+  border-radius: var(--r-sm); user-select: all;
+}
+
 /* 대여 장비 피커 — 검색 + 분류 그룹 + 스크롤 목록 */
 .equip-box { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); overflow: hidden; }
 .equip-selected {
