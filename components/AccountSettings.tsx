@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
+import { ModalClose } from "./ModalClose";
 
 export default function AccountSettings({
   initialName, email, roleLabel, teamName, initialTelegramChatId,
@@ -18,6 +19,7 @@ export default function AccountSettings({
   const [tgMsg, setTgMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [linkCode, setLinkCode] = useState<string | null>(null);
   const [codeBusy, setCodeBusy] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   async function issueLinkCode() {
     setCodeBusy(true);
@@ -137,7 +139,12 @@ export default function AccountSettings({
 
       {/* 텔레그램 알림 연동 */}
       <div className="card" style={{ padding: 22, marginTop: 16 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px" }}>텔레그램 알림</h2>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, margin: "0 0 6px" }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>텔레그램 알림</h2>
+          <button type="button" className="btn btn-line btn-sm" onClick={() => setShowGuide(true)} style={{ flex: "none" }}>
+            연동 방법
+          </button>
+        </div>
         <p className="page-sub" style={{ margin: "0 0 14px" }}>
           연동하면 승인·담당자 배정·마감 알림을 텔레그램으로 받고, /일정 /예약 명령으로 등록도 할 수 있어요.
         </p>
@@ -177,6 +184,59 @@ export default function AccountSettings({
           </div>
         </form>
       </div>
+
+      {/* 텔레그램 연동 방법 매뉴얼 모달 */}
+      {showGuide && (
+        <div className="modal-overlay" onClick={() => setShowGuide(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <ModalClose onClose={() => setShowGuide(false)} />
+            <h2>텔레그램 연동 방법</h2>
+            <p className="page-sub" style={{ margin: "-8px 0 16px" }}>
+              아래 순서대로 따라 하면 1분 안에 알림을 받을 수 있어요.
+            </p>
+
+            {/* 봇 배너 */}
+            <div className="tg-guide-bot">
+              <span className="tg-guide-bot-ic" aria-hidden>✈️</span>
+              <div className="tg-guide-bot-txt">
+                <b>@teamcal_noti_bot</b>
+                <span>텔레그램 검색창에 이 이름을 넣어 봇 대화방을 여세요.</span>
+              </div>
+            </div>
+
+            <div className="tg-guide-label">방법 1 · 간편 연동 <em>(추천)</em></div>
+            <ol className="tg-guide-steps">
+              <li>텔레그램에서 <b>@teamcal_noti_bot</b> 을 검색해 대화방을 열고 <b>시작(Start)</b> 을 눌러요.</li>
+              <li>이 화면의 <b>연동 코드 발급</b> 버튼을 누르면 6자리 코드가 나와요. <span className="tg-guide-muted">(10분간 유효)</span></li>
+              <li>봇 대화방에 <span className="tg-inline-code">/연동 123456</span> 처럼 코드를 붙여 보내요.</li>
+              <li>봇이 <b>“연동 완료”</b> 라고 답하고 테스트 메시지가 오면 끝이에요.</li>
+            </ol>
+
+            <div className="tg-guide-label">방법 2 · 챗 ID 직접 입력</div>
+            <ol className="tg-guide-steps">
+              <li>텔레그램에서 <b>@userinfobot</b> 을 검색해 <b>시작(Start)</b> 을 누르면 내 <b>숫자 ID</b> 를 알려줘요.</li>
+              <li>그 숫자를 복사해 이 화면의 <b>“또는 챗 ID 직접 입력”</b> 칸에 붙여넣고 <b>저장</b> 을 눌러요.</li>
+            </ol>
+
+            <div className="tg-guide-label">연동 후 쓸 수 있는 명령</div>
+            <ul className="tg-guide-cmds">
+              <li><span className="tg-inline-code">/오늘</span> <span className="tg-inline-code">/내일</span> 오늘·내일 일정 확인 <em>(누구나)</em></li>
+              <li><span className="tg-inline-code">/예약현황</span> 장비 예약 현황 <em>(누구나)</em></li>
+              <li><span className="tg-inline-code">/일정 제목 날짜 시간</span> 일정 등록 <em>(권한 필요)</em></li>
+              <li><span className="tg-inline-code">/예약 장비명 날짜 시간</span> 장비 예약 <em>(권한 필요)</em></li>
+              <li><span className="tg-inline-code">/도움말</span> 전체 명령 안내</li>
+            </ul>
+
+            <p className="tg-guide-note">
+              💡 알림이 오지 않으면 봇 대화방에서 <b>시작(Start)</b> 을 눌렀는지, 발급한 코드가 <b>10분</b> 안에 지났는지 확인해 보세요.
+            </p>
+
+            <div className="modal-actions">
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowGuide(false)}>확인했어요</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
