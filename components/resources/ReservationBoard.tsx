@@ -158,6 +158,19 @@ export default function ReservationBoard({
     return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   }, [resources]);
 
+  // 카테고리 접기/펼치기 — 기본은 선택 장비가 든 그룹만 펼침
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    const sel = resources.find((r) => r.id === selected);
+    return new Set([sel?.category?.id ?? "__none"]);
+  });
+  const toggleGroup = (id: string) =>
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const allOpen = groups.length > 0 && groups.every((g) => openGroups.has(g.id));
+
   const fmt = (d: string) =>
     new Date(d).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
@@ -180,25 +193,44 @@ export default function ReservationBoard({
       {/* 장비 선택 — 분류별 그룹 (리스트 뷰) */}
       {view === "list" && (
         <div className="card" style={{ padding: 16 }}>
-          {groups.map((g) => (
-            <div className="rsv-group" key={g.id}>
-              <div className="rsv-group-head">
-                <span className="dot" style={{ background: g.color, width: 9, height: 9 }} />
-                {g.name} <span className="kb-count">{g.items.length}</span>
-              </div>
-              <div className="rsv-chips">
-                {g.items.map((r) => (
-                  <button
-                    key={r.id}
-                    className={`chip chip-btn${selected === r.id ? " sel" : ""}`}
-                    onClick={() => setSelected(r.id)}
-                  >
-                    {r.name}
-                  </button>
-                ))}
-              </div>
+          {groups.length > 1 && (
+            <div className="rsv-toolbar">
+              <button
+                type="button"
+                className="rsv-linkbtn"
+                onClick={() => setOpenGroups(allOpen ? new Set() : new Set(groups.map((g) => g.id)))}
+              >
+                {allOpen ? "모두 접기" : "모두 펼치기"}
+              </button>
             </div>
-          ))}
+          )}
+          {groups.map((g) => {
+            const open = openGroups.has(g.id);
+            const selInGroup = g.items.find((r) => r.id === selected);
+            return (
+              <div className={`rsv-group${open ? " open" : ""}`} key={g.id}>
+                <button type="button" className="rsv-group-head" onClick={() => toggleGroup(g.id)} aria-expanded={open}>
+                  <span className="rsv-caret" aria-hidden>▸</span>
+                  <span className="dot" style={{ background: g.color, width: 9, height: 9 }} />
+                  {g.name} <span className="kb-count">{g.items.length}</span>
+                  {!open && selInGroup && <span className="rsv-sel-tag">{selInGroup.name}</span>}
+                </button>
+                {open && (
+                  <div className="rsv-chips">
+                    {g.items.map((r) => (
+                      <button
+                        key={r.id}
+                        className={`chip chip-btn${selected === r.id ? " sel" : ""}`}
+                        onClick={() => setSelected(r.id)}
+                      >
+                        {r.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
           {/* 선택한 장비의 관리 팀·담당자 — 수령·반납 문의처 */}
           {(() => {
             const sel = resources.find((r) => r.id === selected);
