@@ -106,6 +106,15 @@ export const meUpdateSchema = z.object({
   newPassword: z.string().min(8, "새 비밀번호는 8자 이상").max(100).optional(),
   // 텔레그램 챗 ID — 숫자(그룹은 음수 허용), 빈 문자열 = 연동 해제
   telegramChatId: z.string().max(32).regex(/^-?\d*$/, "챗 ID는 숫자만 입력하세요").optional(),
+  // 텔레그램 알림 수신 설정 — 항목별 on/off (앱 내 알림은 항상 생성)
+  notifyPrefs: z
+    .object({
+      assign: z.boolean().optional(),
+      due: z.boolean().optional(),
+      directive: z.boolean().optional(),
+      equip: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 // 개인 캘린더 일정
@@ -127,6 +136,8 @@ export const teamSchema = z.object({
     .regex(/^[a-z0-9-]+$/, "slug는 영문 소문자·숫자·하이픈만"),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "색상 형식: #RRGGBB"),
   description: z.string().max(200).optional().default(""),
+  // 팀 텔레그램 그룹방 챗 ID (음수 허용, 빈 문자열 = 브리핑 끔)
+  telegramChatId: z.string().max(32).regex(/^-?\d*$/, "챗 ID는 숫자만 입력하세요").optional(),
 });
 
 const roleEnum = z.enum(["admin", "manager", "deputy", "secretary", "leader", "vice_leader", "member"]);

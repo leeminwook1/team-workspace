@@ -27,6 +27,13 @@ const UserSchema = new Schema(
     },
     // 텔레그램 알림 — 봇과 대화하는 챗 ID (빈 문자열 = 미연동)
     telegramChatId: { type: String, default: "" },
+    // 텔레그램 알림 수신 설정 — false인 항목은 텔레그램 발송 생략 (앱 내 알림은 항상 생성)
+    notifyPrefs: {
+      assign: { type: Boolean, default: true }, // 담당자 배정 (업무·행사)
+      due: { type: Boolean, default: true }, // 마감·지연 리마인더
+      directive: { type: Boolean, default: true }, // 지시(TODO)
+      equip: { type: Boolean, default: true }, // 장비 예약·반납
+    },
     // 텔레그램 연동 코드 — 설정에서 발급, 봇에게 /연동 <코드> 전송으로 챗 ID 자동 연결 (10분 유효)
     tgLinkCode: { type: String, default: "" },
     tgLinkCodeExp: { type: Date, default: null },

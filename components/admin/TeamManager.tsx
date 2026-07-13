@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { ColorPicker, PRESET_COLORS } from "@/components/admin/ColorPicker";
 
-type TeamRow = { id: string; name: string; slug: string; color: string; isActive: boolean };
+type TeamRow = { id: string; name: string; slug: string; color: string; isActive: boolean; telegramChatId?: string };
 
 export default function TeamManager({ initialTeams }: { initialTeams: TeamRow[] }) {
   const router = useRouter();
@@ -96,6 +96,7 @@ function EditModal({ team, onClose, onSaved }: { team: TeamRow; onClose: () => v
   const [name, setName] = useState(team.name);
   const [color, setColor] = useState(team.color);
   const [active, setActive] = useState(team.isActive);
+  const [tgChatId, setTgChatId] = useState(team.telegramChatId ?? "");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -104,7 +105,7 @@ function EditModal({ team, onClose, onSaved }: { team: TeamRow; onClose: () => v
     setBusy(true); setErr("");
     const res = await fetch(`/api/teams/${team.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, slug: team.slug, color, isActive: active }),
+      body: JSON.stringify({ name, slug: team.slug, color, isActive: active, telegramChatId: tgChatId.trim() }),
     });
     const data = await res.json();
     setBusy(false);
@@ -125,6 +126,19 @@ function EditModal({ team, onClose, onSaved }: { team: TeamRow; onClose: () => v
           <div className="field">
             <label>팀 색상</label>
             <ColorPicker value={color} onChange={setColor} />
+          </div>
+          <div className="field">
+            <label>텔레그램 그룹 챗 ID (선택)</label>
+            <input
+              value={tgChatId}
+              onChange={(e) => setTgChatId(e.target.value)}
+              placeholder="예: -1001234567890 (비우면 브리핑 끔)"
+              maxLength={32}
+            />
+            <p style={{ fontSize: 12, color: "var(--ink-faint)", margin: "6px 0 0", lineHeight: 1.5 }}>
+              봇을 팀 그룹방에 초대하고 그룹에서 <b>/챗아이디</b>를 보내면 ID를 알려줘요.
+              등록하면 <b>매일 아침 9시</b> 그 방으로 오늘 일정·장비 대여 브리핑이 갑니다.
+            </p>
           </div>
           <div className="field">
             <div className="switch-row">

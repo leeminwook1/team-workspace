@@ -26,6 +26,17 @@ export default function TelegramManager() {
   const [loaded, setLoaded] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [menuMsg, setMenuMsg] = useState("");
+
+  // 봇 명령 메뉴 등록 — 텔레그램 / 입력 시 자동완성 메뉴 표시
+  async function registerMenu() {
+    setBusy(true); setErr(""); setMenuMsg("");
+    const res = await fetch("/api/admin/telegram", { method: "POST" });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) { setErr(data.error ?? "등록 실패"); return; }
+    setMenuMsg(`✓ 명령 메뉴 ${data.registered}개 등록 완료 — 텔레그램에서 / 를 입력하면 메뉴가 떠요.`);
+  }
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/telegram");
@@ -66,11 +77,15 @@ export default function TelegramManager() {
       {/* 요약 */}
       <div className="tg-summary">
         <span className="tg-pct">{pct}%</span>
-        <div>
+        <div style={{ flex: 1 }}>
           <div className="tg-summary-line">활성 사용자 {rows.length}명 중 <b>{linked.length}명</b> 연동</div>
           <div className="tg-summary-sub">연동한 사용자는 알림을 텔레그램으로도 받고, 봇 명령(/일정·/대여 등)을 쓸 수 있어요.</div>
         </div>
+        <button className="btn btn-line btn-sm" disabled={busy} onClick={registerMenu} style={{ flex: "none" }}>
+          명령 메뉴 등록
+        </button>
       </div>
+      {menuMsg && <p className="ok-msg" style={{ marginTop: -8 }}>{menuMsg}</p>}
 
       <div className="admin-section-title">연동됨 {linked.length}명</div>
       <div className="admin-list">

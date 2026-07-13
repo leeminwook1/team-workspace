@@ -4,6 +4,33 @@ import "@/models/Team";
 import { requireActiveUser, json } from "@/lib/api";
 import { canManageTeams } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
+import { setBotCommands, telegramEnabled } from "@/lib/telegram";
+
+// 봇 명령 메뉴 — 텔레그램 규격상 영문 소문자만 등록 가능 (한글 명령은 그대로 동작)
+const BOT_COMMANDS = [
+  { command: "today", description: "오늘 일정" },
+  { command: "tomorrow", description: "내일 일정" },
+  { command: "week", description: "이번 주 일정" },
+  { command: "mytasks", description: "내 담당 업무" },
+  { command: "reservations", description: "장비 예약 현황" },
+  { command: "schedule", description: "일정 등록 — 제목 날짜 [시간]" },
+  { command: "book", description: "장비 예약 — 장비명 날짜 [시간]" },
+  { command: "link", description: "계정 연동 — 코드 6자리" },
+  { command: "chatid", description: "이 대화방 챗 ID 확인" },
+  { command: "help", description: "사용법 안내" },
+];
+
+// POST /api/admin/telegram — 봇 명령 메뉴 등록 (Admin). 텔레그램 / 입력 시 자동완성 메뉴에 표시.
+export async function POST() {
+  const { user, error } = await requireActiveUser();
+  if (error) return error;
+  if (!canManageTeams(user)) return json({ error: "권한이 없습니다." }, 403);
+  if (!telegramEnabled()) return json({ error: "서버에 봇 토큰(TELEGRAM_BOT_TOKEN)이 설정되지 않았습니다." }, 400);
+
+  const ok = await setBotCommands(BOT_COMMANDS);
+  if (!ok) return json({ error: "텔레그램 API 호출에 실패했습니다. 서버 로그를 확인하세요." }, 502);
+  return json({ registered: BOT_COMMANDS.length });
+}
 
 // GET /api/admin/telegram — 텔레그램 연동 현황 (Admin)
 export async function GET() {

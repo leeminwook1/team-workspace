@@ -4,10 +4,19 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { ModalClose } from "./ModalClose";
 
+type NotifyPrefs = { assign: boolean; due: boolean; directive: boolean; equip: boolean };
+const PREF_ITEMS: { key: keyof NotifyPrefs; label: string; desc: string }[] = [
+  { key: "assign", label: "담당 배정", desc: "업무·행사 담당자로 지정될 때" },
+  { key: "due", label: "마감 리마인더", desc: "오늘 마감·지연 업무 아침 알림" },
+  { key: "directive", label: "지시(TODO)", desc: "우리 팀에 지시가 내려올 때 (팀장·부팀장)" },
+  { key: "equip", label: "장비 예약·반납", desc: "장비 반납 처리·미반납 알림" },
+];
+
 export default function AccountSettings({
-  initialName, email, roleLabel, teamName, initialTelegramChatId,
+  initialName, email, roleLabel, teamName, initialTelegramChatId, initialNotifyPrefs,
 }: {
   initialName: string; email: string; roleLabel: string; teamName: string | null; initialTelegramChatId?: string;
+  initialNotifyPrefs?: NotifyPrefs;
 }) {
   const { update } = useSession();
   const [name, setName] = useState(initialName);
@@ -20,6 +29,9 @@ export default function AccountSettings({
   const [linkCode, setLinkCode] = useState<string | null>(null);
   const [codeBusy, setCodeBusy] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [prefs, setPrefs] = useState<NotifyPrefs>(
+    initialNotifyPrefs ?? { assign: true, due: true, directive: true, equip: true }
+  );
 
   async function issueLinkCode() {
     setCodeBusy(true);
@@ -37,7 +49,7 @@ export default function AccountSettings({
     setTgBusy(true);
     const res = await fetch("/api/me", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ telegramChatId: tgId.trim() }),
+      body: JSON.stringify({ telegramChatId: tgId.trim(), notifyPrefs: prefs }),
     });
     const data = await res.json();
     setTgBusy(false);
@@ -178,6 +190,27 @@ export default function AccountSettings({
               maxLength={32}
             />
           </div>
+          {/* 알림 수신 설정 — 연동된 경우에만 (텔레그램 발송만 제어, 앱 내 알림은 항상) */}
+          {tgId.trim() && (
+            <div className="tg-prefs">
+              <div className="tg-prefs-title">받을 알림 선택</div>
+              {PREF_ITEMS.map((it) => (
+                <div className="switch-row" key={it.key}>
+                  <div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ink-soft)" }}>{it.label}</div>
+                    <div style={{ fontSize: 12, color: "var(--ink-faint)" }}>{it.desc}</div>
+                  </div>
+                  <button
+                    type="button" role="switch" aria-checked={prefs[it.key]}
+                    className={`toggle${prefs[it.key] ? " on" : ""}`}
+                    onClick={() => setPrefs((p) => ({ ...p, [it.key]: !p[it.key] }))}
+                  >
+                    <span className="toggle-knob" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           {tgMsg && <p className={tgMsg.ok ? "ok-msg" : "err-msg"}>{tgMsg.text}</p>}
           <div className="modal-actions" style={{ marginTop: 16 }}>
             <button className="btn btn-primary btn-sm" disabled={tgBusy}>{tgBusy ? "저장 중…" : "저장"}</button>

@@ -23,6 +23,7 @@ export default async function AdminTeamsPage() {
         slug: t.slug,
         color: t.color,
         isActive: t.isActive,
+        telegramChatId: t.telegramChatId ?? "",
       }))}
     />
   );

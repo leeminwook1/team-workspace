@@ -7,6 +7,8 @@ const TeamSchema = new Schema(
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
     color: { type: String, required: true, default: "#3182f6" },
     description: { type: String, default: "" },
+    // 팀 텔레그램 그룹방 챗 ID — 등록하면 매일 아침 팀 브리핑 발송 (봇을 그룹에 초대 후 /챗아이디로 확인)
+    telegramChatId: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
   },

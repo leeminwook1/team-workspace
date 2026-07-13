@@ -5,11 +5,18 @@ import { Category } from "@/models/Category";
 import { Task } from "@/models/Task";
 import { Resource } from "@/models/Resource";
 import { Reservation } from "@/models/Reservation";
-import { canCreateTaskInAll, canReserve, visibleTeamIds, type SessionUser, type Role } from "./permissions";
-import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, postCreateGuard } from "./taskReservations";
+import {
+  canCreateTaskInAll, canReserve, visibleTeamIds, canChangeStatusAny, canDeleteTaskDoc, canMarkReturned,
+  type SessionUser, type Role,
+} from "./permissions";
+import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, postCreateGuard, cancelTaskReservations } from "./taskReservations";
 import { logActivity, reservationLabel } from "./activity";
 import { rateLimit } from "./rateLimit";
 import { notify } from "./notify";
+import { esc, answerCallback, editTelegramMessage, type TgButton } from "./telegram";
+
+// 명령 응답 — 문자열(플레인) 또는 서식·버튼 포함 객체
+export type TgReply = string | { text: string; html?: boolean; buttons?: TgButton[][] };
 
 // 텔레그램 인바운드 명령 v1 — /일정 /예약 /오늘 /내일 /예약현황 /연동 /도움말
 // 시간은 숫자 형식만 지원: 14:00-16:00 또는 14-16
@@ -19,30 +26,48 @@ const KST = 9 * 3600_000;
 const HELP = `📖 사용법
 
 /일정 제목 날짜 [시간] [옵션] [담당:이름] [장비:이름]
-  · 날짜: 7/20, 2026-07-20, 오늘, 내일, 7/20-7/22(기간)
+  · 날짜: 7/20, 오늘, 내일, 모레, 금요일, 다음주 화요일, 7/20-7/22(기간)
   · 시간: 14-16, 14:00-16:00, 14시-16시 (없으면 종일)
   · 옵션: @팀이름 #카테고리 !긴급 !높음 장소:내용
   · 담당: 장비: 는 맨 뒤에 — 쉼표로 여러 명·여러 개
-  예) /일정 노방활동 7/20 14-16 #촬영 담당:이민욱 장비:캐논 R6(7-1)
+  예) /일정 노방활동 금요일 14-16 #촬영 담당:이민욱 장비:캐논 R6(7-1)
 
 /예약 장비명[, 장비명2] 날짜 [시간]
   예) /예약 캐논 R6, 배터리(7-1) 내일 14-16
 
-/오늘 · /내일 — 일정 조회
+/오늘 · /내일 · /이번주 — 일정 조회
+/내일정 — 내가 담당인 업무
 /예약현황 [날짜] — 장비 예약 현황
-/연동 123456 — 계정 연결 (코드는 CHQ 설정에서 발급)`;
+/연동 123456 — 계정 연결 (코드는 CHQ 설정에서 발급)
+/챗아이디 — 이 대화방 챗 ID (팀 그룹방 브리핑 등록용)`;
 
 // ── 파싱 유틸 ──
 type DateRange = { start: { y: number; m: number; d: number }; end: { y: number; m: number; d: number } };
 
+const WEEKDAY_IDX: Record<string, number> = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
+
 function parseOneDate(s: string, now: Date): { y: number; m: number; d: number } | null {
   const kst = new Date(now.getTime() + KST);
-  if (s === "오늘") return { y: kst.getUTCFullYear(), m: kst.getUTCMonth() + 1, d: kst.getUTCDate() };
-  if (s === "내일") {
-    const t = new Date(kst.getTime() + 86_400_000);
-    return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
+  const fromKst = (t: Date) => ({ y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() });
+  const plusDays = (n: number) => fromKst(new Date(kst.getTime() + n * 86_400_000));
+
+  if (s === "오늘") return plusDays(0);
+  if (s === "내일") return plusDays(1);
+  if (s === "모레") return plusDays(2);
+
+  // 요일 — 다가오는 그 요일 (오늘이 그 요일이면 오늘), "다음주 X요일"은 다음 주(월요일 시작)의 그 요일
+  let m = s.match(/^(다음주)?([월화수목금토일])요일$/);
+  if (m) {
+    const target = WEEKDAY_IDX[m[2]];
+    const dow = kst.getUTCDay();
+    if (m[1]) {
+      const daysToNextMon = (8 - dow) % 7 || 7; // 다음 주 월요일까지
+      return plusDays(daysToNextMon + ((target + 6) % 7)); // 월=0 … 일=6
+    }
+    return plusDays((target - dow + 7) % 7);
   }
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (m) return { y: +m[1], m: +m[2], d: +m[3] };
   m = s.match(/^(\d{1,2})\/(\d{1,2})$/);
   if (m) return { y: kst.getUTCFullYear(), m: +m[1], d: +m[2] };
@@ -50,8 +75,8 @@ function parseOneDate(s: string, now: Date): { y: number; m: number; d: number }
 }
 
 function parseDateToken(s: string, now: Date): DateRange | null {
-  // 기간: 7/20-7/22 또는 2026-07-20-2026-07-22 (앞뒤 각각 파싱)
-  const rangeMatch = s.match(/^(.+?)-(\d{1,2}\/\d{1,2}|\d{4}-\d{1,2}-\d{1,2}|오늘|내일)$/);
+  // 기간: 7/20-7/22, 금요일-일요일 등 (앞뒤 각각 파싱)
+  const rangeMatch = s.match(/^(.+?)-(\d{1,2}\/\d{1,2}|\d{4}-\d{1,2}-\d{1,2}|오늘|내일|모레|(?:다음주)?[월화수목금토일]요일)$/);
   if (rangeMatch && !/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
     const a = parseOneDate(rangeMatch[1], now);
     const b = parseOneDate(rangeMatch[2], now);
@@ -142,35 +167,49 @@ function toSessionUser(u: any): SessionUser {
   return { id: String(u._id), name: u.name, role: (u.role ?? "member") as Role, teamId: u.teamId ? String(u.teamId) : null, status: u.status };
 }
 
-// ── 메인 진입점: 명령 처리 → 답장 텍스트 반환 ──
-export async function handleTelegramCommand(chatId: string, text: string): Promise<string> {
+// ── 메인 진입점: 명령 처리 → 답장 반환 ──
+// fromId: 보낸 사람의 개인 ID (그룹방에서도 개인 계정으로 식별). 생략 시 chatId 사용.
+export async function handleTelegramCommand(chatId: string, text: string, fromId?: string): Promise<TgReply> {
   await connectDB();
-  const trimmed = text.trim();
-  const [cmd, ...rest] = trimmed.split(/\s+/);
+  // "다음주 월요일"처럼 띄어 쓴 상대 날짜를 한 토큰으로 정규화
+  const trimmed = text.trim()
+    .replace(/다음\s?주\s+([월화수목금토일])요일/g, "다음주$1요일")
+    .replace(/이번\s?주\s+([월화수목금토일])요일/g, "$1요일");
+  const [cmdRaw, ...rest] = trimmed.split(/\s+/);
+  const cmd = cmdRaw.split("@")[0]; // 그룹방에서는 /명령@봇이름 형태로 옴
   const args = rest.join(" ");
 
-  // /연동 — 계정 연결 전에도 동작
-  if (cmd === "/연동" || cmd.startsWith("/link")) {
+  // 연동 없이 동작하는 명령
+  if (cmd === "/연동" || cmd === "/link") {
+    // 그룹방에서 연동하면 그룹 ID가 계정에 붙어 알림이 그룹으로 새므로 차단
+    if (fromId && fromId !== chatId) return "🔒 계정 연동은 봇과의 1:1 대화방에서 보내주세요.";
     return linkAccount(chatId, rest[0] ?? "");
   }
   if (cmd === "/start") {
     return "👋 CHQ 알림봇입니다.\n\nCHQ 설정(내 계정) → 텔레그램 알림에서 [연동 코드 발급] 후\n/연동 123456 형식으로 보내면 계정이 연결돼요.\n\n명령어 안내는 /도움말";
   }
   if (cmd === "/도움말" || cmd === "/help") return HELP;
+  if (cmd === "/챗아이디" || cmd === "/chatid") {
+    return `이 대화방의 챗 ID: ${chatId}\n\n팀 그룹방이라면 관리자가 [관리자 → 팀 관리]에서 이 ID를 등록하면 매일 아침 팀 브리핑이 와요.`;
+  }
 
-  // 이하 명령은 연동된 계정 필요 — 과거에 같은 챗이 여러 계정에 연동됐다면 가장 최근 계정 우선
-  const userDoc: any = await User.findOne({ telegramChatId: chatId, status: "active" }).sort({ updatedAt: -1 }).lean();
+  // 이하 명령은 연동된 계정 필요 — 그룹방에서는 보낸 사람(fromId) 기준.
+  // 과거에 같은 챗이 여러 계정에 연동됐다면 가장 최근 계정 우선.
+  const personalId = fromId ?? chatId;
+  const userDoc: any = await User.findOne({ telegramChatId: personalId, status: "active" }).sort({ updatedAt: -1 }).lean();
   if (!userDoc) {
-    return "❌ 아직 계정이 연결되지 않았어요.\nCHQ 설정 → 텔레그램 알림에서 [연동 코드 발급] 후 /연동 123456 을 보내주세요.";
+    return "❌ 아직 계정이 연결되지 않았어요.\nCHQ 설정 → 텔레그램 알림에서 [연동 코드 발급] 후 봇과의 1:1 대화방에서 /연동 123456 을 보내주세요.";
   }
   const user = toSessionUser(userDoc);
 
   try {
     switch (cmd) {
-      case "/일정": return await createTask(user, args);
-      case "/예약": return await createReservation(user, args);
+      case "/일정": case "/schedule": return await createTask(user, args);
+      case "/예약": case "/book": return await createReservation(user, args);
       case "/오늘": case "/today": return await listDay(user, 0);
       case "/내일": case "/tomorrow": return await listDay(user, 1);
+      case "/이번주": case "/week": return await listWeek(user);
+      case "/내일정": case "/mytasks": return await listMyTasks(user);
       case "/예약현황": case "/reservations": return await listReservations(rest[0] ?? "오늘");
       default:
         return `모르는 명령이에요: ${cmd}\n\n${HELP}`;
@@ -199,7 +238,7 @@ async function linkAccount(chatId: string, code: string): Promise<string> {
 }
 
 // ── /일정 ──
-async function createTask(user: SessionUser, args: string): Promise<string> {
+async function createTask(user: SessionUser, args: string): Promise<TgReply> {
   if (!args) {
     return `📝 이렇게 보내면 바로 등록돼요 (복사해서 수정):
 
@@ -311,14 +350,18 @@ async function createTask(user: SessionUser, args: string): Promise<string> {
     ? `${date.start.m}/${date.start.d}`
     : `${date.start.m}/${date.start.d}~${date.end.m}/${date.end.d}`;
   const timeStr = allDay ? "종일" : `${String(time!.sh).padStart(2, "0")}:${String(time!.sm).padStart(2, "0")}-${String(time!.eh).padStart(2, "0")}:${String(time!.em).padStart(2, "0")}`;
-  const extras = [catName && `#${catName}`, priority === "urgent" && "🔴긴급", priority === "high" && "🟠높음", location && `📍${location}`].filter(Boolean).join(" ");
-  const assigneeLine = assignees.length > 0 ? `\n👤 담당: ${assignees.map((a) => a.name).join(", ")}` : "";
-  const equipLine = equipment.length > 0 ? `\n📦 장비 예약: ${equipment.map((p) => p.name).join(", ")}` : "";
-  return `✅ 일정 등록: ${title} (${user.name})\n${when} ${timeStr} · ${teamLabel}${extras ? `\n${extras}` : ""}${assigneeLine}${equipLine}`;
+  const extras = [catName && `#${esc(catName)}`, priority === "urgent" && "🔴긴급", priority === "high" && "🟠높음", location && `📍${esc(location)}`].filter(Boolean).join(" ");
+  const assigneeLine = assignees.length > 0 ? `\n👤 담당: ${esc(assignees.map((a) => a.name).join(", "))}` : "";
+  const equipLine = equipment.length > 0 ? `\n📦 장비 예약: ${esc(equipment.map((p) => p.name).join(", "))}` : "";
+  return {
+    text: `✅ 일정 등록: <b>${esc(title)}</b> (${esc(user.name ?? "")})\n${when} ${timeStr} · ${esc(teamLabel)}${extras ? `\n${extras}` : ""}${assigneeLine}${equipLine}`,
+    html: true,
+    buttons: [[{ text: "↩ 방금 등록 취소", data: `undo:${task._id}` }]],
+  };
 }
 
 // ── /예약 ──
-async function createReservation(user: SessionUser, args: string): Promise<string> {
+async function createReservation(user: SessionUser, args: string): Promise<TgReply> {
   if (!args) return "사용법: /예약 장비명[, 장비명2] 날짜 [시간] [@팀]\n예) /예약 캐논 R6 내일 14-16";
   const now = new Date();
   let tokens = args.split(/\s+/);
@@ -364,7 +407,7 @@ async function createReservation(user: SessionUser, args: string): Promise<strin
   const conflicts = await findConflicts(picked.map((p) => p.id), { startAt, endAt });
   if (conflicts.length > 0) return `❌ ${conflictMessage(conflicts)}`;
 
-  const done: { id: string; name: string }[] = [];
+  const done: { id: string; name: string; rid: string }[] = [];
   const lost: string[] = [];
   for (const p of picked) {
     const r = await Reservation.create({
@@ -373,7 +416,7 @@ async function createReservation(user: SessionUser, args: string): Promise<strin
     });
     // 동시 요청 이중예약 방어
     if (await postCreateGuard(r)) { lost.push(p.name); continue; }
-    done.push(p);
+    done.push({ ...p, rid: String(r._id) });
     await logActivity({
       actorId: user.id, actorName: user.name ?? "", action: "create", targetType: "reservation",
       targetTitle: reservationLabel(p.name, startAt, endAt),
@@ -381,12 +424,17 @@ async function createReservation(user: SessionUser, args: string): Promise<strin
   }
   const when = `${date.start.m}/${date.start.d} ${fmtT(startAt)}~${fmtT(endAt)}`;
   if (done.length === 0) return `❌ 같은 시간에 다른 예약이 동시에 접수됐어요. 예약현황 확인 후 다시 시도해주세요.`;
-  const lostLine = lost.length > 0 ? `\n⚠ 동시 접수로 실패: ${lost.join(", ")}` : "";
-  return `✅ 예약 완료 (${done.length}건)\n${done.map((p) => `· ${p.name}`).join("\n")}\n${when}${lostLine}`;
+  const lostLine = lost.length > 0 ? `\n⚠ 동시 접수로 실패: ${esc(lost.join(", "))}` : "";
+  return {
+    text: `✅ <b>예약 완료</b> (${done.length}건)\n${done.map((p) => `· ${esc(p.name)}`).join("\n")}\n${when}${lostLine}`,
+    html: true,
+    // 장비별 취소 버튼 — 누르면 그 예약만 취소
+    buttons: done.map((p) => [{ text: `↩ ${p.name} 취소`, data: `delres:${p.rid}` }]),
+  };
 }
 
 // ── /오늘 /내일 ──
-async function listDay(user: SessionUser, offset: number): Promise<string> {
+async function listDay(user: SessionUser, offset: number): Promise<TgReply> {
   const kst = new Date(Date.now() + KST);
   const day = { y: kst.getUTCFullYear(), m: kst.getUTCMonth() + 1, d: kst.getUTCDate() + offset };
   const start = kstDate(day, 0, 0);
@@ -406,13 +454,187 @@ async function listDay(user: SessionUser, offset: number): Promise<string> {
     const time = t.allDay ? "종일" : `${fmtT(t.startDate)}`;
     const team = (t.teamIds ?? []).map((tm: any) => tm.name).join("·");
     const done = t.status === "done" ? " ✔" : "";
-    return `· ${time} ${t.title}${team ? ` (${team})` : ""}${done}`;
+    return `· ${time} ${esc(t.title)}${team ? ` (${esc(team)})` : ""}${done}`;
   });
-  return `📅 ${label} 일정 ${tasks.length}건\n${lines.join("\n")}`;
+  return { text: `📅 <b>${label} 일정 ${tasks.length}건</b>\n${lines.join("\n")}`, html: true };
+}
+
+// ── /이번주 — 월~일 요일별 그룹 ──
+const DAY_LABEL = ["일", "월", "화", "수", "목", "금", "토"];
+async function listWeek(user: SessionUser): Promise<TgReply> {
+  const kst = new Date(Date.now() + KST);
+  const today = { y: kst.getUTCFullYear(), m: kst.getUTCMonth() + 1, d: kst.getUTCDate() };
+  const monOff = -((kst.getUTCDay() + 6) % 7); // 이번 주 월요일까지의 오프셋
+  const start = kstDate({ ...today, d: today.d + monOff }, 0, 0);
+  const end = new Date(start.getTime() + 7 * 86_400_000);
+
+  const q: any = { startDate: { $lt: end }, endDate: { $gt: start } };
+  const scope = visibleTeamIds(user);
+  if (scope !== "all") {
+    if (scope.length === 0) return "소속 팀이 없어 조회할 일정이 없어요.";
+    q.teamIds = { $in: scope };
+  }
+  const tasks: any[] = await Task.find(q).populate("teamIds", "name").sort({ allDay: -1, startDate: 1 }).limit(40).lean();
+  if (tasks.length === 0) return "이번 주 등록된 일정이 없어요. 🎉";
+
+  const fmtD = (d: Date) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+  const parts: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const dayStart = new Date(start.getTime() + i * 86_400_000);
+    const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+    const dayTasks = tasks.filter((t) => new Date(t.startDate) < dayEnd && new Date(t.endDate) > dayStart);
+    if (dayTasks.length === 0) continue;
+    const dKst = new Date(dayStart.getTime() + KST);
+    const lines = dayTasks.map((t) => {
+      const time = t.allDay ? "종일" : fmtT(t.startDate);
+      const team = (t.teamIds ?? []).map((tm: any) => tm.name).join("·");
+      return `· ${time} ${esc(t.title)}${team ? ` (${esc(team)})` : ""}${t.status === "done" ? " ✔" : ""}`;
+    });
+    parts.push(`<b>${DAY_LABEL[dKst.getUTCDay()]} ${fmtD(dKst)}</b>\n${lines.join("\n")}`);
+  }
+  const startKst = new Date(start.getTime() + KST);
+  const endKst = new Date(startKst.getTime() + 6 * 86_400_000);
+  return {
+    text: `📅 <b>이번 주 일정</b> (${fmtD(startKst)}~${fmtD(endKst)}) ${tasks.length}건\n\n${parts.join("\n\n")}`,
+    html: true,
+  };
+}
+
+// ── /내일정 — 내가 담당인 미완료 업무 (마감 임박순, 지연 표시) ──
+async function listMyTasks(user: SessionUser): Promise<TgReply> {
+  const tasks: any[] = await Task.find({ assignees: user.id, status: { $in: ["todo", "in_progress"] } })
+    .populate("teamIds", "name")
+    .sort({ endDate: 1 })
+    .limit(15)
+    .lean();
+  if (tasks.length === 0) return "담당 중인 미완료 업무가 없어요. 🎉";
+
+  const now = Date.now();
+  const lines = tasks.map((t) => {
+    const end = new Date(t.endDate);
+    // allDay는 UTC 자정으로 저장 → 그날 KST 24시(= UTC+15h)를 지나야 지연
+    const overdue = now > end.getTime() + (t.allDay ? 15 * 3600_000 : 0);
+    const d = t.allDay ? end : new Date(end.getTime() + KST);
+    const dueStr = `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+    const team = (t.teamIds ?? []).map((tm: any) => tm.name).join("·");
+    return `· ${overdue ? "⚠ " : ""}${dueStr}까지 ${esc(t.title)}${team ? ` (${esc(team)})` : ""}`;
+  });
+  return { text: `👤 <b>내 담당 업무 ${tasks.length}건</b>\n${lines.join("\n")}`, html: true };
+}
+
+// ── 인라인 버튼 콜백 처리 ──
+// data 형식 — undo:<taskId> 방금 등록 취소 / done:<taskId> 업무 완료 /
+//            delres:<rid> 예약 취소 / ret:<rid> 반납 처리
+export async function handleTelegramCallback(p: {
+  fromId: string; // 누른 사람의 개인 텔레그램 ID (그룹방에서도 개인 식별)
+  chatId: string;
+  messageId: number;
+  messageText: string; // 원본 메시지 (처리 결과를 덧붙여 수정)
+  data: string;
+  callbackId: string;
+}): Promise<void> {
+  await connectDB();
+  const [action, id] = p.data.split(":");
+  // 처리 결과를 원본 메시지에 덧붙이고 버튼 제거 (수정된 메시지는 플레인 텍스트)
+  const finish = async (toast: string, suffix?: string) => {
+    await answerCallback(p.callbackId, toast);
+    if (suffix) await editTelegramMessage(p.chatId, p.messageId, `${p.messageText}\n\n${suffix}`);
+  };
+
+  const userDoc: any = await User.findOne({ telegramChatId: p.fromId, status: "active" }).sort({ updatedAt: -1 }).lean();
+  if (!userDoc) { await answerCallback(p.callbackId, "계정 연동이 필요해요. 설정에서 연동 후 이용해주세요."); return; }
+  const user = toSessionUser(userDoc);
+
+  try {
+    if (action === "undo") {
+      const task: any = await Task.findById(id);
+      if (!task) { await finish("이미 삭제된 일정이에요.", "↩ 이미 취소된 일정입니다."); return; }
+      const teamIds = (task.teamIds ?? []).map(String);
+      if (!canDeleteTaskDoc(user, teamIds, task.createdBy ? String(task.createdBy) : null)) {
+        await answerCallback(p.callbackId, "취소 권한이 없어요."); return;
+      }
+      await cancelTaskReservations([task._id]);
+      await Task.deleteOne({ _id: task._id });
+      await logActivity({ actorId: user.id, actorName: user.name ?? "", action: "delete", targetTitle: `${task.title} (텔레그램 등록 취소)` });
+      await finish("등록을 취소했어요.", `↩ 등록이 취소되었습니다. (${user.name ?? ""})`);
+      return;
+    }
+
+    if (action === "done") {
+      const task: any = await Task.findById(id);
+      if (!task) { await finish("이미 삭제된 업무예요.", "⚠ 삭제된 업무입니다."); return; }
+      if (task.status === "done") { await answerCallback(p.callbackId, "이미 완료된 업무예요."); return; }
+      const teamIds = (task.teamIds ?? []).map(String);
+      const assignees = (task.assignees ?? []).map(String);
+      if (!canChangeStatusAny(user, teamIds, assignees)) {
+        await answerCallback(p.callbackId, "완료 처리 권한이 없어요."); return;
+      }
+      task.status = "done";
+      await task.save();
+      await logActivity({ actorId: user.id, actorName: user.name ?? "", action: "status", targetTitle: task.title, meta: { status: "done", detail: "텔레그램에서 완료" } });
+      await finish("완료 처리했어요! 👏", `✅ 완료 처리됨 — ${user.name ?? ""}`);
+      return;
+    }
+
+    if (action === "delres") {
+      const r: any = await Reservation.findById(id);
+      if (!r || r.status !== "booked") { await finish("이미 처리된 예약이에요.", "↩ 이미 취소·처리된 예약입니다."); return; }
+      if (String(r.reservedBy) !== user.id && user.role !== "admin") {
+        await answerCallback(p.callbackId, "본인 예약만 취소할 수 있어요."); return;
+      }
+      r.status = "cancelled";
+      await r.save();
+      const res: any = await Resource.findById(r.resourceId).select("name").lean();
+      await logActivity({
+        actorId: user.id, actorName: user.name ?? "", action: "delete", targetType: "reservation",
+        targetTitle: reservationLabel(res?.name ?? "자원", r.startAt, r.endAt), meta: { detail: "예약 취소 (텔레그램)" },
+      });
+      await finish("예약을 취소했어요.", `↩ ${res?.name ?? "장비"} 예약이 취소되었습니다. (${user.name ?? ""})`);
+      return;
+    }
+
+    if (action === "ret") {
+      const r: any = await Reservation.findById(id);
+      if (!r) { await answerCallback(p.callbackId, "예약을 찾을 수 없어요."); return; }
+      if (r.status === "returned") { await answerCallback(p.callbackId, "이미 반납 처리된 예약이에요."); return; }
+      if (r.status !== "booked") { await answerCallback(p.callbackId, "취소된 예약은 반납할 수 없어요."); return; }
+      const res: any = await Resource.findById(r.resourceId).select("name managerId").lean();
+      if (!canMarkReturned(user, String(r.reservedBy), res?.managerId ? String(res.managerId) : null)) {
+        await answerCallback(p.callbackId, "반납 처리 권한이 없어요. (예약자·관리 담당자·과장단)"); return;
+      }
+      const now = new Date();
+      const late = now.getTime() > new Date(r.endAt).getTime() + 10 * 60_000;
+      r.status = "returned";
+      r.returnedAt = now;
+      r.returnedBy = user.id;
+      await r.save();
+      const label = reservationLabel(res?.name ?? "자원", r.startAt, r.endAt);
+      await logActivity({
+        actorId: user.id, actorName: user.name ?? "", action: "status", targetType: "reservation",
+        targetTitle: label, meta: { detail: late ? "지연 반납 (텔레그램)" : "반납 완료 (텔레그램)" },
+      });
+      // 웹 반납과 동일 — 예약자·관리 담당자에게 알림 (처리한 본인 제외)
+      const recipients = [String(r.reservedBy), res?.managerId ? String(res.managerId) : ""]
+        .filter((uid) => uid && uid !== user.id);
+      await notify(recipients, {
+        type: "reservation",
+        title: late ? "⏰ 장비가 지연 반납되었습니다" : "✅ 장비가 반납되었습니다",
+        body: `${label} — ${user.name ?? ""} 님이 반납 처리`,
+        link: "/resources",
+      });
+      await finish("반납 처리했어요!", `✅ 반납 처리됨 — ${user.name ?? ""}${late ? " (지연)" : ""}`);
+      return;
+    }
+
+    await answerCallback(p.callbackId, "알 수 없는 동작이에요.");
+  } catch (e) {
+    console.error("[telegram] 콜백 처리 오류:", e);
+    await answerCallback(p.callbackId, "처리 중 오류가 발생했어요.");
+  }
 }
 
 // ── /예약현황 ──
-async function listReservations(dateArg: string): Promise<string> {
+async function listReservations(dateArg: string): Promise<TgReply> {
   const d = parseOneDate(dateArg, new Date());
   if (!d) return "사용법: /예약현황 7/20 (생략하면 오늘)";
   const start = kstDate(d, 0, 0);
@@ -422,7 +644,7 @@ async function listReservations(dateArg: string): Promise<string> {
     .sort({ startAt: 1 }).limit(20).lean();
   if (list.length === 0) return `${d.m}/${d.d} 예약이 없어요.`;
   const lines = list.map((r) =>
-    `· ${r.resourceId?.name ?? "?"} ${fmtT(r.startAt)}~${fmtT(r.endAt)} (${r.teamId?.name ?? "?"} ${r.reservedBy?.name ?? ""})`
+    `· ${esc(r.resourceId?.name ?? "?")} ${fmtT(r.startAt)}~${fmtT(r.endAt)} (${esc(r.teamId?.name ?? "?")} ${esc(r.reservedBy?.name ?? "")})`
   );
-  return `📦 ${d.m}/${d.d} 장비 예약 ${list.length}건\n${lines.join("\n")}`;
+  return { text: `📦 <b>${d.m}/${d.d} 장비 예약 ${list.length}건</b>\n${lines.join("\n")}`, html: true };
 }
