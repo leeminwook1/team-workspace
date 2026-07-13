@@ -1,5 +1,6 @@
 import { connectDB } from "./mongodb";
 import { ActivityLog } from "@/models/ActivityLog";
+import { touchChanged } from "./changes";
 
 type Action = "create" | "update" | "delete" | "status" | "login" | "approve";
 
@@ -25,6 +26,8 @@ export async function logActivity(args: {
   } catch (e) {
     console.error("[activity] 기록 실패:", e);
   }
+  // 자동 반영용 변경 신호 — 활동 로그를 남기는 모든 변경을 한 곳에서 커버
+  await touchChanged(args.targetType ?? "task");
 }
 
 // 예약 로그 제목: "카메라 1호 · 7. 15. 10:00~12:00" (KST 기준)

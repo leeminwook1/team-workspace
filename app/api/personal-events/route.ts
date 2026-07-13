@@ -4,6 +4,7 @@ import { User } from "@/models/User";
 import { requireActiveUser, json } from "@/lib/api";
 import { canViewPersonalCalendar } from "@/lib/permissions";
 import { personalEventSchema } from "@/lib/validations";
+import { touchChanged } from "@/lib/changes";
 
 function serialize(e: any) {
   return {
@@ -63,5 +64,6 @@ export async function POST(req: Request) {
 
   await connectDB();
   const e = await PersonalEvent.create({ ...d, userId: user.id, startDate, endDate });
+  await touchChanged("personal");
   return json({ id: String(e._id) }, 201);
 }

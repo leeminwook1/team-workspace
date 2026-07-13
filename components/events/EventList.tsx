@@ -59,7 +59,7 @@ export default function EventList({ teams, canManage }: { teams: Team[]; canMana
     }
   }, []);
   useEffect(() => { load(); }, [load]);
-  useAutoRefresh(load); // 다른 사람 변경 자동 반영
+  useAutoRefresh(load, ["event"]); // 다른 사람 변경 자동 반영
 
   return (
     <div className="events">

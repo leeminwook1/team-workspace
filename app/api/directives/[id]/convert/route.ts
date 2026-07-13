@@ -5,6 +5,7 @@ import { requireActiveUser, json } from "@/lib/api";
 import { canManageDirective } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
+import { touchChanged } from "@/lib/changes";
 
 // POST /api/directives/:id/convert — TODO(또는 분배 항목)를 달력 일정으로 등록
 // body: { assignmentId?: string } — 있으면 해당 팀원 담당 일정, 없으면 TODO 전체를 팀 일정으로
@@ -70,6 +71,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
 
   await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetTitle: task.title });
+  await touchChanged("directive"); // '일정 등록됨' 표시도 즉시 반영
 
   // 담당 팀원에게 알림 (등록한 본인 제외)
   await notify(assignees.filter((a) => a !== user.id), {

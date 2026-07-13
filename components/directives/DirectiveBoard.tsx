@@ -80,7 +80,7 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
     }
   }, []);
   useEffect(() => { load(); }, [load]);
-  useAutoRefresh(load); // 새 TODO·상태 변경 자동 반영
+  useAutoRefresh(load, ["directive"]); // 새 TODO·상태 변경 자동 반영
 
   const canManage = (d: Directive) =>
     user?.role === "admin" || (user?.role === "leader" && !!d.team && user?.teamId === d.team.id);

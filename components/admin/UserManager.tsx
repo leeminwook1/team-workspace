@@ -56,7 +56,7 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
     setLoaded(true);
   }, []);
   useEffect(() => { load(); }, [load]);
-  useAutoRefresh(load); // 자동 반영
+  useAutoRefresh(load, ["user"]); // 자동 반영
 
   async function remove(u: UserRow) {
     const ok = await confirm({

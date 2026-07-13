@@ -125,7 +125,7 @@ export default function ReservationBoard({
   useAutoRefresh(() => {
     load(selected);
     if (view === "timeline" && weekRange) fetchWeek(weekRange.from, weekRange.to);
-  });
+  }, ["reservation"]);
 
   async function reserve(e: React.FormEvent) {
     e.preventDefault();

@@ -4,6 +4,7 @@ import { requireActiveUser, json } from "@/lib/api";
 import { canManageDirective, canEditDirective } from "@/lib/permissions";
 import { directiveUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
+import { touchChanged } from "@/lib/changes";
 
 const MANAGE_KEYS = ["status", "assignments"]; // 팀장 권한
 const EDIT_KEYS = ["title", "body", "dueDate", "priority"]; // 발신자 권한
@@ -55,6 +56,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   await dir.save();
+  await touchChanged("directive"); // 상태·분배 변경은 로그를 안 남기므로 직접 신호
   return json({ id: String(dir._id) });
 }
 

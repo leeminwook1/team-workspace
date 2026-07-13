@@ -151,7 +151,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   const refetch = useCallback(() => {
     if (range) fetchTasks(range.from, range.to);
   }, [range, fetchTasks]);
-  useAutoRefresh(refetch); // 다른 사람이 등록·수정해도 새로고침 없이 반영
+  useAutoRefresh(refetch, ["task"]); // 다른 사람이 등록·수정해도 새로고침 없이 반영
 
   // 필터 적용된 일정 — FullCalendar 이벤트와 모바일 월간 그리드가 공유
   const filteredTasks = useMemo(

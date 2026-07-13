@@ -50,7 +50,7 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
   const refetch = useCallback(() => {
     if (range) fetchEvents(range.from, range.to, target);
   }, [range, target, fetchEvents]);
-  useAutoRefresh(refetch); // 자동 반영
+  useAutoRefresh(refetch, ["personal"]); // 자동 반영
 
   function changeTarget(id: string) {
     setTarget(id);

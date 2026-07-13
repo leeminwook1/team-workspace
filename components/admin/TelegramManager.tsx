@@ -33,7 +33,7 @@ export default function TelegramManager() {
     setLoaded(true);
   }, []);
   useEffect(() => { load(); }, [load]);
-  useAutoRefresh(load); // 자동 반영
+  useAutoRefresh(load, ["user"]); // 자동 반영
 
   async function unlink(u: Row) {
     const ok = await confirm({

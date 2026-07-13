@@ -94,7 +94,7 @@ export default function TeamBoard({
   // 자동 반영 — 개인일정 오버레이 갱신 (통계 카드는 서버 컴포넌트라 AutoRefresh가 담당)
   useAutoRefresh(() => {
     if (lastRange.current) fetchOverlay(lastRange.current.from, lastRange.current.to);
-  });
+  }, ["personal"]);
 
   const api = () => calRef.current?.getApi();
   const monthLabel = curStart ? `${curStart.getFullYear()}년 ${curStart.getMonth() + 1}월` : "";

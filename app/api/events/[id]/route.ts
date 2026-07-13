@@ -8,6 +8,7 @@ import { canManageEvents, canDeleteEvent } from "@/lib/permissions";
 import { eventUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
+import { touchChanged } from "@/lib/changes";
 
 function serializeFull(e: any) {
   return {
@@ -129,6 +130,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const itemsOnly = keys.length === 1 && keys[0] === "items";
   if (!itemsOnly) {
     await logActivity({ actorId: user.id, actorName: user.name, action: "update", targetType: "event", targetTitle: ev.title });
+  } else {
+    await touchChanged("event"); // 투두 이동도 다른 사람 화면에 즉시 반영
   }
   return json({ id: String(ev._id) });
 }
