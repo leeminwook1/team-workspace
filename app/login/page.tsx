@@ -43,16 +43,17 @@ export default function LoginPage() {
         <div className="brand">
           <span className="glyph">T</span>
           <span className="word">Team<b>Cal</b></span>
+          <span className="brand-tag">문화과</span>
         </div>
         <div>
           <h1>
-            여러 팀의 일정을
+            문화과의 모든 일정,
             <br />
             <em>하나의 달력</em>에서.
           </h1>
           <p>
-            사진·영상·디자인부터 공연·방송·음향까지 — 팀별로 색으로 구분해
-            한눈에 보고, 날짜를 눌러 바로 업무를 등록하세요.
+            사진·영상·디자인부터 공연·방송·음향까지 — 문화과 모든 팀의
+            일정을 색으로 구분해 한눈에 보고, 날짜를 눌러 바로 등록하세요.
           </p>
           <div className="team-legend">
             {TEAM_LEGEND.map((t) => (
@@ -63,13 +64,13 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
-        <div className="hero-foot">가입 신청 후 관리자 승인을 거쳐 이용할 수 있어요.</div>
+        <div className="hero-foot">문화과 구성원 전용 — 가입 신청 후 승인을 거쳐 이용할 수 있어요.</div>
       </div>
 
       <div className="login-form-panel">
         <div className="card auth-card">
           <h1>다시 오셨네요</h1>
-          <p className="sub">계정으로 로그인해 팀 일정을 확인하세요.</p>
+          <p className="sub">로그인하고 문화과 일정을 확인하세요.</p>
           <form onSubmit={onSubmit}>
             <div className="field">
               <label htmlFor="email">이메일</label>

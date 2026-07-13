@@ -58,7 +58,7 @@ export default function RegisterPage() {
           <div className="icon-badge ok"><Icon name="check" size={30} strokeWidth={2.4} /></div>
           <h1>가입 신청 완료</h1>
           <p className="sub">
-            선택하신 팀·역할로 관리자가 승인하면
+            선택하신 팀·역할로 문화과 관리자가 승인하면
             <br />
             로그인 후 이용할 수 있습니다.
           </p>
@@ -74,9 +74,10 @@ export default function RegisterPage() {
         <div className="brand" style={{ marginBottom: 22 }}>
           <span className="glyph">T</span>
           <span className="word">Team<b>Cal</b></span>
+          <span className="brand-tag">문화과</span>
         </div>
         <h1>가입 신청</h1>
-        <p className="sub">신청 후 관리자 승인을 거쳐 이용할 수 있어요.</p>
+        <p className="sub">문화과 구성원이라면 누구나 — 승인 후 이용할 수 있어요.</p>
         <form onSubmit={onSubmit}>
           <div className="field">
             <label htmlFor="name">이름</label>

@@ -364,6 +364,14 @@ a { color: inherit; text-decoration: none; }
 .rsv-st-returned { background: color-mix(in srgb, var(--st-done) 12%, transparent); color: var(--st-done); }
 .rsv-row-done td { color: var(--ink-faint); }
 
+/* 브랜드 옆 "문화과" 태그 — 공간 좁은 앱 내부(사이드바·모바일 상단)에선 숨김 */
+.brand-tag {
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.02em;
+  color: var(--primary); background: var(--accent-soft);
+  padding: 2px 7px; border-radius: 999px; align-self: center; flex: none;
+}
+.side .brand-tag, .topbar-m .brand-tag { display: none; }
+
 /* ── 사용자 관리 검색·필터 툴바 ── */
 .um-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
 .um-search {
@@ -1361,25 +1369,28 @@ a { color: inherit; text-decoration: none; }
   display: inline-grid; place-items: center; width: 26px; height: 26px; margin: 4px 0 3px;
   padding: 0; border-radius: 50%; background: var(--primary); color: #fff !important; font-weight: 800;
 }
-/* 이벤트 칩 → 투명 배경 (도트+텍스트가 대신함) */
+/* 이벤트 껍데기 → 투명 (색은 .ev1c 칩이 담당) */
 .fc .fc-dayGridMonth-view .fc-daygrid-event {
   background: transparent !important; border: 0 !important; box-shadow: none !important;
-  border-radius: 7px; transition: background 0.12s;
+  border-radius: 7px;
 }
-/* 호버: 연한 배경 + 글자 강조 — 클릭 가능한 일정임을 표시 */
-.fc .fc-dayGridMonth-view .fc-daygrid-event:hover { background: var(--paper) !important; }
-.fc .fc-dayGridMonth-view .fc-daygrid-event:hover .ev1c-t { color: var(--ink); font-weight: 700; }
-.ev1c { display: flex; align-items: center; gap: 5px; min-width: 0; padding: 1px 4px; }
-.ev1c-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+/* 호버: 칩 살짝 들어올리기 — 클릭 가능한 일정임을 표시 */
+.fc .fc-dayGridMonth-view .fc-daygrid-event:hover .ev1c { filter: brightness(1.06); transform: translateY(-1px); }
+.ev1c {
+  display: flex; align-items: center; gap: 5px; min-width: 0; width: 100%;
+  padding: 2px 6px 2px 5px; border-radius: 6px;
+  transition: filter 0.12s, transform 0.12s;
+}
 .ev1c-t {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 11.5px; font-weight: 600; color: var(--ink-soft);
+  font-size: 11.5px; font-weight: 700;
 }
 .ev1c-urgent {
   flex: none; font-size: 9.5px; font-weight: 700; color: var(--danger);
   background: var(--danger-soft); padding: 1px 4px; border-radius: 4px;
 }
-.fc .fc-dayGridMonth-view .ev-done .ev1c-t { text-decoration: line-through; color: var(--ink-faint); }
+.fc .fc-dayGridMonth-view .ev-done .ev1c { opacity: 0.55; }
+.fc .fc-dayGridMonth-view .ev-done .ev1c-t { text-decoration: line-through; }
 /* 주말 색상 (일=빨강, 토=파랑) */
 .fc .fc-day-sun .fc-daygrid-day-number, .fc .fc-col-header-cell.fc-day-sun .fc-col-header-cell-cushion { color: #e5484d; }
 .fc .fc-day-sat .fc-daygrid-day-number, .fc .fc-col-header-cell.fc-day-sat .fc-col-header-cell-cushion { color: #4c8dff; }

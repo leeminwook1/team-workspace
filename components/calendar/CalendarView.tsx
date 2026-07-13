@@ -418,13 +418,19 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           eventResize={onEventMove}
           events={events}
           eventContent={(arg) => {
-            // 월간 뷰: 도트 + 제목 (1c) — 나머지 뷰는 기본 렌더링(true 반환)
+            // 월간 뷰: 팀색 칩(틴트 배경 + 왼쪽 컬러바) — 나머지 뷰는 기본 렌더링(true 반환)
             if (arg.view.type !== "dayGridMonth") return true;
             const p = arg.event.extendedProps as { urgent?: boolean; done?: boolean };
+            const color = arg.event.borderColor;
             return (
-              <span className="ev1c">
-                <i className="ev1c-dot" style={{ background: arg.event.borderColor }} />
-                <span className="ev1c-t">{arg.event.title}</span>
+              <span
+                className="ev1c"
+                style={{
+                  background: `color-mix(in srgb, ${color} 13%, transparent)`,
+                  borderLeft: `3px solid ${color}`,
+                }}
+              >
+                <span className="ev1c-t" style={{ color }}>{arg.event.title}</span>
                 {p.urgent && !p.done && <b className="ev1c-urgent">긴급</b>}
               </span>
             );

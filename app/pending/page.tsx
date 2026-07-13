@@ -20,7 +20,7 @@ export default async function PendingPage() {
         <p className="sub">
           {session.user.name}님, 가입 신청이 접수되었습니다.
           <br />
-          관리자가 팀과 역할을 배정해 승인하면 이용할 수 있어요.
+          문화과 관리자가 팀과 역할을 확인해 승인하면 이용할 수 있어요.
           <br />
           <span style={{ fontSize: 13, color: "var(--ink-faint)" }}>
             (승인 후 이 페이지를 새로고침하면 자동으로 이동합니다)

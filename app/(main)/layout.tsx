@@ -60,6 +60,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           <Link href="/home" className="brand" aria-label="홈으로">
             <span className="glyph">T</span>
             <span className="word">Team<b>Cal</b></span>
+            <span className="brand-tag">문화과</span>
           </Link>
           <div className="side-brand-actions">
             <ThemeToggle />
@@ -87,6 +88,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         <Link href="/home" className="brand" aria-label="홈으로">
           <span className="glyph">T</span>
           <span className="word">Team<b>Cal</b></span>
+          <span className="brand-tag">문화과</span>
         </Link>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <GlobalSearch compact />
