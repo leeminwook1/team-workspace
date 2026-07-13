@@ -36,7 +36,7 @@ export default async function ResourcesPage() {
             ? { id: String(r.categoryId._id ?? r.categoryId), name: r.categoryId.name, color: r.categoryId.color || "#8b95a1", order: r.categoryId.order ?? 0 }
             : null,
           ownerTeam: r.ownerTeamId?.name ? { name: r.ownerTeamId.name, color: r.ownerTeamId.color } : null,
-          manager: r.managerId?.name ? { name: r.managerId.name } : null,
+          manager: r.managerId?.name ? { id: String(r.managerId._id), name: r.managerId.name } : null,
         }))}
         teams={teams.map((t: any) => ({ id: String(t._id), name: t.name, color: t.color }))}
       />

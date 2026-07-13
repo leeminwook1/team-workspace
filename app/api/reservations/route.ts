@@ -20,7 +20,7 @@ export async function GET(req: Request) {
   const to = url.searchParams.get("to");
 
   await connectDB();
-  const q: any = { status: "booked" };
+  const q: any = { status: { $in: ["booked", "returned"] } }; // 반납 완료도 이력으로 표시
   if (resource) q.resourceId = resource;
   if (from && to) {
     q.startAt = { $lt: new Date(to) };
@@ -31,6 +31,7 @@ export async function GET(req: Request) {
     .populate("resourceId", "name")
     .populate("reservedBy", "name")
     .populate("teamId", "name color")
+    .populate("returnedBy", "name")
     .sort({ startAt: 1 })
     .lean();
 
@@ -43,6 +44,9 @@ export async function GET(req: Request) {
       startAt: r.startAt,
       endAt: r.endAt,
       note: r.note,
+      status: r.status,
+      returnedAt: r.returnedAt ?? null,
+      returnedByName: r.returnedBy?.name ?? null,
     })),
   });
 }

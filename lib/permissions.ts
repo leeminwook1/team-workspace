@@ -134,6 +134,13 @@ export function canManageTeams(u: SessionUser) {
 export function canReserve(u: SessionUser, teamId: string) {
   return canCreateTask(u, teamId);
 }
+// 장비 반납 처리 — 예약자 본인, admin·과장·부과장, 또는 그 장비의 관리 담당자
+export function canMarkReturned(u: SessionUser, reservedById: string, resourceManagerId?: string | null) {
+  if (!isActive(u)) return false;
+  if (APPROVERS.includes(u.role)) return true;
+  if (String(reservedById) === String(u.id)) return true;
+  return resourceManagerId != null && String(resourceManagerId) === String(u.id);
+}
 
 // ── 다중 팀 업무(협업) 기준 헬퍼 ──
 export function canCreateTaskInAll(u: SessionUser, teamIds: string[]) {

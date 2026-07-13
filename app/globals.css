@@ -353,6 +353,16 @@ a { color: inherit; text-decoration: none; }
 }
 .rsv-owner b { color: var(--ink-soft); font-weight: 700; }
 .rsv-owner .dot { width: 7px; height: 7px; }
+/* 예약 상태 뱃지 — 예정 / 사용 중 / 미반납(지연) / 반납 완료 */
+.rsv-st {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+}
+.rsv-st-upcoming { background: color-mix(in srgb, var(--ink-faint) 12%, transparent); color: var(--ink-soft); }
+.rsv-st-inuse { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); }
+.rsv-st-overdue { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+.rsv-st-returned { background: color-mix(in srgb, var(--st-done) 12%, transparent); color: var(--st-done); }
+.rsv-row-done td { color: var(--ink-faint); }
 
 /* ── 행사 관리 ── */
 /* 행사 목록 (카드 그리드) */

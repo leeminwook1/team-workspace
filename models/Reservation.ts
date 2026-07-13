@@ -10,7 +10,9 @@ const ReservationSchema = new Schema(
     startAt: { type: Date, required: true },
     endAt: { type: Date, required: true },
     note: { type: String, default: "" },
-    status: { type: String, enum: ["booked", "cancelled"], default: "booked" },
+    status: { type: String, enum: ["booked", "returned", "cancelled"], default: "booked" },
+    returnedAt: { type: Date, default: null }, // 반납 처리 시각
+    returnedBy: { type: Schema.Types.ObjectId, ref: "User", default: null }, // 반납 처리자
   },
   { timestamps: true }
 );

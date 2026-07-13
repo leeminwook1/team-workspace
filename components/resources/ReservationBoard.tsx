@@ -11,7 +11,7 @@ type ResourceOpt = {
   id: string; name: string;
   category: { id: string; name: string; color?: string; order: number } | null;
   ownerTeam?: { name: string; color: string } | null; // 관리 팀
-  manager?: { name: string } | null; // 관리 담당자
+  manager?: { id: string; name: string } | null; // 관리 담당자
 };
 type TeamOpt = { id: string; name: string; color: string };
 type ReservationItem = {
@@ -22,6 +22,23 @@ type ReservationItem = {
   startAt: string;
   endAt: string;
   note: string;
+  status: "booked" | "returned";
+  returnedAt: string | null;
+  returnedByName: string | null;
+};
+
+// 예약 한 건의 진행 상태 — 예정 / 사용 중 / 미반납(지연) / 반납 완료
+type RsvState = "upcoming" | "inuse" | "overdue" | "returned";
+const GRACE_MS = 10 * 60_000; // 종료 후 10분 유예
+function rsvState(r: ReservationItem): RsvState {
+  if (r.status === "returned") return "returned";
+  const now = Date.now();
+  if (now < new Date(r.startAt).getTime()) return "upcoming";
+  if (now <= new Date(r.endAt).getTime() + GRACE_MS) return "inuse";
+  return "overdue";
+}
+const STATE_LABEL: Record<RsvState, string> = {
+  upcoming: "예정", inuse: "사용 중", overdue: "미반납", returned: "반납 완료",
 };
 
 export default function ReservationBoard({
@@ -49,11 +66,12 @@ export default function ReservationBoard({
     const data = await res.json();
     setWeekEvents((data.reservations ?? []).map((r: ReservationItem) => {
       const color = r.team?.color ?? "#8b95a1";
+      const returned = r.status === "returned";
       return {
-        id: r.id, title: `${r.resource?.name ?? "?"}${r.team ? ` · ${r.team.name}` : ""}`,
+        id: r.id, title: `${r.resource?.name ?? "?"}${r.team ? ` · ${r.team.name}` : ""}${returned ? " ✓" : ""}`,
         start: r.startAt, end: r.endAt,
-        backgroundColor: color + "26", borderColor: color, textColor: color,
-        extendedProps: { resId: r.id, byId: r.reservedBy?.id, byName: r.reservedBy?.name ?? "?" },
+        backgroundColor: color + (returned ? "12" : "26"), borderColor: returned ? color + "55" : color, textColor: returned ? color + "99" : color,
+        extendedProps: { resId: r.id, byId: r.reservedBy?.id, byName: r.reservedBy?.name ?? "?", returned },
       };
     }));
   }, []);
@@ -138,8 +156,37 @@ export default function ReservationBoard({
     if (weekRange) fetchWeek(weekRange.from, weekRange.to);
   }
 
+  // 반납 처리 — 예약자·admin·과장단·장비 관리 담당자
+  async function markReturned(id: string) {
+    const confirmed = await confirm({
+      title: "반납 처리",
+      message: "이 장비를 반납 처리할까요? 반납하면 남은 시간에 다른 팀이 예약할 수 있어요.",
+      confirmText: "반납 완료",
+      cancelText: "닫기",
+    });
+    if (!confirmed) return;
+    const res = await fetch(`/api/reservations/${id}/return`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) { setErr(data.error ?? "반납 처리 실패"); return; }
+    setErr("");
+    load(selected);
+    if (weekRange) fetchWeek(weekRange.from, weekRange.to);
+  }
+
+  // 이 예약의 반납 버튼을 보여줄지 (서버에서 최종 검증)
+  const isReturnManager = ["admin", "manager", "deputy"].includes(user?.role ?? "");
+  function canReturnUi(r: ReservationItem) {
+    if (r.reservedBy?.id === user?.id || isReturnManager) return true;
+    const res = resources.find((x) => x.id === r.resource?.id);
+    return res?.manager?.id === user?.id;
+  }
+
   // 타임라인에서 예약 클릭 — 본인·admin이면 취소, 아니면 예약자 안내
-  async function onTimelineClick(resId: string, byId?: string, byName?: string) {
+  async function onTimelineClick(resId: string, byId?: string, byName?: string, returned?: boolean) {
+    if (returned) {
+      await confirm({ title: "예약 정보", message: `${byName ?? "?"} 님이 사용 후 반납한 예약입니다.`, confirmText: "확인", alert: true });
+      return;
+    }
     if (byId === user?.id || user?.role === "admin") {
       await cancel(resId);
     } else {
@@ -302,7 +349,7 @@ export default function ReservationBoard({
             eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
             events={weekEvents}
             datesSet={(arg) => fetchWeek(arg.startStr, arg.endStr)}
-            eventClick={(arg) => onTimelineClick(arg.event.extendedProps.resId, arg.event.extendedProps.byId, arg.event.extendedProps.byName)}
+            eventClick={(arg) => onTimelineClick(arg.event.extendedProps.resId, arg.event.extendedProps.byId, arg.event.extendedProps.byName, arg.event.extendedProps.returned)}
             noEventsContent="이 주에 예약이 없습니다"
           />
           <p className="rsv-tip">예약을 클릭하면 상세를 볼 수 있어요. (본인 예약은 취소 가능)</p>
@@ -319,13 +366,20 @@ export default function ReservationBoard({
         ) : (
           <table className="table">
             <thead>
-              <tr><th>기간</th><th>팀</th><th>예약자</th><th>메모</th><th /></tr>
+              <tr><th>기간</th><th>상태</th><th>팀</th><th>예약자</th><th>메모</th><th /></tr>
             </thead>
             <tbody>
-              {list.map((r) => (
-                <tr key={r.id}>
+              {list.map((r) => {
+                const st = rsvState(r);
+                return (
+                <tr key={r.id} className={st === "returned" ? "rsv-row-done" : undefined}>
                   <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
                     {fmt(r.startAt)} ~ {fmt(r.endAt)}
+                  </td>
+                  <td>
+                    <span className={`rsv-st rsv-st-${st}`} title={st === "returned" && r.returnedAt ? `반납: ${fmt(r.returnedAt)}${r.returnedByName ? ` · ${r.returnedByName}` : ""}` : undefined}>
+                      {st === "overdue" && "⚠ "}{STATE_LABEL[st]}
+                    </span>
                   </td>
                   <td>
                     {r.team && (
@@ -337,13 +391,17 @@ export default function ReservationBoard({
                   </td>
                   <td style={{ color: "var(--ink-soft)" }}>{r.reservedBy?.name}</td>
                   <td style={{ color: "var(--ink-soft)", fontSize: 13 }}>{r.note}</td>
-                  <td>
-                    {(r.reservedBy?.id === user?.id || user?.role === "admin") && (
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    {st === "upcoming" && (r.reservedBy?.id === user?.id || user?.role === "admin") && (
                       <button className="btn btn-danger btn-sm" onClick={() => cancel(r.id)}>취소</button>
+                    )}
+                    {(st === "inuse" || st === "overdue") && canReturnUi(r) && (
+                      <button className="btn btn-primary btn-sm" onClick={() => markReturned(r.id)}>반납</button>
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
