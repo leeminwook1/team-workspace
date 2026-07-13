@@ -4,6 +4,7 @@ import { Resource } from "@/models/Resource";
 import { requireActiveUser, json } from "@/lib/api";
 import { canMarkReturned } from "@/lib/permissions";
 import { logActivity, reservationLabel } from "@/lib/activity";
+import { notify } from "@/lib/notify";
 
 // POST /api/reservations/:id/return — 반납 처리 (예약자·admin·과장·부과장·장비 관리 담당자)
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
@@ -28,10 +29,22 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   r.returnedBy = user.id;
   await r.save();
 
+  const label = reservationLabel(res?.name ?? "자원", r.startAt, r.endAt);
   await logActivity({
     actorId: user.id, actorName: user.name, action: "status", targetType: "reservation",
-    targetTitle: reservationLabel(res?.name ?? "자원", r.startAt, r.endAt),
+    targetTitle: label,
     meta: { detail: late ? "지연 반납" : "반납 완료" },
   });
+
+  // 알림 — 예약자·장비 관리 담당자에게 (처리한 본인 제외)
+  const recipients = [String(r.reservedBy), res?.managerId ? String(res.managerId) : ""]
+    .filter((id) => id && id !== user.id);
+  await notify(recipients, {
+    type: "reservation",
+    title: late ? "⏰ 장비가 지연 반납되었습니다" : "✅ 장비가 반납되었습니다",
+    body: `${label} — ${user.name} 님이 반납 처리`,
+    link: "/resources",
+  });
+
   return json({ returned: true, late });
 }
