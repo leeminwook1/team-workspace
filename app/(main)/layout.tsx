@@ -58,8 +58,8 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       <aside className="side">
         <div className="side-brand-row">
           <Link href="/home" className="brand" aria-label="홈으로">
-            <span className="glyph">T</span>
-            <span className="word">Team<b>Cal</b></span>
+            <span className="glyph">C</span>
+            <span className="word">C<b>HQ</b></span>
             <span className="brand-tag">문화과</span>
           </Link>
           <div className="side-brand-actions">
@@ -86,8 +86,8 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       {/* ── 모바일 상단바 ── */}
       <header className="topbar-m">
         <Link href="/home" className="brand" aria-label="홈으로">
-          <span className="glyph">T</span>
-          <span className="word">Team<b>Cal</b></span>
+          <span className="glyph">C</span>
+          <span className="word">C<b>HQ</b></span>
           <span className="brand-tag">문화과</span>
         </Link>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

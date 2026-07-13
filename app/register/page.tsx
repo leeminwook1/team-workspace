@@ -72,8 +72,8 @@ export default function RegisterPage() {
     <div className="auth-wrap">
       <div className="card auth-card">
         <div className="brand" style={{ marginBottom: 22 }}>
-          <span className="glyph">T</span>
-          <span className="word">Team<b>Cal</b></span>
+          <span className="glyph">C</span>
+          <span className="word">C<b>HQ</b></span>
           <span className="brand-tag">문화과</span>
         </div>
         <h1>가입 신청</h1>

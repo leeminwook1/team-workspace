@@ -28,7 +28,7 @@ const HELP = `📖 사용법
 
 /오늘 · /내일 — 일정 조회
 /예약현황 [날짜] — 장비 예약 현황
-/연동 123456 — 계정 연결 (코드는 TeamCal 설정에서 발급)`;
+/연동 123456 — 계정 연결 (코드는 CHQ 설정에서 발급)`;
 
 // ── 파싱 유틸 ──
 type DateRange = { start: { y: number; m: number; d: number }; end: { y: number; m: number; d: number } };
@@ -112,14 +112,14 @@ export async function handleTelegramCommand(chatId: string, text: string): Promi
     return linkAccount(chatId, rest[0] ?? "");
   }
   if (cmd === "/start") {
-    return "👋 TeamCal 알림봇입니다.\n\nTeamCal 설정(내 계정) → 텔레그램 알림에서 [연동 코드 발급] 후\n/연동 123456 형식으로 보내면 계정이 연결돼요.\n\n명령어 안내는 /도움말";
+    return "👋 CHQ 알림봇입니다.\n\nCHQ 설정(내 계정) → 텔레그램 알림에서 [연동 코드 발급] 후\n/연동 123456 형식으로 보내면 계정이 연결돼요.\n\n명령어 안내는 /도움말";
   }
   if (cmd === "/도움말" || cmd === "/help") return HELP;
 
   // 이하 명령은 연동된 계정 필요
   const userDoc: any = await User.findOne({ telegramChatId: chatId, status: "active" }).lean();
   if (!userDoc) {
-    return "❌ 아직 계정이 연결되지 않았어요.\nTeamCal 설정 → 텔레그램 알림에서 [연동 코드 발급] 후 /연동 123456 을 보내주세요.";
+    return "❌ 아직 계정이 연결되지 않았어요.\nCHQ 설정 → 텔레그램 알림에서 [연동 코드 발급] 후 /연동 123456 을 보내주세요.";
   }
   const user = toSessionUser(userDoc);
 
@@ -141,7 +141,7 @@ export async function handleTelegramCommand(chatId: string, text: string): Promi
 
 // ── /연동 ──
 async function linkAccount(chatId: string, code: string): Promise<string> {
-  if (!/^\d{6}$/.test(code)) return "사용법: /연동 123456\n코드는 TeamCal 설정 → 텔레그램 알림에서 발급해요.";
+  if (!/^\d{6}$/.test(code)) return "사용법: /연동 123456\n코드는 CHQ 설정 → 텔레그램 알림에서 발급해요.";
   const u: any = await User.findOne({ tgLinkCode: code, tgLinkCodeExp: { $gt: new Date() } });
   if (!u) return "❌ 코드가 틀렸거나 만료됐어요 (10분 유효). 설정에서 다시 발급해주세요.";
   u.telegramChatId = chatId;

@@ -41,8 +41,8 @@ export default function LoginPage() {
     <div className="login-wrap">
       <div className="login-hero">
         <div className="brand">
-          <span className="glyph">T</span>
-          <span className="word">Team<b>Cal</b></span>
+          <span className="glyph">C</span>
+          <span className="word">C<b>HQ</b></span>
           <span className="brand-tag">문화과</span>
         </div>
         <div>

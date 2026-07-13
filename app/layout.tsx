@@ -3,7 +3,7 @@ import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "TeamCal — 문화과 업무일정",
+  title: "CHQ — 문화과 업무일정",
   description: "문화과 모든 팀의 업무 일정을 하나의 달력에서 관리합니다.",
 };
 
