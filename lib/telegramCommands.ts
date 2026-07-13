@@ -9,6 +9,7 @@ import { canCreateTaskInAll, canReserve, visibleTeamIds, type SessionUser, type 
 import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, postCreateGuard } from "./taskReservations";
 import { logActivity, reservationLabel } from "./activity";
 import { rateLimit } from "./rateLimit";
+import { notify } from "./notify";
 
 // 텔레그램 인바운드 명령 v1 — /일정 /예약 /오늘 /내일 /예약현황 /연동 /도움말
 // 시간은 숫자 형식만 지원: 14:00-16:00 또는 14-16
@@ -17,12 +18,12 @@ const KST = 9 * 3600_000;
 
 const HELP = `📖 사용법
 
-/일정 제목 날짜 [시간] [옵션] [장비:이름,이름2]
+/일정 제목 날짜 [시간] [옵션] [담당:이름] [장비:이름]
   · 날짜: 7/20, 2026-07-20, 오늘, 내일, 7/20-7/22(기간)
-  · 시간: 14:00-16:00 또는 14-16 (없으면 종일)
+  · 시간: 14-16, 14:00-16:00, 14시-16시 (없으면 종일)
   · 옵션: @팀이름 #카테고리 !긴급 !높음 장소:내용
-  · 장비: 는 맨 뒤에 — 일정과 연동된 예약이 함께 잡혀요
-  예) /일정 노방활동 7/20 14:00-16:00 #촬영 장비:캐논 R6(7-1), 배터리(7-1)
+  · 담당: 장비: 는 맨 뒤에 — 쉼표로 여러 명·여러 개
+  예) /일정 노방활동 7/20 14-16 #촬영 담당:이민욱 장비:캐논 R6(7-1)
 
 /예약 장비명[, 장비명2] 날짜 [시간]
   예) /예약 캐논 R6, 배터리(7-1) 내일 14-16
@@ -61,12 +62,30 @@ function parseDateToken(s: string, now: Date): DateRange | null {
 }
 
 function parseTimeToken(s: string): { sh: number; sm: number; eh: number; em: number } | null {
-  const m = s.match(/^(\d{1,2})(?::(\d{2}))?-(\d{1,2})(?::(\d{2}))?$/);
+  // 14-16, 14:00-16:00, 14시-16시, 14~16 모두 허용
+  const m = s.match(/^(\d{1,2})(?::(\d{2}))?시?[-~](\d{1,2})(?::(\d{2}))?시?$/);
   if (!m) return null;
   const sh = +m[1], sm = +(m[2] ?? 0), eh = +m[3], em = +(m[4] ?? 0);
   if (sh > 23 || eh > 24 || sm > 59 || em > 59) return null;
   return { sh, sm, eh, em };
 }
+
+// 꼬리 옵션(담당: 장비:) 추출 — 값에 공백·쉼표가 들어가므로 맨 뒤에 몰아 쓰고,
+// 첫 키 등장 위치부터 끝까지를 키별 구간으로 나눈다 (담당·장비 순서는 무관)
+function extractTailSections(args: string, keys: string[]): { rest: string; sections: Record<string, string> } {
+  const re = new RegExp(`(?:^|\\s)(${keys.join("|")}):`, "g");
+  const hits: { key: string; idx: number; valStart: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(args))) hits.push({ key: m[1], idx: m.index, valStart: m.index + m[0].length });
+  if (hits.length === 0) return { rest: args, sections: {} };
+  const sections: Record<string, string> = {};
+  for (let i = 0; i < hits.length; i++) {
+    const end = i + 1 < hits.length ? hits[i + 1].idx : args.length;
+    sections[hits[i].key] = args.slice(hits[i].valStart, end).trim();
+  }
+  return { rest: args.slice(0, hits[0].idx).trim(), sections };
+}
+const splitNames = (s: string | undefined) => (s ?? "").split(",").map((x) => x.trim()).filter(Boolean);
 
 const ymd = (d: { y: number; m: number; d: number }) =>
   `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
@@ -97,6 +116,28 @@ async function matchResources(names: string[]): Promise<{ picked: { id: string; 
   return { picked };
 }
 
+// 담당자 이름 매칭 (부분 일치, 대소문자 무시) — /일정 담당: 용
+async function matchUsers(names: string[]): Promise<{ picked: { id: string; name: string }[] } | { error: string }> {
+  const all: any[] = await User.find({ status: "active" }).select("name").lean();
+  const picked: { id: string; name: string }[] = [];
+  for (const q of names) {
+    const hits = all.filter((u) => u.name.toLowerCase().includes(q.toLowerCase()));
+    if (hits.length === 0) return { error: `❌ "${q}" 이름의 사용자를 찾을 수 없어요.` };
+    if (hits.length > 1) {
+      const exact = hits.filter((u) => u.name.toLowerCase() === q.toLowerCase());
+      if (exact.length !== 1) {
+        return { error: `"${q}" 가 여러 명과 일치해요 — 이름을 정확히 써주세요:\n${hits.slice(0, 8).map((u) => `· ${u.name}`).join("\n")}` };
+      }
+      picked.push({ id: String(exact[0]._id), name: exact[0].name });
+      continue;
+    }
+    picked.push({ id: String(hits[0]._id), name: hits[0].name });
+  }
+  // 같은 사람 중복 지정 제거
+  const seen = new Set<string>();
+  return { picked: picked.filter((p) => !seen.has(p.id) && seen.add(p.id)) };
+}
+
 function toSessionUser(u: any): SessionUser {
   return { id: String(u._id), name: u.name, role: (u.role ?? "member") as Role, teamId: u.teamId ? String(u.teamId) : null, status: u.status };
 }
@@ -117,8 +158,8 @@ export async function handleTelegramCommand(chatId: string, text: string): Promi
   }
   if (cmd === "/도움말" || cmd === "/help") return HELP;
 
-  // 이하 명령은 연동된 계정 필요
-  const userDoc: any = await User.findOne({ telegramChatId: chatId, status: "active" }).lean();
+  // 이하 명령은 연동된 계정 필요 — 과거에 같은 챗이 여러 계정에 연동됐다면 가장 최근 계정 우선
+  const userDoc: any = await User.findOne({ telegramChatId: chatId, status: "active" }).sort({ updatedAt: -1 }).lean();
   if (!userDoc) {
     return "❌ 아직 계정이 연결되지 않았어요.\nCHQ 설정 → 텔레그램 알림에서 [연동 코드 발급] 후 /연동 123456 을 보내주세요.";
   }
@@ -148,6 +189,8 @@ async function linkAccount(chatId: string, code: string): Promise<string> {
   if (!rl.ok) return `❌ 시도 횟수를 초과했어요. ${Math.ceil(rl.retryAfterSec / 60)}분 후 다시 시도해주세요.`;
   const u: any = await User.findOne({ tgLinkCode: code, tgLinkCodeExp: { $gt: new Date() } });
   if (!u) return "❌ 코드가 틀렸거나 만료됐어요 (10분 유효). 설정에서 다시 발급해주세요.";
+  // 한 텔레그램 = 한 계정 — 같은 챗이 다른 계정에 남아 있으면 해제 (등록자 오인 방지)
+  await User.updateMany({ _id: { $ne: u._id }, telegramChatId: chatId }, { $set: { telegramChatId: "" } });
   u.telegramChatId = chatId;
   u.tgLinkCode = "";
   u.tgLinkCodeExp = null;
@@ -157,16 +200,26 @@ async function linkAccount(chatId: string, code: string): Promise<string> {
 
 // ── /일정 ──
 async function createTask(user: SessionUser, args: string): Promise<string> {
-  if (!args) return "사용법: /일정 제목 날짜 [시간] [옵션] [장비:이름,이름2]\n예) /일정 주간회의 내일 14:00-15:00";
+  if (!args) {
+    return `📝 이렇게 보내면 바로 등록돼요 (복사해서 수정):
+
+/일정 주간회의 내일 14-16
+/일정 노방활동 7/20 14시-16시 #촬영
+/일정 워크숍 7/20-7/22
+
+뒤에 붙이는 옵션 (모두 선택)
+· @팀이름 — 다른 팀 일정 (예: @사진)
+· #카테고리 · !긴급 · !높음 · 장소:2층
+· 담당:이름,이름2 — 담당자 지정 (알림도 감)
+· 장비:캐논 R6, 배터리 — 장비 예약도 함께`;
+  }
   const now = new Date();
 
-  // 장비: 는 이름에 공백·쉼표가 들어가므로 맨 뒤에서 통째로 추출 (마지막 옵션으로 쓸 것)
-  let equipNames: string[] = [];
-  const em = args.match(/(?:^|\s)장비:(.+)$/);
-  if (em) {
-    equipNames = em[1].split(",").map((s) => s.trim()).filter(Boolean);
-    args = args.slice(0, em.index).trim();
-  }
+  // 담당:·장비: 는 값에 공백·쉼표가 들어가므로 맨 뒤에서 통째로 추출
+  const tail = extractTailSections(args, ["장비", "담당"]);
+  args = tail.rest;
+  const equipNames = splitNames(tail.sections["장비"]);
+  const assigneeNames = splitNames(tail.sections["담당"]);
 
   const tokens = args.split(/\s+/);
 
@@ -177,7 +230,7 @@ async function createTask(user: SessionUser, args: string): Promise<string> {
 
   for (const t of tokens) {
     if (!date && (date = parseDateToken(t, now))) continue;
-    if (date && !time && (time = parseTimeToken(t))) continue;
+    if (!time && (time = parseTimeToken(t))) continue; // 시간은 날짜 앞뒤 어디든 OK
     if (t.startsWith("@")) { teamName = t.slice(1); continue; }
     if (t.startsWith("#")) { catName = t.slice(1); continue; }
     if (t === "!긴급") { priority = "urgent"; continue; }
@@ -213,6 +266,14 @@ async function createTask(user: SessionUser, args: string): Promise<string> {
     categoryId = String(cat._id);
   }
 
+  // 담당자 — 이름으로 매칭 (여러 명 쉼표 구분)
+  let assignees: { id: string; name: string }[] = [];
+  if (assigneeNames.length > 0) {
+    const m = await matchUsers(assigneeNames);
+    if ("error" in m) return m.error;
+    assignees = m.picked;
+  }
+
   const allDay = !time;
   const startDate = allDay ? new Date(ymd(date.start)) : kstDate(date.start, time!.sh, time!.sm);
   const endDate = allDay ? new Date(ymd(date.end)) : kstDate(date.start, time!.eh, time!.em);
@@ -229,21 +290,31 @@ async function createTask(user: SessionUser, args: string): Promise<string> {
   }
 
   const task = await Task.create({
-    title, teamIds: [teamId], categoryId, assignees: [], createdBy: user.id,
+    title, teamIds: [teamId], categoryId, assignees: assignees.map((a) => a.id), createdBy: user.id,
     startDate, endDate, allDay, priority, location,
   });
   if (equipment.length > 0) {
     await syncTaskReservations(task, equipment.map((p) => p.id), window, user.id);
   }
   await logActivity({ actorId: user.id, actorName: user.name ?? "", action: "create", targetTitle: `${task.title} (텔레그램)` });
+  // 담당자 알림 — 웹 등록과 동일 (본인 제외)
+  if (assignees.length > 0) {
+    await notify(assignees.map((a) => a.id).filter((id) => id !== user.id), {
+      type: "task_assigned",
+      title: "새 업무에 담당자로 지정됐어요",
+      body: title,
+      link: `/calendar?task=${task._id}`,
+    });
+  }
 
   const when = date.start.m === date.end.m && date.start.d === date.end.d
     ? `${date.start.m}/${date.start.d}`
     : `${date.start.m}/${date.start.d}~${date.end.m}/${date.end.d}`;
   const timeStr = allDay ? "종일" : `${String(time!.sh).padStart(2, "0")}:${String(time!.sm).padStart(2, "0")}-${String(time!.eh).padStart(2, "0")}:${String(time!.em).padStart(2, "0")}`;
   const extras = [catName && `#${catName}`, priority === "urgent" && "🔴긴급", priority === "high" && "🟠높음", location && `📍${location}`].filter(Boolean).join(" ");
+  const assigneeLine = assignees.length > 0 ? `\n👤 담당: ${assignees.map((a) => a.name).join(", ")}` : "";
   const equipLine = equipment.length > 0 ? `\n📦 장비 예약: ${equipment.map((p) => p.name).join(", ")}` : "";
-  return `✅ 일정 등록: ${title}\n${when} ${timeStr} · ${teamLabel}${extras ? `\n${extras}` : ""}${equipLine}`;
+  return `✅ 일정 등록: ${title} (${user.name})\n${when} ${timeStr} · ${teamLabel}${extras ? `\n${extras}` : ""}${assigneeLine}${equipLine}`;
 }
 
 // ── /예약 ──

@@ -222,7 +222,7 @@ export default function AccountSettings({
             <ul className="tg-guide-cmds">
               <li><span className="tg-inline-code">/오늘</span> <span className="tg-inline-code">/내일</span> 오늘·내일 일정 확인 <em>(누구나)</em></li>
               <li><span className="tg-inline-code">/예약현황</span> 장비 예약 현황 <em>(누구나)</em></li>
-              <li><span className="tg-inline-code">/일정 제목 날짜 시간</span> 일정 등록 <em>(권한 필요)</em></li>
+              <li><span className="tg-inline-code">/일정 제목 날짜 시간 담당:이름 장비:이름</span> 일정 등록 <em>(권한 필요)</em></li>
               <li><span className="tg-inline-code">/예약 장비명 날짜 시간</span> 장비 예약 <em>(권한 필요)</em></li>
               <li><span className="tg-inline-code">/도움말</span> 전체 명령 안내</li>
             </ul>

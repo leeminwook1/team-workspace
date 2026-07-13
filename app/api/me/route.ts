@@ -33,6 +33,8 @@ export async function PATCH(req: Request) {
   if (d.telegramChatId !== undefined) {
     me.telegramChatId = d.telegramChatId.trim();
     if (me.telegramChatId) {
+      // 한 텔레그램 = 한 계정 — 같은 챗이 다른 계정에 남아 있으면 해제 (명령 실행 계정 오인 방지)
+      await User.updateMany({ _id: { $ne: me._id }, telegramChatId: me.telegramChatId }, { $set: { telegramChatId: "" } });
       telegramTest = telegramEnabled()
         ? await sendTelegram(me.telegramChatId, `✅ CHQ 알림 연동 완료!\n${me.name} 님, 이제 승인·배정·마감 알림을 여기로 받아요.`)
         : false;
