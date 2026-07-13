@@ -62,6 +62,8 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [view, setView] = useState<"list" | "report">("list"); // 발신 그룹만 리포트 탭
+  const [statusFilter, setStatusFilter] = useState<string>("all"); // 상태 필터 칩
+  const [teamFilter, setTeamFilter] = useState<string>("all"); // 팀 필터 (발신 그룹)
 
   const [loadErr, setLoadErr] = useState(false);
   const load = useCallback(async () => {
@@ -81,6 +83,13 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
   const canManage = (d: Directive) =>
     user?.role === "admin" || (user?.role === "leader" && !!d.team && user?.teamId === d.team.id);
   const canDelete = (d: Directive) => user?.role === "admin" || d.createdBy?.id === user?.id;
+
+  const shown = items.filter((d) =>
+    (statusFilter === "all" || d.status === statusFilter) &&
+    (teamFilter === "all" || d.team?.id === teamFilter)
+  );
+  const countOf = (s: string) => items.filter((d) => d.status === s).length;
+  const filterTeams = teams.filter((t) => items.some((d) => d.team?.id === t.id));
 
   return (
     <div className="directives">
@@ -114,18 +123,46 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
       ) : items.length === 0 ? (
         <p className="muted-note">아직 TODO가 없습니다.</p>
       ) : (
-        <div className="dir-list">
-          {items.map((d) => (
-            <DirectiveCard
-              key={d.id}
-              dir={d}
-              canManage={canManage(d)}
-              canDelete={canDelete(d)}
-              showRead={canCreate}
-              onChanged={load}
-            />
-          ))}
-        </div>
+        <>
+          {/* 상태·팀 필터 칩 */}
+          <div className="dir-filters">
+            <button className={`chip chip-btn${statusFilter === "all" ? " sel" : ""}`} onClick={() => setStatusFilter("all")}>
+              전체 <b className="dir-chip-n">{items.length}</b>
+            </button>
+            {Object.entries(STATUS).map(([key, [label, color]]) => {
+              const n = countOf(key);
+              if (n === 0) return null;
+              return (
+                <button key={key} className={`chip chip-btn${statusFilter === key ? " sel" : ""}`} onClick={() => setStatusFilter(key)}>
+                  <span className="dot" style={{ background: color }} />{label} <b className="dir-chip-n">{n}</b>
+                </button>
+              );
+            })}
+            {canCreate && filterTeams.length > 1 && (
+              <select className="dir-team-select" value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} aria-label="팀 필터">
+                <option value="all">전체 팀</option>
+                {filterTeams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            )}
+          </div>
+
+          {shown.length === 0 ? (
+            <p className="muted-note">조건에 맞는 TODO가 없습니다.</p>
+          ) : (
+            <div className="dir-list">
+              {shown.map((d) => (
+                <DirectiveCard
+                  key={d.id}
+                  dir={d}
+                  canManage={canManage(d)}
+                  canDelete={canDelete(d)}
+                  showRead={canCreate}
+                  onChanged={load}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {createOpen && (
@@ -181,7 +218,7 @@ function DirectiveCard({
   }
 
   return (
-    <div className="dir-card">
+    <div className={`dir-card${dir.status === "done" ? " done" : ""}`}>
       <div className="dir-top">
         {dir.team && (
           <span className="chip"><span className="dot" style={{ background: dir.team.color }} />{dir.team.name}</span>
@@ -229,29 +266,30 @@ function DirectiveCard({
         </div>
       )}
 
-      {canManage && (
+      {(canManage || canDelete) && (
         <div className="dir-actions">
-          <div className="seg dir-seg">
-            {Object.entries(STATUS).map(([key, [label]]) => (
-              <button key={key} className={dir.status === key ? "on" : ""} disabled={busy} onClick={() => setStatus(key)}>{label}</button>
-            ))}
-          </div>
-          <button className="btn btn-line btn-sm" onClick={() => setAssignOpen(true)}>
-            <Icon name="userLine" size={14} /> 팀원 분배
-          </button>
-          {dir.assignments.length === 0 && (
-            dir.converted ? (
-              <span className="dir-conv-done"><Icon name="check" size={13} strokeWidth={2.6} /> 일정 등록됨</span>
-            ) : (
-              <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => convert()}>일정으로 등록</button>
-            )
+          {canManage && (
+            <>
+              <div className="seg dir-seg">
+                {Object.entries(STATUS).map(([key, [label]]) => (
+                  <button key={key} className={dir.status === key ? "on" : ""} disabled={busy} onClick={() => setStatus(key)}>{label}</button>
+                ))}
+              </div>
+              <button className="btn btn-line btn-sm" onClick={() => setAssignOpen(true)}>
+                <Icon name="userLine" size={14} /> 팀원 분배
+              </button>
+              {dir.assignments.length === 0 && (
+                dir.converted ? (
+                  <span className="dir-conv-done"><Icon name="check" size={13} strokeWidth={2.6} /> 일정 등록됨</span>
+                ) : (
+                  <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => convert()}>일정으로 등록</button>
+                )
+              )}
+            </>
           )}
-        </div>
-      )}
-
-      {canDelete && (
-        <div className="dir-foot">
-          <button className="btn btn-danger btn-xs" disabled={busy} onClick={remove}>삭제</button>
+          {canDelete && (
+            <button className="btn btn-danger btn-xs dir-del" disabled={busy} onClick={remove}>삭제</button>
+          )}
         </div>
       )}
 

@@ -95,6 +95,15 @@ export default function ResourceManager({
 
   const uncategorized = initialResources.filter((r) => !r.category);
 
+  // 분류 접기/펼치기 — 기본은 모두 접힘 (개수만 보이게)
+  const [openCats, setOpenCats] = useState<Set<string>>(new Set());
+  const toggleCat = (id: string) =>
+    setOpenCats((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
   return (
     <div style={{ maxWidth: 720 }}>
       {/* 장비 분류 관리 */}
@@ -165,13 +174,15 @@ export default function ResourceManager({
       <div className="admin-section-title">장비 {initialResources.length}개</div>
       {initialCategories.map((c) => {
         const items = initialResources.filter((r) => r.category?.id === c.id);
+        const open = openCats.has(c.id);
         return (
           <section key={c.id} className="rc-group">
-            <div className="rc-group-head">
+            <button type="button" className="rc-group-head rc-group-toggle" onClick={() => toggleCat(c.id)} aria-expanded={open}>
+              <span className={`rsv-caret${open ? " open" : ""}`} aria-hidden>▸</span>
               <span className="dot" style={{ background: c.color, width: 9, height: 9 }} />
               <span>{c.name}</span><span className="kb-count">{items.length}</span>
-            </div>
-            {items.length === 0 ? (
+            </button>
+            {!open ? null : items.length === 0 ? (
               <div className="rc-group-empty">이 분류에 등록된 장비가 없습니다.</div>
             ) : (
               <div className="admin-list">
