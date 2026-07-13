@@ -21,6 +21,8 @@ type Directive = {
   assignments: Assignment[];
   converted: boolean;
   createdAt: string;
+  readAt: string | null; // 팀장 열람 시각 (읽음 확인)
+  doneAt: string | null; // 완료 시각
 };
 
 const STATUS: Record<Directive["status"], [string, string]> = {
@@ -48,6 +50,9 @@ function relTime(iso: string) {
   if (h < 24) return `${h}시간 전`;
   return new Date(iso).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
 }
+function daysSince(iso: string) {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400_000);
+}
 
 export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; canCreate: boolean }) {
   const { data: session } = useSession();
@@ -55,6 +60,7 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
   const [items, setItems] = useState<Directive[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const [view, setView] = useState<"list" | "report">("list"); // 발신 그룹만 리포트 탭
 
   const load = useCallback(async () => {
     const res = await fetch("/api/directives");
@@ -83,8 +89,17 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
         )}
       </div>
 
+      {canCreate && (
+        <div className="seg" role="tablist" aria-label="보기 전환" style={{ marginBottom: 14 }}>
+          <button className={view === "list" ? "on" : ""} onClick={() => setView("list")}>목록</button>
+          <button className={view === "report" ? "on" : ""} onClick={() => setView("report")}>팀별 리포트</button>
+        </div>
+      )}
+
       {loading ? (
         <p className="muted-note">불러오는 중…</p>
+      ) : view === "report" && canCreate ? (
+        <DirectiveReport items={items} />
       ) : items.length === 0 ? (
         <p className="muted-note">아직 TODO가 없습니다.</p>
       ) : (
@@ -95,6 +110,7 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
               dir={d}
               canManage={canManage(d)}
               canDelete={canDelete(d)}
+              showRead={canCreate}
               onChanged={load}
             />
           ))}
@@ -109,9 +125,9 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
 }
 
 function DirectiveCard({
-  dir, canManage, canDelete, onChanged,
+  dir, canManage, canDelete, showRead, onChanged,
 }: {
-  dir: Directive; canManage: boolean; canDelete: boolean; onChanged: () => void;
+  dir: Directive; canManage: boolean; canDelete: boolean; showRead: boolean; onChanged: () => void;
 }) {
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
@@ -166,6 +182,17 @@ function DirectiveCard({
           <span className="badge" style={{ background: `color-mix(in srgb, ${prio.color} 14%, transparent)`, color: prio.color }}>{prio.label}</span>
         )}
         {due && <span className="dir-due">마감 {due}</span>}
+        {showRead && (
+          dir.readAt ? (
+            <span className="dir-read ok" title={new Date(dir.readAt).toLocaleString("ko-KR")}>
+              <Icon name="check" size={12} strokeWidth={2.8} /> 읽음
+            </span>
+          ) : (
+            <span className="dir-read no">
+              미확인{daysSince(dir.createdAt) >= 1 ? ` ${daysSince(dir.createdAt)}일째` : ""}
+            </span>
+          )
+        )}
         <span className="dir-meta-r">{dir.createdBy?.name ?? "?"} · {relTime(dir.createdAt)}</span>
       </div>
 
@@ -220,6 +247,71 @@ function DirectiveCard({
       {assignOpen && dir.team && (
         <AssignModal dir={dir} teamId={dir.team.id} onClose={() => setAssignOpen(false)} onSaved={() => { setAssignOpen(false); onChanged(); }} />
       )}
+    </div>
+  );
+}
+
+/* ── 팀별 처리 현황 리포트 (발신 그룹 전용) ── */
+function DirectiveReport({ items }: { items: Directive[] }) {
+  type Row = {
+    team: Team; total: number; todo: number; inProgress: number; hold: number; done: number;
+    unread: number; oldestWaitDays: number | null; avgDoneDays: number | null;
+  };
+  const byTeam = new Map<string, Directive[]>();
+  for (const d of items) {
+    if (!d.team) continue;
+    if (!byTeam.has(d.team.id)) byTeam.set(d.team.id, []);
+    byTeam.get(d.team.id)!.push(d);
+  }
+  const rows: Row[] = Array.from(byTeam.values()).map((list) => {
+    const waiting = list.filter((d) => d.status === "todo");
+    const doneWithTime = list.filter((d) => d.status === "done" && d.doneAt);
+    const avg = doneWithTime.length
+      ? doneWithTime.reduce((s, d) => s + (new Date(d.doneAt!).getTime() - new Date(d.createdAt).getTime()), 0) / doneWithTime.length / 86400_000
+      : null;
+    return {
+      team: list[0].team!,
+      total: list.length,
+      todo: waiting.length,
+      inProgress: list.filter((d) => d.status === "in_progress").length,
+      hold: list.filter((d) => d.status === "hold").length,
+      done: list.filter((d) => d.status === "done").length,
+      unread: list.filter((d) => !d.readAt).length,
+      oldestWaitDays: waiting.length ? Math.max(...waiting.map((d) => daysSince(d.createdAt))) : null,
+      avgDoneDays: avg,
+    };
+  }).sort((a, b) => (b.todo + b.inProgress) - (a.todo + a.inProgress));
+
+  if (rows.length === 0) return <p className="muted-note">아직 TODO가 없습니다.</p>;
+
+  return (
+    <div className="dir-report">
+      {rows.map((r) => {
+        const pct = r.total ? Math.round((r.done / r.total) * 100) : 0;
+        return (
+          <div className="dir-rep-card" key={r.team.id}>
+            <div className="dir-rep-head">
+              <span className="chip"><span className="dot" style={{ background: r.team.color }} />{r.team.name}</span>
+              {r.unread > 0 && <span className="dir-read no">미확인 {r.unread}</span>}
+              {r.oldestWaitDays != null && r.oldestWaitDays >= 3 && (
+                <span className="rsv-st rsv-st-overdue">⚠ 대기 {r.oldestWaitDays}일째</span>
+              )}
+              <span className="dir-rep-pct" style={pct === 100 ? { color: "var(--st-done)" } : undefined}>{pct}%</span>
+            </div>
+            <div className="dir-rep-bar"><span style={{ width: `${pct}%` }} /></div>
+            <div className="dir-rep-nums">
+              <span>대기 <b>{r.todo}</b></span>
+              <span>진행 <b>{r.inProgress}</b></span>
+              {r.hold > 0 && <span>보류 <b>{r.hold}</b></span>}
+              <span>완료 <b>{r.done}</b>/{r.total}</span>
+              {r.avgDoneDays != null && <span className="dir-rep-avg">평균 처리 {r.avgDoneDays < 1 ? "1일 이내" : `${Math.round(r.avgDoneDays)}일`}</span>}
+            </div>
+          </div>
+        );
+      })}
+      <p className="muted-note" style={{ marginTop: 4 }}>
+        읽음 = 해당 팀 팀장이 TODO 목록을 열람한 것 · 평균 처리 = TODO 하달부터 완료 처리까지
+      </p>
     </div>
   );
 }

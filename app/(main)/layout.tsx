@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import Link from "next/link";
 import { connectDB } from "@/lib/mongodb";
 import { Directive } from "@/models/Directive";
-import { canApproveUsers, canCreateDirective, canManageTeams, canUseDirectives, ROLE_LABEL, type SessionUser } from "@/lib/permissions";
+import { canApproveUsers, canCreateDirective, canManageTeams, canUseDirectives, canViewAllTeams, ROLE_LABEL, type SessionUser } from "@/lib/permissions";
 import LogoutButton from "@/components/LogoutButton";
 import NavLinks, { BottomNav, type NavItem } from "@/components/NavLinks";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -38,10 +38,12 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   const showAdmin = canApproveUsers(user) || canManageTeams(user);
   const todoBadge = await pendingDirectiveCount(user);
 
+  const showTeamBoard = canViewAllTeams(user) || user.role === "leader" || user.role === "vice_leader";
   const navItems: NavItem[] = [
     { href: "/home", label: "홈", icon: "home" },
     { href: "/calendar", label: "달력", icon: "calendar" },
     { href: "/personal", label: "내 캘린더", icon: "userLine" },
+    ...(showTeamBoard ? [{ href: "/team", label: "팀 현황", icon: "users" as const }] : []),
     { href: "/resources", label: "자원 예약", icon: "resources" },
     { href: "/events", label: "행사 관리", icon: "board" },
     ...(canUseDirectives(user) ? [{ href: "/directives", label: "TODO", icon: "inbox" as const, badge: todoBadge }] : []),

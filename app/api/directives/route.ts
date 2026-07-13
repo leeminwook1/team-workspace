@@ -35,6 +35,8 @@ function serialize(d: any) {
     })),
     converted: !!d.convertedTaskId, // 지시 전체가 일정으로 등록됐는지
     createdAt: d.createdAt,
+    readAt: d.readAt ?? null, // 팀장 열람 시각 (읽음 확인)
+    doneAt: d.doneAt ?? null, // 완료 시각 (처리 소요 리포트)
   };
 }
 
@@ -50,6 +52,11 @@ export async function GET() {
   if (!canCreateDirective(user)) {
     if (!user.teamId) return json({ directives: [] });
     q.teamId = user.teamId;
+    // 읽음 확인 — 수신자(팀장·부팀장)가 목록을 열람하면 미열람 지시를 읽음 처리
+    await Directive.updateMany(
+      { teamId: user.teamId, readAt: null },
+      { $set: { readAt: new Date(), readBy: user.id } }
+    );
   }
 
   const list = await Directive.find(q)

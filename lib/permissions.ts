@@ -116,11 +116,13 @@ export function canUseDirectives(u: SessionUser) {
 }
 
 // ── 개인 캘린더 ──
-// 본인 + 같은 팀 "팀장" + admin만 열람 (부팀장·과장·부과장·서기 불가). 수정은 본인만.
-export function canViewPersonalCalendar(viewer: SessionUser, target: { id: string; teamId: string | null }) {
+// 본인 + 같은 팀 "팀장" + admin + (과장·부과장·서기는 "팀장" 것만) 열람. 수정은 본인만.
+export function canViewPersonalCalendar(viewer: SessionUser, target: { id: string; teamId: string | null; role?: Role }) {
   if (!isActive(viewer)) return false;
   if (String(viewer.id) === String(target.id)) return true;
   if (viewer.role === "admin") return true;
+  // 과장·부과장·서기 → 팀장 개인 캘린더만
+  if (["manager", "deputy", "secretary"].includes(viewer.role) && target.role === "leader") return true;
   return viewer.role === "leader" && viewer.teamId != null && target.teamId != null
     && String(viewer.teamId) === String(target.teamId);
 }

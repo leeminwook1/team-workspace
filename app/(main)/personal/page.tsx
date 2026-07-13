@@ -17,7 +17,7 @@ export default async function PersonalPage() {
 
   await connectDB();
 
-  // 열람 가능한 다른 사람 목록 — 팀장: 같은 팀원 / admin: 전체 활성 사용자
+  // 열람 가능한 다른 사람 목록 — 팀장: 같은 팀원 / admin: 전체 / 과장·부과장·서기: 팀장들만
   let viewables: { id: string; name: string; teamName: string }[] = [];
   if (user.role === "leader" && user.teamId) {
     const members: any[] = await User.find({ teamId: user.teamId, status: "active", _id: { $ne: user.id } })
@@ -27,6 +27,10 @@ export default async function PersonalPage() {
     const members: any[] = await User.find({ status: "active", _id: { $ne: user.id } })
       .populate("teamId", "name").select("name teamId").sort({ name: 1 }).lean();
     viewables = members.map((m) => ({ id: String(m._id), name: m.name, teamName: m.teamId?.name ?? "" }));
+  } else if (["manager", "deputy", "secretary"].includes(user.role)) {
+    const leaders: any[] = await User.find({ role: "leader", status: "active", _id: { $ne: user.id } })
+      .populate("teamId", "name").select("name teamId").sort({ name: 1 }).lean();
+    viewables = leaders.map((m) => ({ id: String(m._id), name: m.name, teamName: m.teamId?.name ?? "" }));
   }
 
   return <PersonalCalendar meName={user.name} viewables={viewables} />;

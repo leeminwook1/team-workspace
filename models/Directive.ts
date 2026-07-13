@@ -24,6 +24,9 @@ const DirectiveSchema = new Schema(
     status: { type: String, enum: ["todo", "in_progress", "done", "hold"], default: "todo" },
     assignments: { type: [AssignmentSchema], default: [] }, // 팀장의 팀원 재분배
     convertedTaskId: { type: Schema.Types.ObjectId, ref: "Task", default: null }, // 지시 전체를 일정으로 등록 시 연결(중복 방지)
+    readAt: { type: Date, default: null }, // 팀장(수신자)이 처음 열람한 시각 — 읽음 확인
+    readBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    doneAt: { type: Date, default: null }, // 완료 처리 시각 — 처리 소요 리포트용
   },
   { timestamps: true }
 );

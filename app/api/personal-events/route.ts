@@ -30,9 +30,9 @@ export async function GET(req: Request) {
 
   await connectDB();
   if (targetId !== user.id) {
-    const target: any = await User.findById(targetId).select("teamId status").lean();
+    const target: any = await User.findById(targetId).select("teamId status role").lean();
     if (!target || target.status !== "active") return json({ error: "사용자를 찾을 수 없습니다." }, 404);
-    if (!canViewPersonalCalendar(user, { id: targetId, teamId: target.teamId ? String(target.teamId) : null })) {
+    if (!canViewPersonalCalendar(user, { id: targetId, teamId: target.teamId ? String(target.teamId) : null, role: target.role })) {
       return json({ error: "이 사용자의 개인 캘린더를 볼 권한이 없습니다." }, 403);
     }
   }

@@ -38,7 +38,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (d.body !== undefined) dir.body = d.body;
   if (d.priority !== undefined) dir.priority = d.priority;
   if (d.dueDate !== undefined) dir.dueDate = d.dueDate ? new Date(d.dueDate) : null;
-  if (d.status !== undefined) dir.status = d.status;
+  if (d.status !== undefined) {
+    // 완료 시각 기록 — 처리 소요 리포트용 (완료에서 벗어나면 초기화)
+    if (d.status === "done" && dir.status !== "done") dir.doneAt = new Date();
+    else if (d.status !== "done") dir.doneAt = null;
+    dir.status = d.status;
+  }
   if (d.assignments !== undefined) {
     // 재분배 갱신: 기존 taskId(일정 연결)는 동일 사용자 항목이면 유지
     const prevByUser = new Map<string, any>();
