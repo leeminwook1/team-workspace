@@ -132,15 +132,15 @@ export default function ReservationBoard({
     }
   }, [reservableTeams, form.teamId]);
 
-  const load = useCallback(async (resourceId: string) => {
-    if (!resourceId) return;
+  // 대여 목록은 전체 장비 예약을 불러온다 (어제~60일 뒤) — 아래에서 장비 필터로 좁힐 수 있음
+  const load = useCallback(async () => {
     const from = new Date();
     from.setDate(from.getDate() - 1);
     const to = new Date();
     to.setDate(to.getDate() + 60);
     try {
       const res = await fetch(
-        `/api/reservations?resource=${resourceId}&from=${from.toISOString()}&to=${to.toISOString()}`
+        `/api/reservations?from=${from.toISOString()}&to=${to.toISOString()}`
       );
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
@@ -150,11 +150,12 @@ export default function ReservationBoard({
       setErr("예약 목록을 불러오지 못했어요. 네트워크 확인 후 새로고침해주세요.");
     }
   }, []);
+  const [listScope, setListScope] = useState<"all" | "selected">("all"); // 목록 범위
 
-  useEffect(() => { load(selected); }, [selected, load]);
+  useEffect(() => { load(); }, [load]);
   // 자동 반영 — 다른 팀이 예약·반납해도 새로고침 없이 갱신
   useAutoRefresh(() => {
-    load(selected);
+    load();
     if (view === "timeline" && weekRange) fetchWeek(weekRange.from, weekRange.to);
   }, ["reservation"]);
 
@@ -182,7 +183,7 @@ export default function ReservationBoard({
     }
     setOk("예약 완료!");
     setForm((f) => ({ ...f, note: "" }));
-    load(selected);
+    load();
   }
 
   async function cancel(id: string) {
@@ -197,7 +198,7 @@ export default function ReservationBoard({
     const res = await fetch(`/api/reservations/${id}`, { method: "DELETE" });
     const data = await res.json();
     if (!res.ok) { setErr(data.error ?? "취소 실패"); return; }
-    load(selected);
+    load();
     if (weekRange) fetchWeek(weekRange.from, weekRange.to);
   }
 
@@ -214,7 +215,7 @@ export default function ReservationBoard({
     const data = await res.json();
     if (!res.ok) { setErr(data.error ?? "반납 처리 실패"); return; }
     setErr("");
-    load(selected);
+    load();
     if (weekRange) fetchWeek(weekRange.from, weekRange.to);
   }
 
@@ -417,23 +418,34 @@ export default function ReservationBoard({
         </div>
       )}
 
-      {/* 예약 현황 (리스트 뷰) */}
-      {view === "list" && (
+      {/* 대여 목록 (리스트 뷰) — 기본은 전체 장비, 선택 장비로 좁힐 수 있음 */}
+      {view === "list" && (() => {
+        const shown = listScope === "selected" ? list.filter((r) => r.resource?.id === selected) : list;
+        const selName = resources.find((x) => x.id === selected)?.name ?? "선택 장비";
+        return (
       <div className="card" style={{ padding: 8 }}>
-        {list.length === 0 ? (
+        <div className="rsv-list-head">
+          <span className="rsv-list-title">대여 목록 <b>{shown.length}</b></span>
+          <div className="seg rsv-scope-seg" role="tablist" aria-label="목록 범위">
+            <button className={listScope === "all" ? "on" : ""} onClick={() => setListScope("all")}>전체 장비</button>
+            <button className={listScope === "selected" ? "on" : ""} onClick={() => setListScope("selected")}>{selName}</button>
+          </div>
+        </div>
+        {shown.length === 0 ? (
           <p style={{ padding: 24, textAlign: "center", color: "var(--ink-faint)", fontSize: 14 }}>
-            예약이 없습니다. 첫 예약을 해보세요!
+            {listScope === "selected" ? `"${selName}"의 예약이 없습니다.` : "예약이 없습니다. 첫 예약을 해보세요!"}
           </p>
         ) : (
           <table className="table">
             <thead>
-              <tr><th>기간</th><th>상태</th><th>팀</th><th>예약자</th><th>메모</th><th /></tr>
+              <tr><th>장비</th><th>기간</th><th>상태</th><th>팀</th><th>예약자</th><th>메모</th><th /></tr>
             </thead>
             <tbody>
-              {list.map((r) => {
+              {shown.map((r) => {
                 const st = rsvState(r);
                 return (
                 <tr key={r.id} className={st === "returned" ? "rsv-row-done" : undefined}>
+                  <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{r.resource?.name ?? "?"}</td>
                   <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
                     {fmt(r.startAt)} ~ {fmt(r.endAt)}
                     {(() => {
@@ -471,7 +483,8 @@ export default function ReservationBoard({
           </table>
         )}
       </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
