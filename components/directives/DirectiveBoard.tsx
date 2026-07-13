@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { Icon } from "@/components/icons";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { LoadError } from "@/components/LoadError";
+import { useAutoRefresh } from "@/components/useAutoRefresh";
 
 type Team = { id: string; name: string; color: string };
 type Person = { id: string; name: string } | null;
@@ -79,6 +80,7 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
     }
   }, []);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load); // 새 TODO·상태 변경 자동 반영
 
   const canManage = (d: Directive) =>
     user?.role === "admin" || (user?.role === "leader" && !!d.team && user?.teamId === d.team.id);

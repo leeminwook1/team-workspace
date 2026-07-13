@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { canApproveUsers, canManageTeams, type SessionUser } from "@/lib/permissions";
 import AdminTabs from "@/components/admin/AdminTabs";
+import AutoRefresh from "@/components/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <p className="page-sub">팀·자원·사용자와 활동 로그를 관리합니다.</p>
       </div>
       <AdminTabs tabs={tabs} />
+      <AutoRefresh />
       <div>{children}</div>
     </div>
   );

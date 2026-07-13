@@ -6,6 +6,7 @@ import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import koLocale from "@fullcalendar/core/locales/ko";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { useAutoRefresh } from "@/components/useAutoRefresh";
 
 type ResourceOpt = {
   id: string; name: string;
@@ -120,6 +121,11 @@ export default function ReservationBoard({
   }, []);
 
   useEffect(() => { load(selected); }, [selected, load]);
+  // 자동 반영 — 다른 팀이 예약·반납해도 새로고침 없이 갱신
+  useAutoRefresh(() => {
+    load(selected);
+    if (view === "timeline" && weekRange) fetchWeek(weekRange.from, weekRange.to);
+  });
 
   async function reserve(e: React.FormEvent) {
     e.preventDefault();

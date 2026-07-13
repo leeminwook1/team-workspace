@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { Pagination } from "@/components/Pagination";
 import { Icon } from "@/components/icons";
+import { useAutoRefresh } from "@/components/useAutoRefresh";
 
 const PAGE_SIZE = 10;
 
@@ -55,6 +56,7 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
     setLoaded(true);
   }, []);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load); // 자동 반영
 
   async function remove(u: UserRow) {
     const ok = await confirm({

@@ -7,6 +7,7 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import koLocale from "@fullcalendar/core/locales/ko";
 import { Icon } from "@/components/icons";
+import { useAutoRefresh } from "@/components/useAutoRefresh";
 
 export type MemberStat = {
   id: string;
@@ -50,6 +51,7 @@ export default function TeamBoard({
   }, [members]);
 
   const [overlayErr, setOverlayErr] = useState(false);
+  const lastRange = useRef<{ from: string; to: string } | null>(null);
   const fetchOverlay = useCallback(async (from: string, to: string) => {
     try {
       const res = await fetch(`/api/personal-events/overlay?team=${teamId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
@@ -88,6 +90,11 @@ export default function TeamBoard({
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+
+  // 자동 반영 — 개인일정 오버레이 갱신 (통계 카드는 서버 컴포넌트라 AutoRefresh가 담당)
+  useAutoRefresh(() => {
+    if (lastRange.current) fetchOverlay(lastRange.current.from, lastRange.current.to);
+  });
 
   const api = () => calRef.current?.getApi();
   const monthLabel = curStart ? `${curStart.getFullYear()}년 ${curStart.getMonth() + 1}월` : "";
@@ -203,6 +210,7 @@ export default function TeamBoard({
           eventDidMount={(info) => { info.el.title = info.event.title; }}
           datesSet={(arg) => {
             setCurStart(arg.view.currentStart);
+            lastRange.current = { from: arg.startStr, to: arg.endStr };
             fetchOverlay(arg.startStr, arg.endStr);
           }}
         />

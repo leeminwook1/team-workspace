@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { Icon } from "@/components/icons";
+import { useAutoRefresh } from "@/components/useAutoRefresh";
 
 type Row = {
   id: string;
@@ -32,6 +33,7 @@ export default function TelegramManager() {
     setLoaded(true);
   }, []);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load); // 자동 반영
 
   async function unlink(u: Row) {
     const ok = await confirm({

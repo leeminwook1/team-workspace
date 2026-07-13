@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { LoadError } from "@/components/LoadError";
+import { useAutoRefresh } from "@/components/useAutoRefresh";
 
 type Team = { id: string; name: string; color: string };
 type EventSummary = {
@@ -58,6 +59,7 @@ export default function EventList({ teams, canManage }: { teams: Team[]; canMana
     }
   }, []);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load); // 다른 사람 변경 자동 반영
 
   return (
     <div className="events">

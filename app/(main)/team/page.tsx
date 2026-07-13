@@ -7,6 +7,7 @@ import { Task } from "@/models/Task";
 import { Team } from "@/models/Team";
 import { canViewAllTeams, ROLE_LABEL, type SessionUser } from "@/lib/permissions";
 import TeamBoard, { type MemberStat } from "@/components/team/TeamBoard";
+import AutoRefresh from "@/components/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -70,12 +71,15 @@ export default async function TeamPage({ searchParams }: { searchParams: { team?
   });
 
   return (
-    <TeamBoard
-      teamName={team?.name ?? ""}
-      teamColor={team?.color ?? "#3182f6"}
-      teamId={teamId}
-      teams={isOrg ? teams.map((t) => ({ id: String(t._id), name: t.name, color: t.color })) : []}
-      stats={stats}
-    />
+    <>
+      <AutoRefresh />
+      <TeamBoard
+        teamName={team?.name ?? ""}
+        teamColor={team?.color ?? "#3182f6"}
+        teamId={teamId}
+        teams={isOrg ? teams.map((t) => ({ id: String(t._id), name: t.name, color: t.color })) : []}
+        stats={stats}
+      />
+    </>
   );
 }

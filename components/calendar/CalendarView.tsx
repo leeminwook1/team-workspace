@@ -12,6 +12,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import koLocale from "@fullcalendar/core/locales/ko";
 import { Icon } from "@/components/icons";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { useAutoRefresh } from "@/components/useAutoRefresh";
 
 type TeamInfo = { id: string; name: string; slug: string; color: string };
 type TeamRef = { id: string; name: string; color: string };
@@ -150,6 +151,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   const refetch = useCallback(() => {
     if (range) fetchTasks(range.from, range.to);
   }, [range, fetchTasks]);
+  useAutoRefresh(refetch); // 다른 사람이 등록·수정해도 새로고침 없이 반영
 
   // 필터 적용된 일정 — FullCalendar 이벤트와 모바일 월간 그리드가 공유
   const filteredTasks = useMemo(

@@ -10,6 +10,7 @@ import koLocale from "@fullcalendar/core/locales/ko";
 import { Icon } from "@/components/icons";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { LoadError } from "@/components/LoadError";
+import { useAutoRefresh } from "@/components/useAutoRefresh";
 import { EventFormModal } from "@/components/events/EventList";
 
 type Team = { id: string; name: string; color: string };
@@ -78,6 +79,8 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
     }
   }, [eventId]);
   useEffect(() => { load(); }, [load]);
+  // 자동 반영 — 단, 모달·드래그 중에는 건너뛴다 (작업 방해 방지)
+  useAutoRefresh(() => { if (!itemModal && !editEvent && !dragId) load(); });
 
   // 담당자 후보 = 전체 활성 사용자 (팀 무관 지정 가능)
   useEffect(() => {

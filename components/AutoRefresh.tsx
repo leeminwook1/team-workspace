@@ -1,0 +1,11 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useAutoRefresh } from "@/components/useAutoRefresh";
+
+// 서버 컴포넌트 페이지(홈·팀 현황 등)용 — 주기적으로 서버 데이터를 다시 렌더
+export default function AutoRefresh({ intervalMs = 45_000 }: { intervalMs?: number }) {
+  const router = useRouter();
+  useAutoRefresh(() => router.refresh(), intervalMs);
+  return null;
+}

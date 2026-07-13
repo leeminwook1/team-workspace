@@ -16,6 +16,7 @@ import {
 } from "@/lib/permissions";
 import { Icon } from "@/components/icons";
 import HomeWidgets, { type WTask } from "@/components/home/HomeWidgets";
+import AutoRefresh from "@/components/AutoRefresh";
 import { DEFAULT_LAYOUT, type WidgetSlot } from "@/lib/widgets";
 
 export const dynamic = "force-dynamic";
@@ -141,6 +142,7 @@ export default async function HomePage() {
 
   return (
     <div className="dash">
+      <AutoRefresh />
       {/* 히어로 — 인사 (Toss 블루 그라디언트) */}
       <div className="dash-hero">
         <div>

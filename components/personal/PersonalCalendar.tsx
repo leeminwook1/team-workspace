@@ -8,6 +8,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import koLocale from "@fullcalendar/core/locales/ko";
 import { Icon } from "@/components/icons";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { useAutoRefresh } from "@/components/useAutoRefresh";
 
 type PEvent = {
   id: string; title: string; memo: string; location: string;
@@ -49,6 +50,7 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
   const refetch = useCallback(() => {
     if (range) fetchEvents(range.from, range.to, target);
   }, [range, target, fetchEvents]);
+  useAutoRefresh(refetch); // 자동 반영
 
   function changeTarget(id: string) {
     setTarget(id);
