@@ -31,12 +31,19 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
   const readOnly = target !== "";
   const api = () => calRef.current?.getApi();
 
+  const [loadErr, setLoadErr] = useState(false);
   const fetchEvents = useCallback(async (from: string, to: string, user: string) => {
-    const qs = new URLSearchParams({ from, to });
-    if (user) qs.set("user", user);
-    const res = await fetch(`/api/personal-events?${qs}`);
-    if (res.ok) setEvents((await res.json()).events ?? []);
-    else setEvents([]);
+    try {
+      const qs = new URLSearchParams({ from, to });
+      if (user) qs.set("user", user);
+      const res = await fetch(`/api/personal-events?${qs}`);
+      if (!res.ok) throw new Error(String(res.status));
+      setEvents((await res.json()).events ?? []);
+      setLoadErr(false);
+    } catch {
+      setEvents([]);
+      setLoadErr(true);
+    }
   }, []);
 
   const refetch = useCallback(() => {
@@ -97,6 +104,11 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
       {readOnly && (
         <p className="pc-banner">
           <Icon name="userLine" size={14} /> <b>{targetName}</b> 님의 개인 캘린더 — 읽기 전용
+        </p>
+      )}
+      {loadErr && (
+        <p className="err-msg" style={{ marginTop: 10 }}>
+          일정을 불러오지 못했어요. 네트워크 확인 후 <button className="rsv-linkbtn" style={{ color: "inherit", textDecoration: "underline" }} onClick={refetch}>다시 시도</button>
         </p>
       )}
 

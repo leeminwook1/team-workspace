@@ -64,7 +64,7 @@ export default async function TeamPage({ searchParams }: { searchParams: { team?
       inProgress: mine.filter((t) => t.status === "in_progress").length,
       weekDue: mine.filter((t) => t.status !== "done" && new Date(t.endDate) >= now && new Date(t.endDate) < week).length,
       overdue: overdueTasks.length,
-      overdueTitles: overdueTasks.slice(0, 3).map((t) => t.title),
+      overdueItems: overdueTasks.slice(0, 3).map((t) => ({ id: String(t._id), title: t.title })),
       doneWeek: mine.filter((t) => t.status === "done").length,
     };
   });

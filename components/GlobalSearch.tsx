@@ -8,11 +8,12 @@ import { Icon } from "@/components/icons";
 type TeamRef = { name: string; color: string };
 type Results = {
   tasks: { id: string; title: string; date: string; allDay: boolean; teams: TeamRef[] }[];
-  events: { id: string; title: string; eventDate: string | null; teams: TeamRef[]; itemsTotal: number }[];
+  events: { id: string; title: string; eventDate: string | null; teams: TeamRef[]; itemsTotal: number; matchedItems?: string[] }[];
   directives: { id: string; title: string; status: string; dueDate: string | null; team: TeamRef | null }[];
+  resources: { id: string; name: string; category: TeamRef | null }[];
 };
 
-const EMPTY: Results = { tasks: [], events: [], directives: [] };
+const EMPTY: Results = { tasks: [], events: [], directives: [], resources: [] };
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" }) : "";
 
@@ -60,7 +61,7 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
     router.push(href);
   }
 
-  const total = results.tasks.length + results.events.length + results.directives.length;
+  const total = results.tasks.length + results.events.length + results.directives.length + (results.resources?.length ?? 0);
 
   return (
     <>
@@ -85,7 +86,7 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
                 ref={inputRef}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="업무 · 행사 · TODO 검색"
+                placeholder="업무 · 행사 · TODO · 장비 검색"
                 aria-label="검색어"
               />
               <button className="gs-esc" onClick={close}>ESC</button>
@@ -122,8 +123,27 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
                           <span className="gs-item-dots">
                             {e.teams.slice(0, 3).map((tm, i) => <span className="dot" key={i} style={{ background: tm.color }} />)}
                           </span>
-                          <span className="gs-item-title">{e.title}</span>
+                          <span className="gs-item-title">
+                            {e.title}
+                            {(e.matchedItems?.length ?? 0) > 0 && (
+                              <span className="gs-item-sub"> — {e.matchedItems!.join(", ")}</span>
+                            )}
+                          </span>
                           <span className="gs-item-meta">{e.eventDate ? fmtDate(e.eventDate) : `할 일 ${e.itemsTotal}개`}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {(results.resources?.length ?? 0) > 0 && (
+                    <div className="gs-group">
+                      <div className="gs-group-title">장비</div>
+                      {results.resources.map((r) => (
+                        <button className="gs-item" key={r.id} onClick={() => go("/resources")}>
+                          <span className="gs-item-dots">
+                            {r.category && <span className="dot" style={{ background: r.category.color }} />}
+                          </span>
+                          <span className="gs-item-title">{r.name}</span>
+                          <span className="gs-item-meta">{r.category?.name ?? ""}</span>
                         </button>
                       ))}
                     </div>

@@ -23,6 +23,7 @@ function serializeSummary(e: any) {
     itemsTotal: items.length,
     itemsDone: items.filter((it: any) => it.status === "done").length,
     createdAt: e.createdAt,
+    closedAt: e.closedAt ?? null,
   };
 }
 
@@ -32,7 +33,7 @@ export async function GET() {
   if (error) return error;
 
   await connectDB();
-  const list = await Event.find()
+  const list = await Event.find({ deletedAt: null })
     .populate("teamIds", "name color")
     .populate("managerId", "name")
     .sort({ createdAt: -1 })

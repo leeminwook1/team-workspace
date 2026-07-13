@@ -32,5 +32,6 @@ const DirectiveSchema = new Schema(
 );
 
 DirectiveSchema.index({ teamId: 1, createdAt: -1 });
+DirectiveSchema.index({ status: 1, dueDate: 1 }); // 크론 마감 알림용
 
 export const Directive = models.Directive || model("Directive", DirectiveSchema);

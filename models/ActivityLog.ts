@@ -15,5 +15,8 @@ const ActivityLogSchema = new Schema(
 );
 
 ActivityLogSchema.index({ createdAt: -1 });
+ActivityLogSchema.index({ targetType: 1, createdAt: -1 }); // 관리자 활동/로그인 탭 조회용
+// 180일 지난 로그 자동 삭제 — 무한 성장 방지 (감사 기록은 6개월 보존)
+ActivityLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 180 * 24 * 3600 });
 
 export const ActivityLog = models.ActivityLog || model("ActivityLog", ActivityLogSchema);

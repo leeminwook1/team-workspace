@@ -2,7 +2,9 @@ import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
 import { Event } from "@/models/Event";
 import { Directive } from "@/models/Directive";
+import { Resource } from "@/models/Resource";
 import "@/models/Team";
+import "@/models/ResourceCategory";
 import { requireActiveUser, json } from "@/lib/api";
 import { visibleTeamIds, canUseDirectives, canCreateDirective } from "@/lib/permissions";
 
@@ -14,7 +16,7 @@ export async function GET(req: Request) {
   if (error) return error;
 
   const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
-  if (q.length < 1) return json({ tasks: [], events: [], directives: [] });
+  if (q.length < 1) return json({ tasks: [], events: [], directives: [], resources: [] });
   const rx = new RegExp(escapeRegex(q), "i");
 
   await connectDB();
@@ -32,10 +34,19 @@ export async function GET(req: Request) {
     .limit(5)
     .lean();
 
-  // 행사 — 전체 공유 보드
-  const events = await Event.find({ $or: [{ title: rx }, { location: rx }, { description: rx }] })
+  // 행사 — 전체 공유 보드 (행사 안 할 일 제목까지 검색)
+  const events = await Event.find({
+    deletedAt: null,
+    $or: [{ title: rx }, { location: rx }, { description: rx }, { "items.title": rx }],
+  })
     .populate("teamIds", "name color")
     .sort({ createdAt: -1 })
+    .limit(5)
+    .lean();
+
+  // 장비(자원) — 이름 검색
+  const resources = await Resource.find({ isActive: true, name: rx })
+    .populate("categoryId", "name color")
     .limit(5)
     .lean();
 
@@ -65,6 +76,12 @@ export async function GET(req: Request) {
       id: String(e._id), title: e.title, eventDate: e.eventDate,
       teams: (e.teamIds ?? []).filter(Boolean).map(team).filter(Boolean),
       itemsTotal: (e.items ?? []).length,
+      // 검색어와 맞은 할 일 제목 (행사 제목이 아니라 내부 투두로 걸렸을 때 표시)
+      matchedItems: (e.items ?? []).filter((i: any) => rx.test(i.title ?? "")).slice(0, 2).map((i: any) => i.title),
+    })),
+    resources: (resources as any[]).map((r: any) => ({
+      id: String(r._id), name: r.name,
+      category: r.categoryId?.name ? { name: r.categoryId.name, color: r.categoryId.color ?? "#8b95a1" } : null,
     })),
     directives: directives.map((d: any) => ({
       id: String(d._id), title: d.title, status: d.status, dueDate: d.dueDate,

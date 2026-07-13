@@ -1022,11 +1022,18 @@ function TaskDetailModal({
   }
 
   async function remove(scope?: "series") {
+    // 전체 반복 삭제는 몇 회차가 지워지는지 먼저 보여준다
+    let seriesMsg = "이 반복 일정 전체를 삭제할까요? 모든 반복 회차가 삭제되며 되돌릴 수 없습니다.";
+    if (scope === "series") {
+      try {
+        const r = await fetch(`/api/tasks/${task.id}`);
+        const cnt = r.ok ? ((await r.json()).task?.seriesCount ?? 0) : 0;
+        if (cnt > 0) seriesMsg = `이 반복 일정 총 ${cnt}회차가 모두 삭제됩니다. 되돌릴 수 없습니다.`;
+      } catch { /* 카운트 실패 시 기본 문구 */ }
+    }
     const ok = await confirm({
       title: scope === "series" ? "반복 전체 삭제" : "업무 삭제",
-      message: scope === "series"
-        ? "이 반복 일정 전체를 삭제할까요? 모든 반복 회차가 삭제되며 되돌릴 수 없습니다."
-        : "이 업무를 삭제할까요? 삭제하면 되돌릴 수 없습니다.",
+      message: scope === "series" ? seriesMsg : "이 업무를 삭제할까요? 삭제하면 되돌릴 수 없습니다.",
       confirmText: "삭제",
       danger: true,
     });

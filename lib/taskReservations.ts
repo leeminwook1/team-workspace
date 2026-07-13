@@ -41,6 +41,25 @@ export async function findConflicts(
   }));
 }
 
+/**
+ * 생성 직후 이중예약 방어 — 사전 충돌 검사와 create가 원자적이지 않아,
+ * 동시 요청 두 개가 모두 검사를 통과할 수 있다. 생성 후 다른 겹침 예약이
+ * 보이면 내 예약을 지우고 그 충돌을 반환한다(호출측은 409 처리).
+ * 최악의 경우 둘 다 물러나 재시도하게 되지만, 이중예약은 발생하지 않는다.
+ */
+export async function postCreateGuard(resv: { _id: any; resourceId: any; startAt: Date; endAt: Date }) {
+  const other: any = await Reservation.findOne({
+    _id: { $ne: resv._id },
+    resourceId: resv.resourceId,
+    status: "booked",
+    startAt: { $lt: resv.endAt },
+    endAt: { $gt: resv.startAt },
+  }).lean();
+  if (!other) return null;
+  await Reservation.deleteOne({ _id: resv._id });
+  return other;
+}
+
 export function conflictMessage(conflicts: { resource: string; by: string; startAt: Date; endAt: Date }[]) {
   const fmt = (d: Date) => new Date(d).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
   const first = conflicts[0];

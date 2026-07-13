@@ -29,5 +29,6 @@ const TaskSchema = new Schema(
 // 설계 4.7 인덱스
 TaskSchema.index({ teamIds: 1, startDate: 1 });
 TaskSchema.index({ assignees: 1, startDate: 1 });
+TaskSchema.index({ status: 1, endDate: 1 }); // 크론(마감·지연)·팀 현황 집계용
 
 export const Task = models.Task || model("Task", TaskSchema);

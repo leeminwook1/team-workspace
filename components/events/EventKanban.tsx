@@ -9,6 +9,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import koLocale from "@fullcalendar/core/locales/ko";
 import { Icon } from "@/components/icons";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { LoadError } from "@/components/LoadError";
 import { EventFormModal } from "@/components/events/EventList";
 
 type Team = { id: string; name: string; color: string };
@@ -17,6 +18,7 @@ type Item = { id: string; title: string; status: "todo" | "doing" | "hold" | "do
 type EventFull = {
   id: string; title: string; description: string; teams: Team[]; manager: Person;
   eventDate: string | null; location: string; priority: string; createdBy: string | null; items: Item[];
+  closedAt: string | null;
 };
 
 const COLS: { key: Item["status"]; label: string; color: string }[] = [
@@ -62,10 +64,18 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
+  const [loadErr, setLoadErr] = useState(false);
   const load = useCallback(async () => {
-    const res = await fetch(`/api/events/${eventId}`);
-    if (res.ok) setEv((await res.json()).event);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/events/${eventId}`);
+      if (!res.ok) throw new Error(String(res.status));
+      setEv((await res.json()).event);
+      setLoadErr(false);
+    } catch {
+      setLoadErr(true);
+    } finally {
+      setLoading(false);
+    }
   }, [eventId]);
   useEffect(() => { load(); }, [load]);
 
@@ -135,10 +145,30 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
     setItemModal(null);
   }
   async function deleteEvent() {
-    const ok = await confirm({ title: "행사 삭제", message: `“${ev?.title}” 행사를 삭제할까요? 할 일도 함께 삭제됩니다.`, confirmText: "삭제", danger: true });
+    const ok = await confirm({
+      title: "행사 삭제",
+      message: `“${ev?.title}” 행사를 삭제할까요? 할 일도 함께 삭제됩니다.\n(30일 안에는 관리자에게 요청해 복구할 수 있어요)`,
+      confirmText: "삭제", danger: true,
+    });
     if (!ok) return;
     await fetch(`/api/events/${eventId}`, { method: "DELETE" });
     window.location.href = "/events";
+  }
+  async function toggleClosed() {
+    const closing = !ev?.closedAt;
+    const ok = await confirm({
+      title: closing ? "행사 종료" : "행사 재개",
+      message: closing
+        ? "행사를 종료(보관)할까요? 목록의 '종료된 행사'로 이동하고 홈·알림 집계에서 빠집니다."
+        : "종료된 행사를 다시 진행 중으로 되돌릴까요?",
+      confirmText: closing ? "종료" : "재개",
+    });
+    if (!ok) return;
+    await fetch(`/api/events/${eventId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ closed: closing }),
+    });
+    load();
   }
   async function duplicateEvent() {
     const ok = await confirm({ title: "행사 복제", message: "이 행사의 할 일 목록을 복사해 새 행사를 만듭니다. (상태·담당자·날짜는 초기화)", confirmText: "복제" });
@@ -149,6 +179,7 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
   }
 
   if (loading) return <p className="muted-note">불러오는 중…</p>;
+  if (loadErr) return <LoadError onRetry={() => { setLoading(true); load(); }} />;
   if (!ev) return <p className="muted-note">행사를 찾을 수 없습니다.</p>;
 
   const dday = ddayOf(ev.eventDate);
@@ -179,10 +210,17 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
           <div style={{ display: "flex", gap: 8, flex: "none", flexWrap: "wrap" }}>
             <button className="btn btn-line btn-sm" onClick={() => setEditEvent(true)}>행사 수정</button>
             <button className="btn btn-line btn-sm" onClick={duplicateEvent}>복제</button>
+            <button className="btn btn-line btn-sm" onClick={toggleClosed}>{ev.closedAt ? "재개" : "행사 종료"}</button>
             <button className="btn btn-danger btn-sm" onClick={deleteEvent}>삭제</button>
           </div>
         )}
       </div>
+
+      {ev.closedAt && (
+        <p className="pc-banner" style={{ marginBottom: 12 }}>
+          <Icon name="check" size={14} /> 종료된 행사입니다 ({new Date(ev.closedAt).toLocaleDateString("ko-KR", { month: "long", day: "numeric" })} 종료)
+        </p>
+      )}
 
       {/* 진행률 요약 (Toss 스타일 숫자 강조) */}
       {totalCount > 0 && (

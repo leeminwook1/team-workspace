@@ -14,5 +14,7 @@ const NotificationSchema = new Schema(
 );
 
 NotificationSchema.index({ userId: 1, read: 1, createdAt: -1 });
+// 90일 지난 알림 자동 삭제 — 화면은 최근 30개만 쓰므로 무한 성장 방지
+NotificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 3600 });
 
 export const Notification = models.Notification || model("Notification", NotificationSchema);

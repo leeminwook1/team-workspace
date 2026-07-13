@@ -61,7 +61,10 @@ export default function ReservationBoard({
 
   const fetchWeek = useCallback(async (from: string, to: string) => {
     setWeekRange({ from, to });
-    const res = await fetch(`/api/reservations?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    let res: Response;
+    try {
+      res = await fetch(`/api/reservations?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    } catch { setErr("예약을 불러오지 못했어요. 네트워크를 확인해주세요."); return; }
     if (!res.ok) return;
     const data = await res.json();
     setWeekEvents((data.reservations ?? []).map((r: ReservationItem) => {
@@ -103,12 +106,16 @@ export default function ReservationBoard({
     from.setDate(from.getDate() - 1);
     const to = new Date();
     to.setDate(to.getDate() + 60);
-    const res = await fetch(
-      `/api/reservations?resource=${resourceId}&from=${from.toISOString()}&to=${to.toISOString()}`
-    );
-    if (res.ok) {
+    try {
+      const res = await fetch(
+        `/api/reservations?resource=${resourceId}&from=${from.toISOString()}&to=${to.toISOString()}`
+      );
+      if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setList(data.reservations ?? []);
+      setErr("");
+    } catch {
+      setErr("예약 목록을 불러오지 못했어요. 네트워크 확인 후 새로고침해주세요.");
     }
   }, []);
 

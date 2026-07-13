@@ -32,16 +32,16 @@ export const authOptions: NextAuthOptions = {
         // 무차별 대입 방어 — 같은 IP에서 15분 내 실패 10회면 차단 (성공 시 초기화)
         const key = `login:${clientIp((req?.headers ?? {}) as Record<string, string | undefined>)}`;
         const FAIL_LIMIT = 10, FAIL_WINDOW = 15 * 60 * 1000;
-        if (isBlocked(key, FAIL_LIMIT)) return null;
+        if (await isBlocked(key, FAIL_LIMIT)) return null;
 
         await connectDB();
         const user: any = await User.findOne({ email: creds.email.toLowerCase() }).lean();
         const ok = user ? await bcrypt.compare(creds.password, user.passwordHash) : false;
         if (!user || !ok || user.status === "disabled") {
-          recordFailure(key, FAIL_WINDOW);
+          await recordFailure(key, FAIL_WINDOW);
           return null;
         }
-        clearFailures(key);
+        await clearFailures(key);
         return { id: String(user._id), name: user.name, email: user.email };
       },
     }),

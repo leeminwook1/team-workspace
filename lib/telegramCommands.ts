@@ -6,8 +6,9 @@ import { Task } from "@/models/Task";
 import { Resource } from "@/models/Resource";
 import { Reservation } from "@/models/Reservation";
 import { canCreateTaskInAll, canReserve, visibleTeamIds, type SessionUser, type Role } from "./permissions";
-import { taskWindow, findConflicts, conflictMessage, syncTaskReservations } from "./taskReservations";
+import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, postCreateGuard } from "./taskReservations";
 import { logActivity, reservationLabel } from "./activity";
+import { rateLimit } from "./rateLimit";
 
 // 텔레그램 인바운드 명령 v1 — /일정 /예약 /오늘 /내일 /예약현황 /연동 /도움말
 // 시간은 숫자 형식만 지원: 14:00-16:00 또는 14-16
@@ -142,6 +143,9 @@ export async function handleTelegramCommand(chatId: string, text: string): Promi
 // ── /연동 ──
 async function linkAccount(chatId: string, code: string): Promise<string> {
   if (!/^\d{6}$/.test(code)) return "사용법: /연동 123456\n코드는 CHQ 설정 → 텔레그램 알림에서 발급해요.";
+  // 무차별 대입 방어 — 같은 챗에서 10분 내 5회 초과 시 차단
+  const rl = await rateLimit(`tglink:${chatId}`, 5, 10 * 60 * 1000);
+  if (!rl.ok) return `❌ 시도 횟수를 초과했어요. ${Math.ceil(rl.retryAfterSec / 60)}분 후 다시 시도해주세요.`;
   const u: any = await User.findOne({ tgLinkCode: code, tgLinkCodeExp: { $gt: new Date() } });
   if (!u) return "❌ 코드가 틀렸거나 만료됐어요 (10분 유효). 설정에서 다시 발급해주세요.";
   u.telegramChatId = chatId;
@@ -289,18 +293,25 @@ async function createReservation(user: SessionUser, args: string): Promise<strin
   const conflicts = await findConflicts(picked.map((p) => p.id), { startAt, endAt });
   if (conflicts.length > 0) return `❌ ${conflictMessage(conflicts)}`;
 
+  const done: { id: string; name: string }[] = [];
+  const lost: string[] = [];
   for (const p of picked) {
-    await Reservation.create({
+    const r = await Reservation.create({
       resourceId: p.id, teamId, reservedBy: user.id,
       startAt, endAt, note: "텔레그램 예약",
     });
+    // 동시 요청 이중예약 방어
+    if (await postCreateGuard(r)) { lost.push(p.name); continue; }
+    done.push(p);
     await logActivity({
       actorId: user.id, actorName: user.name ?? "", action: "create", targetType: "reservation",
       targetTitle: reservationLabel(p.name, startAt, endAt),
     });
   }
   const when = `${date.start.m}/${date.start.d} ${fmtT(startAt)}~${fmtT(endAt)}`;
-  return `✅ 예약 완료 (${picked.length}건)\n${picked.map((p) => `· ${p.name}`).join("\n")}\n${when}`;
+  if (done.length === 0) return `❌ 같은 시간에 다른 예약이 동시에 접수됐어요. 예약현황 확인 후 다시 시도해주세요.`;
+  const lostLine = lost.length > 0 ? `\n⚠ 동시 접수로 실패: ${lost.join(", ")}` : "";
+  return `✅ 예약 완료 (${done.length}건)\n${done.map((p) => `· ${p.name}`).join("\n")}\n${when}${lostLine}`;
 }
 
 // ── /오늘 /내일 ──

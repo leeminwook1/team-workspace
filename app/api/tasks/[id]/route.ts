@@ -50,6 +50,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       status: t.status,
       priority: t.priority,
       location: t.location,
+      recurrenceId: t.recurrenceId ? String(t.recurrenceId) : null,
+      // 반복 시리즈 전체 회차 수 — 전체 삭제 확인 문구용
+      seriesCount: t.recurrenceId ? await Task.countDocuments({ recurrenceId: t.recurrenceId }) : 0,
     },
   });
 }

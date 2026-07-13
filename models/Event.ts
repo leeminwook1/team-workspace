@@ -25,6 +25,9 @@ const EventSchema = new Schema(
     priority: { type: String, enum: ["low", "normal", "high", "urgent"], default: "normal" },
     items: { type: [EventItemSchema], default: [] }, // 행사 안의 투두(칸반 카드)
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    closedAt: { type: Date, default: null }, // 행사 종료(보관) 시각 — null이면 진행 중
+    deletedAt: { type: Date, default: null }, // 소프트 삭제 — 30일 내 복구 가능, 이후 크론이 완전 삭제
+
   },
   { timestamps: true }
 );

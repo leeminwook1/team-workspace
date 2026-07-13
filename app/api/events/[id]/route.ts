@@ -30,6 +30,7 @@ function serializeFull(e: any) {
       note: it.note ?? "",
     })),
     createdAt: e.createdAt,
+    closedAt: e.closedAt ?? null,
   };
 }
 
@@ -45,7 +46,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     .populate("items.assigneeId", "name")
     .populate("items.teamId", "name color")
     .lean();
-  if (!ev) return json({ error: "행사를 찾을 수 없습니다." }, 404);
+  if (!ev || ev.deletedAt) return json({ error: "행사를 찾을 수 없습니다." }, 404);
   return json({ event: serializeFull(ev) });
 }
 
@@ -61,10 +62,18 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   await connectDB();
   const ev: any = await Event.findById(params.id);
-  if (!ev) return json({ error: "행사를 찾을 수 없습니다." }, 404);
+  if (!ev || ev.deletedAt) return json({ error: "행사를 찾을 수 없습니다." }, 404);
 
   const d = parsed.data;
   const prevManager = ev.managerId ? String(ev.managerId) : "";
+  // 행사 종료(보관) / 재개
+  if (d.closed !== undefined) {
+    ev.closedAt = d.closed ? new Date() : null;
+    await logActivity({
+      actorId: user.id, actorName: user.name, action: "status", targetType: "event",
+      targetTitle: ev.title, meta: { detail: d.closed ? "행사 종료" : "행사 재개" },
+    });
+  }
   if (d.title !== undefined) ev.title = d.title;
   if (d.description !== undefined) ev.description = d.description;
   if (d.teamIds !== undefined) ev.teamIds = d.teamIds;
@@ -125,18 +134,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 // DELETE /api/events/:id — admin·과장·부과장 또는 등록자 본인
+// 소프트 삭제: 30일간 DB에 남아 있어 복구 가능, 이후 크론이 완전 삭제
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
   await connectDB();
   const ev: any = await Event.findById(params.id).lean();
-  if (!ev) return json({ error: "행사를 찾을 수 없습니다." }, 404);
+  if (!ev || ev.deletedAt) return json({ error: "행사를 찾을 수 없습니다." }, 404);
   if (!canDeleteEvent(user, String(ev.createdBy))) {
     return json({ error: "행사 삭제 권한이 없습니다." }, 403);
   }
 
-  await Event.deleteOne({ _id: params.id });
+  await Event.updateOne({ _id: params.id }, { $set: { deletedAt: new Date() } });
   await logActivity({ actorId: user.id, actorName: user.name, action: "delete", targetType: "event", targetTitle: ev.title });
   return json({ deleted: true });
 }

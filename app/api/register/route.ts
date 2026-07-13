@@ -10,7 +10,7 @@ import { rateLimit, clientIp } from "@/lib/rateLimit";
 // 신청자가 희망 팀·역할을 함께 제출하면 승인 화면에 미리 선택되어 표시된다.
 export async function POST(req: Request) {
   // 스팸 가입 방어 — IP당 1시간에 5회
-  const rl = rateLimit(`register:${clientIp(req.headers)}`, 5, 60 * 60 * 1000);
+  const rl = await rateLimit(`register:${clientIp(req.headers)}`, 5, 60 * 60 * 1000);
   if (!rl.ok) {
     return json({ error: "가입 신청이 너무 많습니다. 잠시 후 다시 시도해주세요." }, 429);
   }

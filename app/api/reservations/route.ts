@@ -6,6 +6,7 @@ import "@/models/Team";
 import { requireActiveUser, json } from "@/lib/api";
 import { canReserve } from "@/lib/permissions";
 import { reservationSchema } from "@/lib/validations";
+import { postCreateGuard } from "@/lib/taskReservations";
 import { logActivity, reservationLabel } from "@/lib/activity";
 import { Resource } from "@/models/Resource";
 
@@ -100,6 +101,11 @@ export async function POST(req: Request) {
     endAt,
     note: d.note,
   });
+  // 동시 요청 이중예약 방어 — 생성 후 재검사, 겹침이 보이면 내 예약을 물린다
+  const raced = await postCreateGuard(r);
+  if (raced) {
+    return json({ error: "같은 시간에 다른 예약이 동시에 접수되었습니다. 예약 현황을 확인하고 다시 시도해주세요." }, 409);
+  }
   const res: any = await Resource.findById(d.resourceId).select("name").lean();
   await logActivity({
     actorId: user.id, actorName: user.name, action: "create", targetType: "reservation",

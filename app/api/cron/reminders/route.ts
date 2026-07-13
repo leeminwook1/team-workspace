@@ -6,6 +6,21 @@ import { User } from "@/models/User";
 import { json } from "@/lib/api";
 import { notify } from "@/lib/notify";
 
+// 여러 팀의 팀장·부팀장을 한 번의 쿼리로 조회 → teamId별 사용자 id 목록 (N+1 방지)
+async function leadersByTeam(teamIds: string[]): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  if (teamIds.length === 0) return map;
+  const leads: any[] = await User.find({
+    teamId: { $in: teamIds }, role: { $in: ["leader", "vice_leader"] }, status: "active",
+  }).select("_id teamId").lean();
+  for (const l of leads) {
+    const key = String(l.teamId);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(String(l._id));
+  }
+  return map;
+}
+
 // GET /api/cron/reminders — 오늘(KST) 마감 알림. vercel.json crons가 매일 UTC 0시(KST 9시)에 호출.
 // Vercel은 CRON_SECRET 환경변수를 설정하면 Authorization: Bearer로 함께 보낸다.
 export async function GET(req: Request) {
@@ -41,24 +56,23 @@ export async function GET(req: Request) {
     taskNotified += ids.length;
   }
 
-  // 2) 오늘 마감인 대기(TODO) 지시 → 대상 팀 팀장·부팀장에게
+  // 2) 오늘 마감인 대기(TODO) → 대상 팀 팀장·부팀장에게
   const dirs: any[] = await Directive.find({ status: "todo", dueDate: { $gte: start, $lt: end } })
     .select("title teamId")
     .lean();
+  // 팀별 리더를 한 번에 조회해 그룹핑 (지시 건수만큼 쿼리하지 않도록)
+  const dirTeamIds = Array.from(new Set(dirs.map((d) => String(d.teamId)).filter(Boolean)));
+  const leadsByTeam = await leadersByTeam(dirTeamIds);
   let dirNotified = 0;
   for (const d of dirs) {
-    if (!d.teamId) continue;
-    const leads: any[] = await User.find({
-      teamId: d.teamId, role: { $in: ["leader", "vice_leader"] }, status: "active",
-    }).select("_id").lean();
-    const ids = leads.map((l) => String(l._id));
+    const ids = leadsByTeam.get(String(d.teamId)) ?? [];
     if (ids.length === 0) continue;
-    await notify(ids, { type: "due", title: "오늘 마감인 TODO 지시가 있어요", body: d.title, link: "/directives" });
+    await notify(ids, { type: "due", title: "오늘 마감인 TODO가 있어요", body: d.title, link: "/directives" });
     dirNotified += ids.length;
   }
 
   // 3) 오늘 마감인 행사 할 일 → 담당자 (없으면 행사 담당자, 그것도 없으면 등록자)
-  const events: any[] = await Event.find({ items: { $elemMatch: { dueDate: { $gte: start, $lt: end }, status: { $ne: "done" } } } })
+  const events: any[] = await Event.find({ deletedAt: null, closedAt: null, items: { $elemMatch: { dueDate: { $gte: start, $lt: end }, status: { $ne: "done" } } } })
     .select("title items managerId createdBy")
     .lean();
   let eventNotified = 0;
@@ -123,12 +137,10 @@ export async function GET(req: Request) {
       lateByTeam.get(tid)!.push(t.title);
     }
   }
+  const lateLeadsByTeam = await leadersByTeam(Array.from(lateByTeam.keys()));
   let lateLeadNotified = 0;
   for (const [tid, titles] of Array.from(lateByTeam.entries())) {
-    const leads: any[] = await User.find({
-      teamId: tid, role: { $in: ["leader", "vice_leader"] }, status: "active",
-    }).select("_id").lean();
-    const ids = leads.map((l) => String(l._id));
+    const ids = lateLeadsByTeam.get(tid) ?? [];
     if (ids.length === 0) continue;
     await notify(ids, {
       type: "due",
@@ -139,9 +151,13 @@ export async function GET(req: Request) {
     lateLeadNotified += ids.length;
   }
 
+  // 5) 소프트 삭제된 행사 완전 삭제 (30일 경과분)
+  const purge = await Event.deleteMany({ deletedAt: { $lt: new Date(Date.now() - 30 * 86_400_000) } });
+
   return json({
     tasksDue: tasks.length, taskNotified, directivesDue: dirs.length, dirNotified,
     eventItemsDue: events.length, eventNotified,
     lateTasks: lateTasks.length, lateUserNotified, lateLeadNotified,
+    purgedEvents: purge.deletedCount,
   });
 }

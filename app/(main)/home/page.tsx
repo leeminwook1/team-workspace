@@ -38,18 +38,46 @@ export default async function HomePage() {
   await connectDB();
   const { start, end, kst } = kstToday();
 
-  // 1) 오늘 일정 (조회 범위 내)
   const scope = visibleTeamIds(user);
-  const taskQ: any = { startDate: { $lt: end }, endDate: { $gt: start } };
-  if (scope !== "all") taskQ.teamIds = { $in: scope.length ? scope : [] };
-  const todayTasks: any[] = scope !== "all" && scope.length === 0 ? [] : await Task.find(taskQ)
-    .populate("teamIds", "name color")
-    .sort({ allDay: -1, startDate: 1 })
-    .limit(6)
-    .lean();
+  const noScope = scope !== "all" && scope.length === 0;
+  const scoped = (q: any) => {
+    if (scope !== "all") q.teamIds = { $in: scope.length ? scope : [] };
+    return q;
+  };
 
-  // 2) 행사 — 진행 중(행사일 미도래 또는 미지정) + 마감 임박 할 일
-  const eventsRaw: any[] = await Event.find().sort({ eventDate: 1 }).limit(100).lean();
+  // 이번 달(KST) 경계 — 미니 달력 + 진행 현황용
+  const kY = kst.getUTCFullYear(), kM = kst.getUTCMonth();
+  const monthStart = new Date(Date.UTC(kY, kM, 1) - 9 * 3600_000);
+  const monthEnd = new Date(Date.UTC(kY, kM + 1, 1) - 9 * 3600_000);
+
+  // 대시보드 쿼리는 상호 독립 — 병렬 실행으로 첫 로딩 단축
+  const dirQ: any = { status: "todo" };
+  if (!canCreateDirective(user)) dirQ.teamId = user.teamId ?? null;
+  const [todayTasks, eventsRaw, pendingDirs, todayResv, pendingUsers, monthTasks, upcomingTasks, meDoc] = (await Promise.all([
+    // 1) 오늘 일정 (조회 범위 내)
+    noScope ? [] : Task.find(scoped({ startDate: { $lt: end }, endDate: { $gt: start } }))
+      .populate("teamIds", "name color").sort({ allDay: -1, startDate: 1 }).limit(6).lean(),
+    // 2) 행사 — 진행 중 + 마감 임박 집계용 (삭제·종료된 행사 제외)
+    Event.find({ deletedAt: null, closedAt: null }).sort({ eventDate: 1 }).limit(100).lean(),
+    // 3) 대기 중 TODO (지시함 조회 규칙)
+    canUseDirectives(user)
+      ? Directive.find(dirQ).populate("teamId", "name color").sort({ dueDate: 1, createdAt: -1 }).limit(4).lean()
+      : [],
+    // 4) 오늘 자원 예약
+    Reservation.find({ status: "booked", startAt: { $lt: end }, endAt: { $gt: start } })
+      .populate("resourceId", "name").populate("teamId", "name color").sort({ startAt: 1 }).limit(6).lean(),
+    // 5) 승인 대기 (승인권자만)
+    canApproveUsers(user) ? User.countDocuments({ status: "pending" }) : 0,
+    // 6) 이번 달 업무 — 미니 달력 + 진행 현황
+    noScope ? [] : Task.find(scoped({ startDate: { $lt: monthEnd }, endDate: { $gt: monthStart } }))
+      .populate("teamIds", "name color").populate("categoryId", "name color").sort({ startDate: 1 }).limit(300).lean(),
+    // 7) 다가오는 일정 — 지금 이후 시작, 완료 제외
+    noScope ? [] : Task.find(scoped({ startDate: { $gt: new Date() }, status: { $ne: "done" } }))
+      .populate("teamIds", "name color").populate("categoryId", "name color").sort({ startDate: 1 }).limit(5).lean(),
+    // 8) 내 위젯 배치
+    User.findById(user.id).select("homeLayout").lean(),
+  ])) as [any[], any[], any[], any[], number, any[], any[], any];
+
   const upcoming = eventsRaw
     .filter((e) => !e.eventDate || new Date(e.eventDate) >= start)
     .slice(0, 3)
@@ -72,28 +100,6 @@ export default async function HomePage() {
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
     .slice(0, 5);
 
-  // 3) 대기 중 TODO (지시함 조회 규칙)
-  let pendingDirs: any[] = [];
-  if (canUseDirectives(user)) {
-    const dq: any = { status: "todo" };
-    if (!canCreateDirective(user)) {
-      if (user.teamId) dq.teamId = user.teamId;
-      else dq.teamId = null;
-    }
-    pendingDirs = await Directive.find(dq).populate("teamId", "name color").sort({ dueDate: 1, createdAt: -1 }).limit(4).lean();
-  }
-
-  // 4) 오늘 자원 예약
-  const todayResv: any[] = await Reservation.find({ status: "booked", startAt: { $lt: end }, endAt: { $gt: start } })
-    .populate("resourceId", "name")
-    .populate("teamId", "name color")
-    .sort({ startAt: 1 })
-    .limit(6)
-    .lean();
-
-  // 5) 승인 대기 (승인권자만)
-  const pendingUsers = canApproveUsers(user) ? await User.countDocuments({ status: "pending" }) : 0;
-
   // ── 위젯 데이터 ──
   const mapTask = (t: any): WTask => ({
     id: String(t._id),
@@ -108,23 +114,7 @@ export default async function HomePage() {
     category: t.categoryId ? { name: t.categoryId.name ?? "", color: t.categoryId.color ?? "#8b95a1" } : null,
   });
 
-  // 이번 달(KST) 업무 — 미니 달력 + 진행 현황
-  const kY = kst.getUTCFullYear(), kM = kst.getUTCMonth();
-  const monthStart = new Date(Date.UTC(kY, kM, 1) - 9 * 3600_000);
-  const monthEnd = new Date(Date.UTC(kY, kM + 1, 1) - 9 * 3600_000);
-  const monthQ: any = { startDate: { $lt: monthEnd }, endDate: { $gt: monthStart } };
-  if (scope !== "all") monthQ.teamIds = { $in: scope.length ? scope : [] };
-  const monthTasks: any[] = scope !== "all" && scope.length === 0 ? [] : await Task.find(monthQ)
-    .populate("teamIds", "name color").populate("categoryId", "name color").sort({ startDate: 1 }).limit(300).lean();
-
-  // 다가오는 일정 — 지금 이후 시작, 완료 제외
-  const upQ: any = { startDate: { $gt: new Date() }, status: { $ne: "done" } };
-  if (scope !== "all") upQ.teamIds = { $in: scope.length ? scope : [] };
-  const upcomingTasks: any[] = scope !== "all" && scope.length === 0 ? [] : await Task.find(upQ)
-    .populate("teamIds", "name color").populate("categoryId", "name color").sort({ startDate: 1 }).limit(5).lean();
-
   // 내 위젯 배치 (없으면 기본 배치, 지시 권한 없으면 TODO 위젯 제외)
-  const meDoc: any = await User.findById(user.id).select("homeLayout").lean();
   const savedLayout: WidgetSlot[] | null = meDoc?.homeLayout?.length ? meDoc.homeLayout.map((w: any) => ({ id: w.id, size: w.size === 2 ? 2 : 1 })) : null;
   const layout = (savedLayout ?? DEFAULT_LAYOUT).filter((w) => (w.id === "todo" ? canUseDirectives(user) : true));
 

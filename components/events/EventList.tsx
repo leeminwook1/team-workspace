@@ -4,6 +4,7 @@ import { ModalClose } from "@/components/ModalClose";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
+import { LoadError } from "@/components/LoadError";
 
 type Team = { id: string; name: string; color: string };
 type EventSummary = {
@@ -16,6 +17,7 @@ type EventSummary = {
   priority: string;
   itemsTotal: number;
   itemsDone: number;
+  closedAt: string | null;
 };
 
 const PRIO: Record<string, { label: string; color: string; show: boolean }> = {
@@ -42,10 +44,18 @@ export default function EventList({ teams, canManage }: { teams: Team[]; canMana
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
 
+  const [loadErr, setLoadErr] = useState(false);
   const load = useCallback(async () => {
-    const res = await fetch("/api/events");
-    if (res.ok) setEvents((await res.json()).events ?? []);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/events");
+      if (!res.ok) throw new Error(String(res.status));
+      setEvents((await res.json()).events ?? []);
+      setLoadErr(false);
+    } catch {
+      setLoadErr(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -65,15 +75,19 @@ export default function EventList({ teams, canManage }: { teams: Team[]; canMana
 
       {loading ? (
         <p className="muted-note">불러오는 중…</p>
+      ) : loadErr ? (
+        <LoadError onRetry={() => { setLoading(true); load(); }} />
       ) : events.length === 0 ? (
         <p className="muted-note">아직 등록된 행사가 없습니다.</p>
       ) : (
         (() => {
-          // 지난 행사(행사일이 지난 것)는 아래 섹션으로 분리
+          // 종료(보관)된 행사와 지난 행사(행사일이 지난 것)는 아래 섹션으로 분리
           const t0 = new Date(); t0.setHours(0, 0, 0, 0);
           const isPast = (ev: EventSummary) => !!ev.eventDate && new Date(ev.eventDate).getTime() < t0.getTime();
-          const ongoing = events.filter((e) => !isPast(e));
-          const past = events.filter(isPast);
+          const closed = events.filter((e) => e.closedAt);
+          const active = events.filter((e) => !e.closedAt);
+          const ongoing = active.filter((e) => !isPast(e));
+          const past = active.filter(isPast);
           const renderCard = (ev: EventSummary) => {
             const dday = ddayOf(ev.eventDate);
             const prio = PRIO[ev.priority] ?? PRIO.normal;
@@ -117,6 +131,12 @@ export default function EventList({ teams, canManage }: { teams: Team[]; canMana
                 <>
                   <div className="admin-section-title" style={{ marginTop: 28 }}>지난 행사 {past.length}</div>
                   <div className="ev-grid ev-grid-past">{past.map(renderCard)}</div>
+                </>
+              )}
+              {closed.length > 0 && (
+                <>
+                  <div className="admin-section-title" style={{ marginTop: 28 }}>종료된 행사 {closed.length}</div>
+                  <div className="ev-grid ev-grid-past">{closed.map(renderCard)}</div>
                 </>
               )}
             </>

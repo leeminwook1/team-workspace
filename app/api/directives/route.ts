@@ -74,7 +74,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const { user, error } = await requireActiveUser();
   if (error) return error;
-  if (!canCreateDirective(user)) return json({ error: "지시를 내릴 권한이 없습니다." }, 403);
+  if (!canCreateDirective(user)) return json({ error: "TODO를 내릴 권한이 없습니다." }, 403);
 
   const body = await req.json().catch(() => null);
   const parsed = directiveCreateSchema.safeParse(body);
@@ -98,7 +98,7 @@ export async function POST(req: Request) {
   }).select("_id").lean();
   await notify(leads.map((l) => String(l._id)).filter((id) => id !== user.id), {
     type: "directive",
-    title: "새 TODO 지시가 도착했어요",
+    title: "새 TODO가 도착했어요",
     body: created.title,
     link: "/directives",
   });

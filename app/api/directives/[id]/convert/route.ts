@@ -4,16 +4,17 @@ import { Task } from "@/models/Task";
 import { requireActiveUser, json } from "@/lib/api";
 import { canManageDirective } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
+import { notify } from "@/lib/notify";
 
-// POST /api/directives/:id/convert — 지시(또는 분배 항목)를 달력 일정으로 등록
-// body: { assignmentId?: string } — 있으면 해당 팀원 담당 일정, 없으면 지시 전체를 팀 일정으로
+// POST /api/directives/:id/convert — TODO(또는 분배 항목)를 달력 일정으로 등록
+// body: { assignmentId?: string } — 있으면 해당 팀원 담당 일정, 없으면 TODO 전체를 팀 일정으로
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
   await connectDB();
-  const dir: any = await Directive.findById(params.id);
-  if (!dir) return json({ error: "지시를 찾을 수 없습니다." }, 404);
+  const dir: any = await Directive.findById(params.id).lean();
+  if (!dir) return json({ error: "TODO를 찾을 수 없습니다." }, 404);
   if (!canManageDirective(user, String(dir.teamId))) {
     return json({ error: "일정 등록은 담당 팀장만 가능합니다." }, 403);
   }
@@ -32,8 +33,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (assignment.note) title = `${dir.title} · ${assignment.note}`;
     assignees = [String(assignment.userId)];
   } else {
-    // 지시 전체 등록: 이미 등록됐으면 중복 방지
-    if (dir.convertedTaskId) return json({ error: "이미 일정으로 등록된 지시입니다." }, 409);
+    // TODO 전체 등록: 이미 등록됐으면 중복 방지
+    if (dir.convertedTaskId) return json({ error: "이미 일정으로 등록된 TODO입니다." }, 409);
   }
 
   // 마감일이 있으면 그 날, 없으면 오늘 (allDay 일정)
@@ -52,14 +53,31 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     priority: dir.priority,
   });
 
-  if (assignment) {
-    assignment.taskId = task._id;
-    await dir.save();
-  } else {
-    dir.convertedTaskId = task._id;
-    await dir.save();
+  // 원자적 연결 — 동시 클릭 시 taskId/convertedTaskId가 이미 채워졌으면 지고,
+  // 진 쪽은 방금 만든 일정을 지워 중복 등록을 막는다.
+  const claim = assignment
+    ? await Directive.findOneAndUpdate(
+        { _id: params.id, assignments: { $elemMatch: { _id: assignmentId, taskId: null } } },
+        { $set: { "assignments.$.taskId": task._id } }
+      )
+    : await Directive.findOneAndUpdate(
+        { _id: params.id, convertedTaskId: null },
+        { $set: { convertedTaskId: task._id } }
+      );
+  if (!claim) {
+    await Task.deleteOne({ _id: task._id });
+    return json({ error: "이미 일정으로 등록되었습니다." }, 409);
   }
 
   await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetTitle: task.title });
+
+  // 담당 팀원에게 알림 (등록한 본인 제외)
+  await notify(assignees.filter((a) => a !== user.id), {
+    type: "task_assigned",
+    title: "TODO가 내 일정으로 등록됐어요",
+    body: title,
+    link: `/calendar?task=${String(task._id)}`,
+  });
+
   return json({ taskId: String(task._id) }, 201);
 }

@@ -19,7 +19,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   await connectDB();
   const dir: any = await Directive.findById(params.id);
-  if (!dir) return json({ error: "지시를 찾을 수 없습니다." }, 404);
+  if (!dir) return json({ error: "TODO를 찾을 수 없습니다." }, 404);
 
   const d = parsed.data;
   const keys = Object.keys(d);
@@ -31,7 +31,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return json({ error: "상태 변경·재분배는 담당 팀장만 가능합니다." }, 403);
   }
   if (needsEdit && !canEditDirective(user, String(dir.createdBy))) {
-    return json({ error: "지시 내용 수정은 발신자만 가능합니다." }, 403);
+    return json({ error: "TODO 내용 수정은 발신자만 가능합니다." }, 403);
   }
 
   if (d.title !== undefined) dir.title = d.title;
@@ -65,9 +65,9 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 
   await connectDB();
   const dir: any = await Directive.findById(params.id).lean();
-  if (!dir) return json({ error: "지시를 찾을 수 없습니다." }, 404);
+  if (!dir) return json({ error: "TODO를 찾을 수 없습니다." }, 404);
   if (!canEditDirective(user, String(dir.createdBy))) {
-    return json({ error: "지시 삭제는 발신자 또는 최고관리자만 가능합니다." }, 403);
+    return json({ error: "TODO 삭제는 발신자 또는 최고관리자만 가능합니다." }, 403);
   }
 
   await Directive.deleteOne({ _id: params.id });

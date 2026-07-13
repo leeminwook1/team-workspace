@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Icon } from "@/components/icons";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { LoadError } from "@/components/LoadError";
 
 type Team = { id: string; name: string; color: string };
 type Person = { id: string; name: string } | null;
@@ -62,10 +63,18 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
   const [createOpen, setCreateOpen] = useState(false);
   const [view, setView] = useState<"list" | "report">("list"); // 발신 그룹만 리포트 탭
 
+  const [loadErr, setLoadErr] = useState(false);
   const load = useCallback(async () => {
-    const res = await fetch("/api/directives");
-    if (res.ok) setItems((await res.json()).directives ?? []);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/directives");
+      if (!res.ok) throw new Error(String(res.status));
+      setItems((await res.json()).directives ?? []);
+      setLoadErr(false);
+    } catch {
+      setLoadErr(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -98,6 +107,8 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
 
       {loading ? (
         <p className="muted-note">불러오는 중…</p>
+      ) : loadErr ? (
+        <LoadError onRetry={() => { setLoading(true); load(); }} />
       ) : view === "report" && canCreate ? (
         <DirectiveReport items={items} />
       ) : items.length === 0 ? (

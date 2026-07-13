@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -15,7 +16,7 @@ export type MemberStat = {
   inProgress: number;
   weekDue: number;
   overdue: number;
-  overdueTitles: string[];
+  overdueItems: { id: string; title: string }[];
   doneWeek: number;
 };
 
@@ -48,13 +49,20 @@ export default function TeamBoard({
     return map;
   }, [members]);
 
+  const [overlayErr, setOverlayErr] = useState(false);
   const fetchOverlay = useCallback(async (from: string, to: string) => {
-    const res = await fetch(`/api/personal-events/overlay?team=${teamId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
-    if (!res.ok) { setEvents([]); setMembers([]); return; }
-    const data = await res.json();
-    setEvents(data.events ?? []);
-    setMembers(data.members ?? []);
-    setHiddenNames(data.hidden ?? []);
+    try {
+      const res = await fetch(`/api/personal-events/overlay?team=${teamId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      setEvents(data.events ?? []);
+      setMembers(data.members ?? []);
+      setHiddenNames(data.hidden ?? []);
+      setOverlayErr(false);
+    } catch {
+      setEvents([]); setMembers([]);
+      setOverlayErr(true);
+    }
   }, [teamId]);
 
   const fcEvents = events
@@ -134,9 +142,11 @@ export default function TeamBoard({
                 <div className="tb-num"><b className={s.overdue ? "danger" : ""}>{s.overdue}</b><span>지연</span></div>
                 <div className="tb-num"><b>{s.doneWeek}</b><span>주 완료</span></div>
               </div>
-              {s.overdueTitles.length > 0 && (
+              {s.overdueItems.length > 0 && (
                 <div className="tb-overdue-list">
-                  {s.overdueTitles.map((t, i) => <div key={i} className="tb-overdue-item">· {t}</div>)}
+                  {s.overdueItems.map((t) => (
+                    <Link key={t.id} href={`/calendar?task=${t.id}`} className="tb-overdue-item">· {t.title}</Link>
+                  ))}
                 </div>
               )}
             </div>
@@ -170,6 +180,9 @@ export default function TeamBoard({
       )}
       {hiddenNames.length > 0 && (
         <p className="muted-note tb-hidden-note">개인 캘린더 열람 권한이 없어 표시하지 않음: {hiddenNames.join(", ")}</p>
+      )}
+      {overlayErr && (
+        <p className="err-msg" style={{ marginBottom: 10 }}>개인 일정을 불러오지 못했어요. 네트워크 확인 후 달을 이동하면 다시 시도합니다.</p>
       )}
 
       <div className="card cal-card" style={{ padding: 14 }}>

@@ -34,5 +34,7 @@ const UserSchema = new Schema(
   { timestamps: true }
 );
 
+UserSchema.index({ teamId: 1, role: 1, status: 1 }); // 팀장·팀원 조회(알림 대상, 팀 현황)용
+
 export const User = models.User || model("User", UserSchema);
 export type UserDoc = mongoose.InferSchemaType<typeof UserSchema>;

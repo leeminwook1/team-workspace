@@ -72,11 +72,12 @@ export const eventUpdateSchema = z.object({
   location: z.string().max(120).optional(),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
   items: z.array(eventItemSchema).optional(),
+  closed: z.boolean().optional(), // 행사 종료(보관)/재개
 });
 
 // 지시(하달) — 발신은 전사 역할, 대상은 팀(그 팀장이 수신)
 export const directiveCreateSchema = z.object({
-  title: z.string().min(1, "지시 제목을 입력하세요").max(200),
+  title: z.string().min(1, "TODO 제목을 입력하세요").max(200),
   body: z.string().max(2000).optional().default(""),
   teamId: z.string().min(1, "대상 팀을 선택하세요"),
   dueDate: z.string().nullable().optional(), // ISO date 또는 null
