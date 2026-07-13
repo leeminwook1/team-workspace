@@ -31,6 +31,13 @@ type ReservationItem = {
 // 예약 한 건의 진행 상태 — 예정 / 사용 중 / 미반납(지연) / 반납 완료
 type RsvState = "upcoming" | "inuse" | "overdue" | "returned";
 const GRACE_MS = 10 * 60_000; // 종료 후 10분 유예
+// YYYY-MM-DD 문자열에 일수 더하기
+function addDays(ymd: string, days: number) {
+  const d = new Date(ymd + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 function rsvState(r: ReservationItem): RsvState {
   if (r.status === "returned") return "returned";
   const now = Date.now();
@@ -71,12 +78,30 @@ export default function ReservationBoard({
     setWeekEvents((data.reservations ?? []).map((r: ReservationItem) => {
       const color = r.team?.color ?? "#8b95a1";
       const returned = r.status === "returned";
-      return {
-        id: r.id, title: `${r.resource?.name ?? "?"}${r.team ? ` · ${r.team.name}` : ""}${returned ? " ✓" : ""}`,
-        start: r.startAt, end: r.endAt,
-        backgroundColor: color + (returned ? "12" : "26"), borderColor: returned ? color + "55" : color, textColor: returned ? color + "99" : color,
+      const start = new Date(r.startAt);
+      const end = new Date(r.endAt);
+      // 하루를 넘는 기간 대여 → 상단 종일 줄에 가로 막대로 (시간 그리드에 세로로 뭉개지지 않게)
+      const multiDay = end.getTime() - start.getTime() >= 20 * 3600_000 || start.toDateString() !== end.toDateString();
+      const base = {
+        id: r.id,
+        title: `${r.resource?.name ?? "?"}${r.team ? ` · ${r.team.name}` : ""}${returned ? " ✓" : ""}`,
+        backgroundColor: color + (returned ? "12" : "26"),
+        borderColor: returned ? color + "55" : color,
+        textColor: returned ? color + "99" : color,
         extendedProps: { resId: r.id, byId: r.reservedBy?.id, byName: r.reservedBy?.name ?? "?", returned },
       };
+      if (multiDay) {
+        // 종일 이벤트의 end는 배타적 — 종료 시각이 자정이 아니면 다음 날까지 포함.
+        // 타임존 혼선을 피하려고 날짜 전용 문자열(YYYY-MM-DD)로 넘긴다.
+        const endDay = new Date(end);
+        if (endDay.getHours() !== 0 || endDay.getMinutes() !== 0) endDay.setDate(endDay.getDate() + 1);
+        const ymd = (d: Date) => {
+          const p = (n: number) => String(n).padStart(2, "0");
+          return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+        };
+        return { ...base, start: ymd(start), end: ymd(endDay), allDay: true };
+      }
+      return { ...base, start: r.startAt, end: r.endAt };
     }));
   }, []);
 
@@ -92,8 +117,14 @@ export default function ReservationBoard({
 
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
-    teamId: "", date: today, startTime: "10:00", endTime: "12:00", note: "",
+    teamId: "", startDate: today, endDate: addDays(today, 6), startTime: "10:00", endTime: "18:00", note: "",
   });
+  // 대여 일수 (시작·종료일 포함)
+  const rentalDays = (() => {
+    const s = new Date(form.startDate), e = new Date(form.endDate);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
+    return Math.round((e.getTime() - s.getTime()) / 86400_000) + 1;
+  })();
 
   useEffect(() => {
     if (!form.teamId && reservableTeams.length > 0) {
@@ -137,8 +168,9 @@ export default function ReservationBoard({
       body: JSON.stringify({
         resourceId: selected,
         teamId: form.teamId,
-        startAt: `${form.date}T${form.startTime}:00`,
-        endAt: `${form.date}T${form.endTime}:00`,
+        // 기간 대여: 시작일의 시작시각 ~ 종료일의 종료시각
+        startAt: `${form.startDate}T${form.startTime}:00`,
+        endAt: `${form.endDate}T${form.endTime}:00`,
         note: form.note,
       }),
     });
@@ -308,7 +340,11 @@ export default function ReservationBoard({
       {/* 예약 폼 */}
       {reservableTeams.length > 0 ? (
         <div className="card" style={{ padding: 22 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 14px" }}>예약하기</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px" }}>예약하기</h2>
+          <p className="rsv-form-hint">
+            기간으로 빌릴 수 있어요 · 현재 <b>{rentalDays >= 1 ? `${rentalDays}일 대여` : "기간 오류"}</b>
+            {rentalDays === 1 && " (하루)"}
+          </p>
           <form onSubmit={reserve}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
               <div className="field">
@@ -318,15 +354,26 @@ export default function ReservationBoard({
                 </select>
               </div>
               <div className="field">
-                <label>날짜</label>
-                <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required />
+                <label>시작일</label>
+                <input
+                  type="date" value={form.startDate} required
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    // 종료일이 시작일보다 앞서지 않게 같이 밀어준다
+                    setForm((f) => ({ ...f, startDate: v, endDate: f.endDate < v ? v : f.endDate }));
+                  }}
+                />
               </div>
               <div className="field">
-                <label>시작</label>
+                <label>종료일 (반납일)</label>
+                <input type="date" value={form.endDate} min={form.startDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
+              </div>
+              <div className="field">
+                <label>수령 시각</label>
                 <input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} required />
               </div>
               <div className="field">
-                <label>종료</label>
+                <label>반납 시각</label>
                 <input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} required />
               </div>
             </div>
@@ -355,7 +402,8 @@ export default function ReservationBoard({
             height="auto"
             headerToolbar={{ left: "title", right: "prev,today,next" }}
             buttonText={{ today: "오늘" }}
-            allDaySlot={false}
+            allDaySlot
+            allDayText="기간"
             slotLabelFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
             scrollTime="08:00:00"
             nowIndicator
@@ -388,6 +436,10 @@ export default function ReservationBoard({
                 <tr key={r.id} className={st === "returned" ? "rsv-row-done" : undefined}>
                   <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
                     {fmt(r.startAt)} ~ {fmt(r.endAt)}
+                    {(() => {
+                      const d = Math.ceil((new Date(r.endAt).getTime() - new Date(r.startAt).getTime()) / 86400_000);
+                      return d >= 2 ? <span className="rsv-days">{d}일</span> : null;
+                    })()}
                   </td>
                   <td>
                     <span className={`rsv-st rsv-st-${st}`} title={st === "returned" && r.returnedAt ? `반납: ${fmt(r.returnedAt)}${r.returnedByName ? ` · ${r.returnedByName}` : ""}` : undefined}>

@@ -377,6 +377,17 @@ a { color: inherit; text-decoration: none; }
 }
 .rsv-owner b { color: var(--ink-soft); font-weight: 700; }
 .rsv-owner .dot { width: 7px; height: 7px; }
+/* 예약 폼 힌트 + 대여 일수 뱃지 */
+.rsv-form-hint { font-size: 12.5px; color: var(--ink-faint); margin: 0 0 14px; }
+.rsv-form-hint b { color: var(--primary); font-weight: 800; }
+.rsv-days {
+  display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 800;
+  color: var(--primary); background: var(--accent-soft);
+  border-radius: 999px; padding: 1px 7px; vertical-align: 1px;
+}
+/* 타임라인 종일(기간) 줄 — 시간 그리드와 구분되게 */
+.fc .fc-timegrid-axis-cushion { font-size: 11px; color: var(--ink-faint); }
+
 /* 예약 상태 뱃지 — 예정 / 사용 중 / 미반납(지연) / 반납 완료 */
 .rsv-st {
   display: inline-flex; align-items: center; gap: 4px;
@@ -1449,9 +1460,8 @@ a.tb-overdue-item:hover { text-decoration: underline; }
 .fc .fc-event .fc-event-title, .fc .fc-event .fc-event-time {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline;
 }
-/* 날짜 칸이 이벤트를 넘치지 않게 클립 */
-.fc .fc-daygrid-day-events { overflow: hidden; }
-.fc .fc-daygrid-event-harness { max-width: 100%; }
+/* 주의: .fc-daygrid-day-events에 overflow:hidden을 주면
+   여러 날에 걸치는 이벤트(기간 대여·연속 일정)가 첫 칸에서 잘린다 — 넣지 말 것 */
 .fc .fc-daygrid-block-event .fc-event-time { font-weight: 700; opacity: 0.85; margin-right: 3px; }
 .fc .fc-timegrid-event.ev-done, .fc .fc-list-event.ev-done { opacity: 0.5; }
 .fc .ev-done .fc-event-title { text-decoration: line-through; }
