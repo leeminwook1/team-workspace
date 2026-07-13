@@ -86,5 +86,62 @@ export async function GET(req: Request) {
     }
   }
 
-  return json({ tasksDue: tasks.length, taskNotified, directivesDue: dirs.length, dirNotified, eventItemsDue: events.length, eventNotified });
+  // 4) 지연 업무 — 마감(종료)이 지났는데 완료가 아닌 업무 (보류 제외, 최근 14일 내 마감분만)
+  const lateFloor = new Date(start.getTime() - 14 * 86_400_000);
+  const lateTasks: any[] = await Task.find({
+    status: { $in: ["todo", "in_progress"] },
+    endDate: { $gte: lateFloor, $lt: start },
+  })
+    .select("title assignees teamIds endDate")
+    .sort({ endDate: 1 })
+    .lean();
+
+  // 4-1) 담당자에게 — 본인 지연 업무를 묶어 1회 알림
+  const lateByUser = new Map<string, string[]>();
+  for (const t of lateTasks) {
+    for (const uid of (t.assignees ?? []).map(String)) {
+      if (!lateByUser.has(uid)) lateByUser.set(uid, []);
+      lateByUser.get(uid)!.push(t.title);
+    }
+  }
+  let lateUserNotified = 0;
+  for (const [uid, titles] of Array.from(lateByUser.entries())) {
+    await notify([uid], {
+      type: "due",
+      title: `⚠ 마감이 지난 업무가 ${titles.length}건 있어요`,
+      body: `${titles.slice(0, 3).join(", ")}${titles.length > 3 ? ` 외 ${titles.length - 3}건` : ""}`,
+      link: "/calendar",
+    });
+    lateUserNotified += 1;
+  }
+
+  // 4-2) 팀장·부팀장에게 — 팀 지연 현황 요약 (본인 담당 건은 4-1로 이미 받으므로 제외하지 않고 요약으로 제공)
+  const lateByTeam = new Map<string, string[]>();
+  for (const t of lateTasks) {
+    for (const tid of (t.teamIds ?? []).map(String)) {
+      if (!lateByTeam.has(tid)) lateByTeam.set(tid, []);
+      lateByTeam.get(tid)!.push(t.title);
+    }
+  }
+  let lateLeadNotified = 0;
+  for (const [tid, titles] of Array.from(lateByTeam.entries())) {
+    const leads: any[] = await User.find({
+      teamId: tid, role: { $in: ["leader", "vice_leader"] }, status: "active",
+    }).select("_id").lean();
+    const ids = leads.map((l) => String(l._id));
+    if (ids.length === 0) continue;
+    await notify(ids, {
+      type: "due",
+      title: `⚠ 우리 팀 지연 업무 ${titles.length}건`,
+      body: `${titles.slice(0, 3).join(", ")}${titles.length > 3 ? ` 외 ${titles.length - 3}건` : ""}`,
+      link: "/team",
+    });
+    lateLeadNotified += ids.length;
+  }
+
+  return json({
+    tasksDue: tasks.length, taskNotified, directivesDue: dirs.length, dirNotified,
+    eventItemsDue: events.length, eventNotified,
+    lateTasks: lateTasks.length, lateUserNotified, lateLeadNotified,
+  });
 }
