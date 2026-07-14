@@ -63,6 +63,10 @@ export default function HelpPage() {
           <Row k="2. 홈 꾸미기">홈의 <b>위젯 편집</b>으로 미니 달력, 내 담당 업무, 오늘 예약을 원하는 순서로 배치해요.</Row>
           <Row k="3. 알림 연결"><Link href="/settings">설정</Link>에서 텔레그램(알림·명령)과 캘린더 구독(폰 연동)을 켜면 준비 끝.</Row>
         </div>
+        <p className="help-note">
+          <b>설정은 어디에?</b> 왼쪽 아래(모바일은 오른쪽 위)에 있는 <b>내 이름 동그라미(⚙)</b>를 누르면 내 계정 설정이 열려요.
+          이름·비밀번호 변경, 텔레그램 연동, 캘린더 구독을 여기서 해요.
+        </p>
       </Sec>
 
       <Sec id="calendar" icon="calendar" tint="var(--primary)" title="달력 · 업무">
