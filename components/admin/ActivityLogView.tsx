@@ -22,7 +22,7 @@ const ACTION_META: Record<Log["action"], { label: string; color: string }> = {
   approve: { label: "승인", color: "var(--st-done)" },
 };
 const KIND_LABEL: Record<string, string> = {
-  task: "업무", directive: "TODO", event: "행사", reservation: "예약", user: "사용자",
+  task: "업무", directive: "TODO", event: "행사", reservation: "예약", user: "사용자", absence: "부재",
 };
 const STATUS_LABEL: Record<string, string> = {
   todo: "예정", in_progress: "진행중", done: "완료", hold: "보류",

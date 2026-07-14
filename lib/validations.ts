@@ -165,6 +165,15 @@ export const userUpdateSchema = z.object({
   status: z.enum(["active", "disabled"]).optional(),
 });
 
+// 부재·휴가 등록
+export const absenceSchema = z.object({
+  userId: z.string().regex(/^[0-9a-fA-F]{24}$/, "대상을 선택하세요"),
+  type: z.enum(["vacation", "half_am", "half_pm", "business", "training", "etc"]),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "시작일을 입력하세요"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "종료일을 입력하세요"),
+  note: z.string().max(200).optional().default(""),
+});
+
 export const resourceSchema = z.object({
   name: z.string().min(1, "자원 이름을 입력하세요").max(60),
   categoryId: z.string().min(1, "분류를 선택하세요"),

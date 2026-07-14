@@ -10,7 +10,7 @@ export async function logActivity(args: {
   actorName?: string | null;
   action: Action;
   targetTitle: string;
-  targetType?: "task" | "directive" | "event" | "reservation" | "user";
+  targetType?: "task" | "directive" | "event" | "reservation" | "user" | "absence";
   meta?: Record<string, unknown>;
 }) {
   try {

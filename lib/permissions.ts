@@ -130,6 +130,16 @@ export function canViewPersonalCalendar(viewer: SessionUser, target: { id: strin
 export function canApproveUsers(u: SessionUser) {
   return isActive(u) && APPROVERS.includes(u.role); // admin·과장·부과장 (서기 ✕)
 }
+
+// 부재·휴가 등록/삭제 — 본인 / 전사 편집자(admin·과장·부과장·서기) / 팀장·부팀장(자기 팀원)
+export function canManageAbsence(u: SessionUser, target: { id: string; teamId: string | null }) {
+  if (!isActive(u)) return false;
+  if (String(u.id) === String(target.id)) return true;
+  if (ALL_TEAM_EDITORS.includes(u.role)) return true;
+  return ["leader", "vice_leader"].includes(u.role) && u.teamId != null && target.teamId != null
+    && String(u.teamId) === String(target.teamId);
+}
+
 export function canManageTeams(u: SessionUser) {
   return isActive(u) && u.role === "admin"; // 시스템 관리 = 최고관리자만
 }

@@ -748,6 +748,33 @@ function TaskFormModal({
       .catch(() => {});
   }, []);
 
+  // 이 기간의 부재·휴가 — 담당자로 지정하려는 사람이 자리에 없으면 경고
+  const [absMap, setAbsMap] = useState<Map<string, string>>(new Map()); // userId → "연차 7/20~7/22"
+  useEffect(() => {
+    if (!startDate || !endDate || endDate < startDate) { setAbsMap(new Map()); return; }
+    let alive = true;
+    const t = setTimeout(async () => {
+      try {
+        const from = new Date(`${startDate}T00:00:00`).toISOString();
+        const to = new Date(`${endDate}T23:59:59`).toISOString();
+        const res = await fetch(`/api/absences?from=${from}&to=${to}`);
+        if (!res.ok || !alive) return;
+        const data = await res.json();
+        const map = new Map<string, string>();
+        for (const a of data.absences ?? []) {
+          if (!a.user) continue;
+          const d1 = new Date(a.startDate), d2 = new Date(a.endDate);
+          const span = a.startDate.slice(0, 10) === a.endDate.slice(0, 10)
+            ? `${d1.getUTCMonth() + 1}/${d1.getUTCDate()}`
+            : `${d1.getUTCMonth() + 1}/${d1.getUTCDate()}~${d2.getUTCMonth() + 1}/${d2.getUTCDate()}`;
+          if (!map.has(a.user.id)) map.set(a.user.id, `${a.typeLabel} ${span}`);
+        }
+        if (alive) setAbsMap(map);
+      } catch {}
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [startDate, endDate]);
+
   // 이 기간에 이미 예약 중인 장비 — resourceId → 예약자 이름 (수정 중엔 이 일정의 연동 예약 제외)
   const [equipBusy, setEquipBusy] = useState<Map<string, string>>(new Map());
   useEffect(() => {
@@ -972,13 +999,23 @@ function TaskFormModal({
                 {members.map((m) => (
                   <button
                     type="button" key={m.id}
-                    className={`chip chip-btn${assignees.has(m.id) ? " sel" : ""}`}
+                    className={`chip chip-btn${assignees.has(m.id) ? " sel" : ""}${absMap.has(m.id) ? " away" : ""}`}
+                    title={absMap.has(m.id) ? `부재: ${absMap.get(m.id)}` : undefined}
                     onClick={() => toggleAssignee(m.id)}
                   >
-                    {m.name}
+                    {m.name}{absMap.has(m.id) && <span aria-hidden> 🏖</span>}
                   </button>
                 ))}
               </div>
+              {(() => {
+                const away = members.filter((m) => assignees.has(m.id) && absMap.has(m.id));
+                if (away.length === 0) return null;
+                return (
+                  <p className="abs-warn">
+                    ⚠ 이 기간에 부재인 담당자가 있어요 — {away.map((m) => `${m.name}(${absMap.get(m.id)})`).join(", ")}
+                  </p>
+                );
+              })()}
             </div>
           )}
 

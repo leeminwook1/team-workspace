@@ -10,6 +10,8 @@ import { json } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { sendTelegram, telegramEnabled, esc } from "@/lib/telegram";
 import { addInterval, RECUR_BATCH_CAP } from "@/lib/recurrence";
+import { Absence } from "@/models/Absence";
+import { ABSENCE_LABEL, type AbsenceType } from "@/lib/absenceTypes";
 
 // 여러 팀의 팀장·부팀장을 한 번의 쿼리로 조회 → teamId별 사용자 id 목록 (N+1 방지)
 async function leadersByTeam(teamIds: string[]): Promise<Map<string, string[]>> {
@@ -238,14 +240,23 @@ export async function GET(req: Request) {
         }
       }
 
-      if (dayTasks.length === 0 && dayResv.length === 0 && !weekSection) continue; // 빈 브리핑은 보내지 않음
+      // 오늘 부재 — 팀원 연차·출장 명단
+      const dayAbs: any[] = await Absence.find({
+        teamId: team._id, startDate: { $lt: end }, endDate: { $gte: start },
+      }).populate("userId", "name").limit(12).lean();
+
+      if (dayTasks.length === 0 && dayResv.length === 0 && dayAbs.length === 0 && !weekSection) continue; // 빈 브리핑은 보내지 않음
 
       const taskLines = dayTasks.map((t) =>
         `· ${t.allDay ? "종일" : fmtT(t.startDate)} ${esc(t.title)}${t.status === "done" ? " ✔" : ""}`);
       const resvLines = dayResv.map((r) =>
         `· ${esc(r.resourceId?.name ?? "?")} ${fmtT(r.startAt)}~${fmtT(r.endAt)}${r.reservedBy?.name ? ` (${esc(r.reservedBy.name)})` : ""}`);
+      const absLine = dayAbs.length > 0
+        ? `\n🏖 부재 ${dayAbs.length}명 — ${dayAbs.map((a) => `${esc(a.userId?.name ?? "?")}(${ABSENCE_LABEL[a.type as AbsenceType] ?? a.type})`).join(", ")}`
+        : "";
       const text = [
         `☀️ <b>${esc(team.name)} ${isMonday ? "주간" : "오늘"} 브리핑</b> (${kst.getUTCMonth() + 1}/${kst.getUTCDate()} ${kstDow})`,
+        absLine,
         dayTasks.length > 0 ? `\n📅 오늘 일정 ${dayTasks.length}건\n${taskLines.join("\n")}` : "",
         dayResv.length > 0 ? `\n📦 장비 대여 ${dayResv.length}건\n${resvLines.join("\n")}` : "",
         weekSection,
