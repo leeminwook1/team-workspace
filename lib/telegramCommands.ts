@@ -5,6 +5,7 @@ import { Category } from "@/models/Category";
 import { Task } from "@/models/Task";
 import { Resource } from "@/models/Resource";
 import { Reservation } from "@/models/Reservation";
+import { PersonalEvent } from "@/models/PersonalEvent";
 import {
   canCreateTaskInAll, canReserve, visibleTeamIds, canChangeStatusAny, canDeleteTaskDoc, canMarkReturned,
   type SessionUser, type Role,
@@ -13,6 +14,7 @@ import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, postC
 import { logActivity, reservationLabel } from "./activity";
 import { rateLimit } from "./rateLimit";
 import { notify } from "./notify";
+import { touchChanged } from "./changes";
 import { esc, answerCallback, editTelegramMessage, type TgButton } from "./telegram";
 
 // 명령 응답 — 문자열(플레인) 또는 서식·버튼 포함 객체
@@ -31,6 +33,9 @@ const HELP = `📖 사용법
   · 옵션: @팀이름 #카테고리 !긴급 !높음 장소:내용
   · 담당: 장비: 는 맨 뒤에 — 쉼표로 여러 명·여러 개
   예) /일정 노방활동 금요일 14-16 #촬영 담당:이민욱 장비:캐논 R6(7-1)
+
+/개인 제목 날짜 [시간] [장소:내용] — 내 캘린더에만 표시
+  예) /개인 병원 예약 내일 15-16
 
 /예약 장비명[, 장비명2] 날짜 [시간]
   예) /예약 캐논 R6, 배터리(7-1) 내일 14-16
@@ -205,6 +210,7 @@ export async function handleTelegramCommand(chatId: string, text: string, fromId
   try {
     switch (cmd) {
       case "/일정": case "/schedule": return await createTask(user, args);
+      case "/개인": case "/private": return await createPersonalEvent(user, args);
       case "/예약": case "/book": return await createReservation(user, args);
       case "/오늘": case "/today": return await listDay(user, 0);
       case "/내일": case "/tomorrow": return await listDay(user, 1);
@@ -357,6 +363,58 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
     text: `✅ 일정 등록: <b>${esc(title)}</b> (${esc(user.name ?? "")})\n${when} ${timeStr} · ${esc(teamLabel)}${extras ? `\n${extras}` : ""}${assigneeLine}${equipLine}`,
     html: true,
     buttons: [[{ text: "↩ 방금 등록 취소", data: `undo:${task._id}` }]],
+  };
+}
+
+// ── /개인 (개인 일정 — 내 캘린더) ──
+async function createPersonalEvent(user: SessionUser, args: string): Promise<TgReply> {
+  if (!args) {
+    return `📝 개인 일정은 이렇게 (복사해서 수정):
+
+/개인 병원 예약 내일 15-16
+/개인 휴가 7/20-7/22
+/개인 미팅 금요일 14시-15시 장소:강남
+
+· 날짜: 7/20, 오늘, 내일, 모레, 금요일, 다음주 화요일, 7/20-7/22(기간)
+· 시간: 14-16, 14:00-16:00 (없으면 종일)
+· 장소:내용 (선택)
+🔒 개인 일정은 내 캘린더에만 표시돼요 (같은 팀 팀장·관리자만 열람).`;
+  }
+  const now = new Date();
+  const tokens = args.split(/\s+/);
+
+  let date: DateRange | null = null;
+  let time: ReturnType<typeof parseTimeToken> = null;
+  let location = "";
+  const titleParts: string[] = [];
+  for (const t of tokens) {
+    if (!date && (date = parseDateToken(t, now))) continue;
+    if (!time && (time = parseTimeToken(t))) continue;
+    if (t.startsWith("장소:")) { location = t.slice(3); continue; }
+    titleParts.push(t);
+  }
+  const title = titleParts.join(" ").trim();
+  if (!title) return "❌ 제목이 없어요.\n예) /개인 병원 예약 내일 15-16";
+  if (!date) return "❌ 날짜를 못 찾았어요. 7/20, 2026-07-20, 오늘, 내일 형식으로 써주세요.";
+  if (time && time.eh * 60 + time.em <= time.sh * 60 + time.sm) return "❌ 종료 시각이 시작보다 빨라요.";
+
+  const allDay = !time;
+  const startDate = allDay ? new Date(ymd(date.start)) : kstDate(date.start, time!.sh, time!.sm);
+  const endDate = allDay ? new Date(ymd(date.end)) : kstDate(date.start, time!.eh, time!.em);
+
+  const ev = await PersonalEvent.create({ userId: user.id, title, memo: "", location, startDate, endDate, allDay });
+  await touchChanged("personal"); // 웹 '내 캘린더' 자동 반영
+
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  const when = date.start.m === date.end.m && date.start.d === date.end.d
+    ? `${date.start.m}/${date.start.d}`
+    : `${date.start.m}/${date.start.d}~${date.end.m}/${date.end.d}`;
+  const timeStr = allDay ? "종일" : `${p2(time!.sh)}:${p2(time!.sm)}-${p2(time!.eh)}:${p2(time!.em)}`;
+  const locLine = location ? `\n📍 ${esc(location)}` : "";
+  return {
+    text: `✅ 개인 일정 등록: <b>${esc(title)}</b> (${esc(user.name ?? "")})\n${when} ${timeStr}${locLine}\n🔒 내 캘린더에만 표시돼요.`,
+    html: true,
+    buttons: [[{ text: "↩ 방금 등록 취소", data: `pundo:${ev._id}` }]],
   };
 }
 
@@ -523,7 +581,7 @@ async function listMyTasks(user: SessionUser): Promise<TgReply> {
 }
 
 // ── 인라인 버튼 콜백 처리 ──
-// data 형식 — undo:<taskId> 방금 등록 취소 / done:<taskId> 업무 완료 /
+// data 형식 — undo:<taskId> 방금 등록 취소 / pundo:<id> 개인일정 취소 / done:<taskId> 업무 완료 /
 //            delres:<rid> 예약 취소 / ret:<rid> 반납 처리
 export async function handleTelegramCallback(p: {
   fromId: string; // 누른 사람의 개인 텔레그램 ID (그룹방에서도 개인 식별)
@@ -557,6 +615,16 @@ export async function handleTelegramCallback(p: {
       await Task.deleteOne({ _id: task._id });
       await logActivity({ actorId: user.id, actorName: user.name ?? "", action: "delete", targetTitle: `${task.title} (텔레그램 등록 취소)` });
       await finish("등록을 취소했어요.", `↩ 등록이 취소되었습니다. (${user.name ?? ""})`);
+      return;
+    }
+
+    if (action === "pundo") {
+      const ev: any = await PersonalEvent.findById(id);
+      if (!ev) { await finish("이미 삭제된 일정이에요.", "↩ 이미 취소된 일정입니다."); return; }
+      if (String(ev.userId) !== user.id) { await answerCallback(p.callbackId, "본인 개인 일정만 취소할 수 있어요."); return; }
+      await PersonalEvent.deleteOne({ _id: ev._id });
+      await touchChanged("personal");
+      await finish("등록을 취소했어요.", `↩ 개인 일정 등록이 취소되었습니다. (${user.name ?? ""})`);
       return;
     }
 

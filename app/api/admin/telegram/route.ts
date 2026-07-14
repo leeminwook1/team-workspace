@@ -14,6 +14,7 @@ const BOT_COMMANDS = [
   { command: "mytasks", description: "내 담당 업무" },
   { command: "reservations", description: "장비 예약 현황" },
   { command: "schedule", description: "일정 등록 — 제목 날짜 [시간]" },
+  { command: "private", description: "개인 일정 등록 — 내 캘린더에만" },
   { command: "book", description: "장비 예약 — 장비명 날짜 [시간]" },
   { command: "link", description: "계정 연동 — 코드 6자리" },
   { command: "chatid", description: "이 대화방 챗 ID 확인" },
