@@ -30,7 +30,8 @@ const UserSchema = new Schema(
     // 텔레그램 알림 수신 설정 — false인 항목은 텔레그램 발송 생략 (앱 내 알림은 항상 생성)
     notifyPrefs: {
       assign: { type: Boolean, default: true }, // 담당자 배정 (업무·행사)
-      due: { type: Boolean, default: true }, // 마감·지연 리마인더
+      due: { type: Boolean, default: true }, // 오늘 마감 리마인더
+      late: { type: Boolean, default: true }, // 지연(마감 지난) 업무 리마인더
       directive: { type: Boolean, default: true }, // 지시(TODO)
       equip: { type: Boolean, default: true }, // 장비 예약·반납
     },

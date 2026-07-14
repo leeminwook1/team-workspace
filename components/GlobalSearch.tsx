@@ -28,15 +28,52 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const close = useCallback(() => { setOpen(false); setQ(""); setResults(EMPTY); }, []);
+  const [active, setActive] = useState(0); // 키보드(↑↓) 선택 인덱스
 
-  // 열리면 포커스, ESC로 닫기
+  // 결과를 렌더 순서 그대로 평탄화 — ↑↓/Enter 탐색용
+  const flat: { href: string }[] = [
+    ...results.tasks.map((t) => ({ href: `/calendar?task=${t.id}` })),
+    ...results.events.map((e) => ({ href: `/events/${e.id}` })),
+    ...(results.resources ?? []).map(() => ({ href: "/resources" })),
+    ...results.directives.map(() => ({ href: "/directives" })),
+  ];
+
+  // Ctrl/⌘+K — 어디서든 검색 열기
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // 열리면 포커스, ESC 닫기 + ↑↓/Enter 결과 탐색
   useEffect(() => {
     if (!open) return;
     inputRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { close(); return; }
+      if (flat.length === 0) return;
+      if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, flat.length - 1)); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
+      else if (e.key === "Enter") {
+        e.preventDefault();
+        const target = flat[Math.min(active, flat.length - 1)];
+        if (target) go(target.href);
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, close]);
+  }); // flat·active를 참조하므로 매 렌더 재등록 (가벼움)
+
+  // 결과가 바뀌면 선택을 맨 위로 + 선택 항목이 보이게 스크롤
+  useEffect(() => { setActive(0); }, [results]);
+  useEffect(() => {
+    document.querySelector(".gs-item.kb-active")?.scrollIntoView({ block: "nearest" });
+  }, [active]);
 
   // 디바운스 검색
   useEffect(() => {
@@ -73,6 +110,7 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
         <button className="gs-trigger" onClick={() => setOpen(true)}>
           <Icon name="search" size={16} />
           <span>검색</span>
+          <kbd className="gs-kbd">Ctrl K</kbd>
         </button>
       )}
 
@@ -104,8 +142,8 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
                   {results.tasks.length > 0 && (
                     <div className="gs-group">
                       <div className="gs-group-title">업무</div>
-                      {results.tasks.map((t) => (
-                        <button className="gs-item" key={t.id} onClick={() => go(`/calendar?task=${t.id}`)}>
+                      {results.tasks.map((t, i) => (
+                        <button className={`gs-item${active === i ? " kb-active" : ""}`} onMouseEnter={() => setActive(i)} key={t.id} onClick={() => go(`/calendar?task=${t.id}`)}>
                           <span className="gs-item-dots">
                             {t.teams.slice(0, 3).map((tm, i) => <span className="dot" key={i} style={{ background: tm.color }} />)}
                           </span>
@@ -118,8 +156,8 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
                   {results.events.length > 0 && (
                     <div className="gs-group">
                       <div className="gs-group-title">행사</div>
-                      {results.events.map((e) => (
-                        <button className="gs-item" key={e.id} onClick={() => go(`/events/${e.id}`)}>
+                      {results.events.map((e, i) => (
+                        <button className={`gs-item${active === results.tasks.length + i ? " kb-active" : ""}`} onMouseEnter={() => setActive(results.tasks.length + i)} key={e.id} onClick={() => go(`/events/${e.id}`)}>
                           <span className="gs-item-dots">
                             {e.teams.slice(0, 3).map((tm, i) => <span className="dot" key={i} style={{ background: tm.color }} />)}
                           </span>
@@ -137,8 +175,8 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
                   {(results.resources?.length ?? 0) > 0 && (
                     <div className="gs-group">
                       <div className="gs-group-title">장비</div>
-                      {results.resources.map((r) => (
-                        <button className="gs-item" key={r.id} onClick={() => go("/resources")}>
+                      {results.resources.map((r, i) => (
+                        <button className={`gs-item${active === results.tasks.length + results.events.length + i ? " kb-active" : ""}`} onMouseEnter={() => setActive(results.tasks.length + results.events.length + i)} key={r.id} onClick={() => go("/resources")}>
                           <span className="gs-item-dots">
                             {r.category && <span className="dot" style={{ background: r.category.color }} />}
                           </span>
@@ -151,8 +189,8 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
                   {results.directives.length > 0 && (
                     <div className="gs-group">
                       <div className="gs-group-title">TODO</div>
-                      {results.directives.map((d) => (
-                        <button className="gs-item" key={d.id} onClick={() => go("/directives")}>
+                      {results.directives.map((d, i) => (
+                        <button className={`gs-item${active === results.tasks.length + results.events.length + (results.resources?.length ?? 0) + i ? " kb-active" : ""}`} onMouseEnter={() => setActive(results.tasks.length + results.events.length + (results.resources?.length ?? 0) + i)} key={d.id} onClick={() => go("/directives")}>
                           <span className="gs-item-dots">
                             {d.team && <span className="dot" style={{ background: d.team.color }} />}
                           </span>

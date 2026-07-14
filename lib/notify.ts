@@ -4,10 +4,11 @@ import { User } from "@/models/User";
 import { sendTelegram, telegramEnabled, esc, type TgButton } from "./telegram";
 
 // 알림 타입 → 텔레그램 수신 설정 키 (설정에서 끈 항목은 텔레그램 발송 생략)
-const PREF_KEY: Record<string, "assign" | "due" | "directive" | "equip"> = {
+const PREF_KEY: Record<string, "assign" | "due" | "late" | "directive" | "equip"> = {
   task_assigned: "assign",
   event_assigned: "assign",
   due: "due",
+  late: "late", // 지연 업무 리마인더 — 오늘 마감(due)과 분리해 따로 끌 수 있게
   directive: "directive",
   reservation: "equip",
 };

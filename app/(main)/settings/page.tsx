@@ -26,6 +26,7 @@ export default async function SettingsPage() {
       initialNotifyPrefs={{
         assign: me.notifyPrefs?.assign !== false,
         due: me.notifyPrefs?.due !== false,
+        late: me.notifyPrefs?.late !== false,
         directive: me.notifyPrefs?.directive !== false,
         equip: me.notifyPrefs?.equip !== false,
       }}

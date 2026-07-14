@@ -35,7 +35,7 @@ type TaskItem = {
   resources?: { id: string; name: string; ownerId?: string; ownerName?: string }[]; // 연동된 대여 장비 (+장비별 담당자)
 };
 
-type ResourceOpt = { id: string; name: string; category: { id: string; name: string; color?: string; order?: number } | null };
+type ResourceOpt = { id: string; name: string; category: { id: string; name: string; color?: string; order?: number } | null; status?: "available" | "maintenance" | "broken" };
 
 const STATUS_LABEL: Record<string, [string, string]> = {
   todo: ["예정", "var(--st-todo)"],
@@ -73,6 +73,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   const [filtersOpen, setFiltersOpen] = useState(false); // 필터 패널 접기/펼치기
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false); // 휴지통 (삭제 업무 복구)
   const [createDate, setCreateDate] = useState("");
   const [detail, setDetail] = useState<TaskItem | null>(null);
   const [editing, setEditing] = useState<TaskItem | null>(null);
@@ -300,6 +301,9 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           <Icon name="filter" size={13} /> 필터
           {filtersActive && <span className="cal-filter-dot" aria-label="필터 적용됨" />}
         </button>
+        <button className="cal1c-today" onClick={() => setTrashOpen(true)} title="삭제한 업무 복구 (30일)">
+          휴지통
+        </button>
         <div className="cal-spacer" />
         <div className="seg" role="tablist" aria-label="보기 전환">
           <button className={view === "dayGridMonth" ? "on" : ""} onClick={() => changeView("dayGridMonth")}>월</button>
@@ -388,6 +392,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           selected={mSel}
           onSelect={setMSel}
           onTaskClick={setDetail}
+          onAddAt={editableTeams.length > 0 ? (day) => { setCreateDate(day); setCreateOpen(true); } : undefined}
         />
       )}
 
@@ -500,14 +505,78 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           }}
         />
       )}
+
+      {trashOpen && <TrashModal onClose={() => setTrashOpen(false)} onRestored={refetch} />}
+    </div>
+  );
+}
+
+/* ── 휴지통 — 최근 30일 내 삭제된 업무 복구 ── */
+function TrashModal({ onClose, onRestored }: { onClose: () => void; onRestored: () => void }) {
+  const [rows, setRows] = useState<{
+    id: string; title: string; teams: { name: string; color: string }[];
+    startDate: string; deletedAt: string; recurrenceId: string | null;
+  }[] | null>(null);
+  const [err, setErr] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/tasks/trash");
+      if (!res.ok) throw new Error();
+      const d = await res.json();
+      setRows(d.tasks ?? []);
+    } catch { setErr("휴지통을 불러오지 못했어요."); setRows([]); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function restore(id: string) {
+    setErr("");
+    const res = await fetch(`/api/tasks/${id}/restore`, { method: "POST" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setErr(d.error ?? "복구 실패"); return; }
+    setRows((r) => r?.filter((x) => x.id !== id) ?? null);
+    onRestored();
+  }
+
+  const fmtD = (iso: string) => new Date(iso).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
+        <h2>휴지통</h2>
+        <p className="rsv-form-hint" style={{ marginTop: -8 }}>삭제한 업무는 30일 동안 보관돼요. 복구하면 달력에 다시 나타납니다 (연동됐던 장비 예약은 복구되지 않아요).</p>
+        {err && <p className="err-msg">{err}</p>}
+        {rows === null ? (
+          <p className="muted-note">불러오는 중…</p>
+        ) : rows.length === 0 ? (
+          <p className="muted-note" style={{ padding: "16px 0" }}>휴지통이 비어 있어요.</p>
+        ) : (
+          <div className="tlg-list">
+            {rows.map((r) => (
+              <div className="tlg-row" key={r.id}>
+                <span className="tlg-name">
+                  {r.title}
+                  <span className="trash-meta"> · {fmtD(r.startDate)} 일정 · {fmtD(r.deletedAt)} 삭제</span>
+                </span>
+                {r.teams[0] && <span className="chip"><span className="dot" style={{ background: r.teams[0].color }} />{r.teams[0].name}</span>}
+                <span className="tlg-actions">
+                  <button className="btn btn-line btn-sm" onClick={() => restore(r.id)}>복구</button>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 /* ── 모바일 월간 뷰 — 도트 그리드 + 선택일 아젠다 (1d) ── */
-function MobileMonthCal({ monthDate, tasks, selected, onSelect, onTaskClick }: {
+function MobileMonthCal({ monthDate, tasks, selected, onSelect, onTaskClick, onAddAt }: {
   monthDate: Date; tasks: TaskItem[]; selected: string;
   onSelect: (day: string) => void; onTaskClick: (t: TaskItem) => void;
+  onAddAt?: (day: string) => void; // 선택일에 바로 일정 추가 (권한 없으면 미전달)
 }) {
   const today = ymdStr(new Date());
   const y = monthDate.getFullYear(), m = monthDate.getMonth();
@@ -567,6 +636,9 @@ function MobileMonthCal({ monthDate, tasks, selected, onSelect, onTaskClick }: {
       <div className="mc-agenda">
         <div className="mc-agenda-head">
           {selLabel} {selected === today && <b>오늘</b>}
+          {onAddAt && (
+            <button type="button" className="mc-add-day" onClick={() => onAddAt(selected)}>+ 이 날 일정 추가</button>
+          )}
         </div>
         {dayTasks.length === 0 && (
           <div className="mc-empty">이 날짜엔 일정이 없어요.</div>
@@ -676,6 +748,31 @@ function TaskFormModal({
       .catch(() => {});
   }, []);
 
+  // 이 기간에 이미 예약 중인 장비 — resourceId → 예약자 이름 (수정 중엔 이 일정의 연동 예약 제외)
+  const [equipBusy, setEquipBusy] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (!startDate || !endDate || endDate < startDate) { setEquipBusy(new Map()); return; }
+    const from = allDay ? new Date(`${startDate}T00:00:00`) : new Date(`${startDate}T${startTime || "00:00"}:00`);
+    const to = allDay ? new Date(`${endDate}T23:59:59`) : new Date(`${endDate}T${endTime || "23:59"}:00`);
+    if (isNaN(from.getTime()) || isNaN(to.getTime()) || to <= from) { setEquipBusy(new Map()); return; }
+    let alive = true;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/reservations?from=${from.toISOString()}&to=${to.toISOString()}`);
+        if (!res.ok || !alive) return;
+        const data = await res.json();
+        const map = new Map<string, string>();
+        for (const r of data.reservations ?? []) {
+          if (r.status !== "booked" || !r.resource) continue;
+          if (task && r.relatedTaskId === task.id) continue; // 내가 수정 중인 일정의 예약
+          if (!map.has(r.resource.id)) map.set(r.resource.id, r.reservedBy?.name ?? "?");
+        }
+        if (alive) setEquipBusy(map);
+      } catch {}
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [startDate, endDate, startTime, endTime, allDay, task]);
+
   function toggleResource(id: string) {
     setResourceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
     // 선택 해제 시 담당자 매핑도 제거
@@ -722,6 +819,8 @@ function TaskFormModal({
     e.preventDefault();
     setErr("");
     if (teamIds.length === 0) { setErr("팀을 하나 이상 선택하세요."); return; }
+    if (allDay && endDate < startDate) { setErr("종료일이 시작일보다 빠를 수 없어요."); return; }
+    if (!allDay && endTime <= startTime) { setErr("종료 시각이 시작 시각보다 빨라요."); return; }
     setLoading(true);
     // 시간 지정 업무는 브라우저 로컬시각을 ISO(UTC)로 변환해 전송 → 서버 타임존과 무관하게 정확
     const when = allDay
@@ -797,11 +896,12 @@ function TaskFormModal({
             <div className="form-grid-2">
               <div className="field">
                 <label>시작일</label>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+                <input type="date" value={startDate} required
+                  onChange={(e) => { const v = e.target.value; setStartDate(v); setEndDate((d) => (d < v ? v : d)); }} />
               </div>
               <div className="field">
                 <label>종료일</label>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+                <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} required />
               </div>
             </div>
           ) : (
@@ -997,12 +1097,23 @@ function TaskFormModal({
                         </div>
                         {g.items.map((r) => {
                           const on = resourceIds.includes(r.id);
+                          const bad = r.status && r.status !== "available";
+                          const busyBy = !bad ? equipBusy.get(r.id) : undefined;
+                          const blocked = !on && (bad || !!busyBy); // 이미 선택한 건 해제 가능하게
                           return (
-                            <button type="button" key={r.id} className={`equip-row${on ? " on" : ""}`} onClick={() => toggleResource(r.id)}>
+                            <button
+                              type="button" key={r.id}
+                              className={`equip-row${on ? " on" : ""}${blocked ? " blocked" : ""}`}
+                              onClick={() => { if (!blocked) toggleResource(r.id); }}
+                              disabled={blocked}
+                              title={bad ? (r.status === "broken" ? "고장" : "수리·점검 중") : busyBy ? `${busyBy} 예약 중` : undefined}
+                            >
                               <span className="equip-check" aria-hidden>
                                 {on && <Icon name="check" size={12} strokeWidth={3} />}
                               </span>
                               {r.name}
+                              {bad && <b className="equip-row-off off-bad">{r.status === "broken" ? "고장" : "수리중"}</b>}
+                              {!bad && busyBy && <b className="equip-row-off off-busy">{busyBy} 예약중</b>}
                             </button>
                           );
                         })}

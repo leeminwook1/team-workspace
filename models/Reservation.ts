@@ -20,5 +20,7 @@ const ReservationSchema = new Schema(
 // 겹침 검사용 인덱스 (설계 4.7)
 ReservationSchema.index({ resourceId: 1, startAt: 1, endAt: 1 });
 ReservationSchema.index({ relatedTaskId: 1, status: 1 }); // 업무 연동 예약 조회용
+ReservationSchema.index({ status: 1, endAt: 1 }); // 크론 미반납 조회용
+ReservationSchema.index({ teamId: 1, status: 1, startAt: 1 }); // 팀 그룹방 브리핑 조회용
 
 export const Reservation = models.Reservation || model("Reservation", ReservationSchema);

@@ -37,6 +37,7 @@ export default async function ResourcesPage() {
             : null,
           ownerTeam: r.ownerTeamId?.name ? { name: r.ownerTeamId.name, color: r.ownerTeamId.color } : null,
           manager: r.managerId?.name ? { id: String(r.managerId._id), name: r.managerId.name } : null,
+          status: r.status ?? "available",
         }))}
         teams={teams.map((t: any) => ({ id: String(t._id), name: t.name, color: t.color }))}
       />

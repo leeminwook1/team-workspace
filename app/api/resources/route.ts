@@ -29,6 +29,7 @@ export async function GET() {
         : null,
       ownerTeam: r.ownerTeamId?.name ? { id: String(r.ownerTeamId._id), name: r.ownerTeamId.name, color: r.ownerTeamId.color } : null,
       manager: r.managerId?.name ? { id: String(r.managerId._id), name: r.managerId.name } : null,
+      status: r.status ?? "available",
     })),
   });
 }

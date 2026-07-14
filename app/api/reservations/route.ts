@@ -26,6 +26,10 @@ export async function GET(req: Request) {
   if (from && to) {
     q.startAt = { $lt: new Date(to) };
     q.endAt = { $gt: new Date(from) };
+  } else {
+    // 기간 미지정 시 전량 반환 방지 — 최근 90일 ~ 180일 뒤 창으로 제한
+    q.startAt = { $lt: new Date(Date.now() + 180 * 86400_000) };
+    q.endAt = { $gt: new Date(Date.now() - 90 * 86400_000) };
   }
 
   const list = await Reservation.find(q)
@@ -48,6 +52,7 @@ export async function GET(req: Request) {
       status: r.status,
       returnedAt: r.returnedAt ?? null,
       returnedByName: r.returnedBy?.name ?? null,
+      relatedTaskId: r.relatedTaskId ? String(r.relatedTaskId) : null,
     })),
   });
 }
@@ -71,6 +76,13 @@ export async function POST(req: Request) {
   if (endAt <= startAt) return json({ error: "종료 시각이 시작 시각보다 빠릅니다." }, 400);
 
   await connectDB();
+  // 장비 상태 확인 — 수리중/고장 장비는 예약 불가
+  const resDoc: any = await Resource.findById(d.resourceId).select("name status isActive").lean();
+  if (!resDoc || !resDoc.isActive) return json({ error: "예약할 수 없는 장비입니다." }, 400);
+  if (resDoc.status && resDoc.status !== "available") {
+    const label = resDoc.status === "maintenance" ? "수리·점검 중" : "고장";
+    return json({ error: `${resDoc.name}은(는) 현재 ${label}이라 예약할 수 없어요.` }, 409);
+  }
   // [startAt, endAt) 구간 겹침 검사 — 같은 자원의 booked 예약과 겹치면 거절
   const conflict = await Reservation.findOne({
     resourceId: d.resourceId,
@@ -106,10 +118,9 @@ export async function POST(req: Request) {
   if (raced) {
     return json({ error: "같은 시간에 다른 예약이 동시에 접수되었습니다. 예약 현황을 확인하고 다시 시도해주세요." }, 409);
   }
-  const res: any = await Resource.findById(d.resourceId).select("name").lean();
   await logActivity({
     actorId: user.id, actorName: user.name, action: "create", targetType: "reservation",
-    targetTitle: reservationLabel(res?.name ?? "자원", startAt, endAt),
+    targetTitle: reservationLabel(resDoc.name ?? "자원", startAt, endAt),
   });
   return json({ id: String(r._id) }, 201);
 }

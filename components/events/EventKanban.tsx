@@ -3,6 +3,7 @@ import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -51,6 +52,7 @@ function dueInfo(iso: string | null, done: boolean) {
 }
 
 export default function EventKanban({ eventId, allTeams, canManage }: { eventId: string; allTeams: Team[]; canManage: boolean }) {
+  const router = useRouter();
   const confirm = useConfirm();
   const { data: session } = useSession();
   const myId = session?.user?.id;
@@ -155,7 +157,7 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
     });
     if (!ok) return;
     await fetch(`/api/events/${eventId}`, { method: "DELETE" });
-    window.location.href = "/events";
+    router.push("/events");
   }
   async function toggleClosed() {
     const closing = !ev?.closedAt;
@@ -178,7 +180,7 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
     if (!ok) return;
     const res = await fetch(`/api/events/${eventId}/duplicate`, { method: "POST" });
     const data = await res.json();
-    if (res.ok) window.location.href = `/events/${data.id}`;
+    if (res.ok) router.push(`/events/${data.id}`);
   }
 
   if (loading) return <p className="muted-note">불러오는 중…</p>;

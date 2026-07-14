@@ -29,6 +29,8 @@ export default function NotificationBell() {
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const [items, setItems] = useState<Noti[]>([]);
   const [unread, setUnread] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [moreBusy, setMoreBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -37,13 +39,30 @@ export default function NotificationBell() {
       const d = await res.json();
       setItems(d.notifications ?? []);
       setUnread(d.unread ?? 0);
+      setHasMore(!!d.hasMore);
     } catch {}
   }, []);
+
+  // 이전 알림 더 보기 — 마지막 항목 이전 30개를 이어 붙임
+  const loadMore = useCallback(async () => {
+    setMoreBusy(true);
+    try {
+      const last = items[items.length - 1];
+      if (!last) return;
+      const res = await fetch(`/api/notifications?before=${encodeURIComponent(last.createdAt)}`);
+      if (!res.ok) return;
+      const d = await res.json();
+      setItems((xs) => [...xs, ...(d.notifications ?? [])]);
+      setHasMore(!!d.hasMore);
+    } catch {} finally { setMoreBusy(false); }
+  }, [items]);
 
   useEffect(() => {
     load();
     const t = setInterval(load, 60_000);
-    return () => clearInterval(t);
+    const onFocus = () => load(); // 창으로 돌아오면 즉시 갱신
+    window.addEventListener("focus", onFocus);
+    return () => { clearInterval(t); window.removeEventListener("focus", onFocus); };
   }, [load]);
 
   // 패널 위치 — 버튼 아래, 화면 밖으로 나가지 않게
@@ -107,6 +126,11 @@ export default function NotificationBell() {
                   </span>
                 </button>
               ))}
+              {hasMore && (
+                <button className="noti-more" onClick={loadMore} disabled={moreBusy}>
+                  {moreBusy ? "불러오는 중…" : "이전 알림 더 보기"}
+                </button>
+              )}
             </div>
           </div>
         </>,

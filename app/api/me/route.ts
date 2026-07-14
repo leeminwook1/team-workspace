@@ -43,7 +43,7 @@ export async function PATCH(req: Request) {
 
   // 텔레그램 알림 수신 설정 — 전달된 항목만 갱신
   if (d.notifyPrefs) {
-    for (const k of ["assign", "due", "directive", "equip"] as const) {
+    for (const k of ["assign", "due", "late", "directive", "equip"] as const) {
       if (typeof d.notifyPrefs[k] === "boolean") me.set(`notifyPrefs.${k}`, d.notifyPrefs[k]);
     }
   }

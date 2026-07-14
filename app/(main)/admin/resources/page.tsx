@@ -39,6 +39,7 @@ export default async function AdminResourcesPage() {
         ownerTeam: r.ownerTeamId?.name ? { id: String(r.ownerTeamId._id), name: r.ownerTeamId.name, color: r.ownerTeamId.color } : null,
         manager: r.managerId?.name ? { id: String(r.managerId._id), name: r.managerId.name } : null,
         isActive: r.isActive,
+        status: r.status ?? "available",
       }))}
     />
   );

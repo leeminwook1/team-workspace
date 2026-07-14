@@ -9,7 +9,7 @@ import { taskUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
 import { Reservation } from "@/models/Reservation";
-import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, cancelTaskReservations } from "@/lib/taskReservations";
+import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, cancelTaskReservations, findUnavailableResources, unavailableMessage } from "@/lib/taskReservations";
 
 // GET /api/tasks/:id — 단건 조회 (검색 딥링크용). 조회 범위(역할) 검증.
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -124,6 +124,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
   const window = taskWindow(task);
   if (equipTarget && equipTarget.length > 0) {
+    // 새로 추가되는 장비만 상태 검사 — 이미 빌려둔 장비가 도중에 고장 처리돼도 일정 수정은 막지 않는다
+    const already: any[] = await Reservation.find({ relatedTaskId: task._id, status: "booked" }).select("resourceId").lean();
+    const alreadySet = new Set(already.map((r) => String(r.resourceId)));
+    const added = equipTarget.filter((rid) => !alreadySet.has(rid));
+    if (added.length > 0) {
+      const unavailable = await findUnavailableResources(added);
+      if (unavailable.length > 0) return json({ error: unavailableMessage(unavailable) }, 409);
+    }
     const conflicts = await findConflicts(equipTarget, window, String(task._id));
     if (conflicts.length > 0) return json({ error: conflictMessage(conflicts) }, 409);
   }
@@ -171,19 +179,20 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     return json({ error: "삭제는 팀장·최고관리자 또는 본인이 만든 일정만 가능합니다." }, 403);
   }
 
+  // 소프트 삭제 — 30일 내 휴지통에서 복구 가능, 이후 크론이 완전 삭제
   const scope = new URL(req.url).searchParams.get("scope");
   if (scope === "series" && task.recurrenceId) {
     const ids = (await Task.find({ recurrenceId: task.recurrenceId }).select("_id").lean()).map((t: any) => t._id);
-    const r = await Task.deleteMany({ recurrenceId: task.recurrenceId });
+    const r = await Task.updateMany({ recurrenceId: task.recurrenceId }, { $set: { deletedAt: new Date() } });
     await cancelTaskReservations(ids); // 연동 장비 예약도 취소
     await logActivity({
       actorId: user.id, actorName: user.name, action: "delete",
-      targetTitle: `${task.title} (반복 ${r.deletedCount}건)`,
+      targetTitle: `${task.title} (반복 ${r.modifiedCount}건)`,
     });
-    return json({ deleted: true, count: r.deletedCount });
+    return json({ deleted: true, count: r.modifiedCount });
   }
 
-  await Task.deleteOne({ _id: params.id });
+  await Task.updateOne({ _id: params.id }, { $set: { deletedAt: new Date() } });
   await cancelTaskReservations([task._id]); // 연동 장비 예약도 취소
   await logActivity({ actorId: user.id, actorName: user.name, action: "delete", targetTitle: task.title });
   return json({ deleted: true });

@@ -9,6 +9,7 @@ import "@/models/Resource";
 import { json } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { sendTelegram, telegramEnabled, esc } from "@/lib/telegram";
+import { addInterval, RECUR_BATCH_CAP } from "@/lib/recurrence";
 
 // 여러 팀의 팀장·부팀장을 한 번의 쿼리로 조회 → teamId별 사용자 id 목록 (N+1 방지)
 async function leadersByTeam(teamIds: string[]): Promise<Map<string, string[]>> {
@@ -114,7 +115,7 @@ export async function GET(req: Request) {
     .sort({ endDate: 1 })
     .lean();
 
-  // 4-1) 담당자에게 — 본인 지연 업무를 묶어 1회 알림
+  // 4-1) 담당자에게 — 본인 지연 업무를 묶어 1회 알림 (수신설정 '지연'으로 별도 제어)
   const lateByUser = new Map<string, string[]>();
   for (const t of lateTasks) {
     for (const uid of (t.assignees ?? []).map(String)) {
@@ -125,7 +126,7 @@ export async function GET(req: Request) {
   let lateUserNotified = 0;
   for (const [uid, titles] of Array.from(lateByUser.entries())) {
     await notify([uid], {
-      type: "due",
+      type: "late",
       title: `⚠ 마감이 지난 업무가 ${titles.length}건 있어요`,
       body: `${titles.slice(0, 3).join(", ")}${titles.length > 3 ? ` 외 ${titles.length - 3}건` : ""}`,
       link: "/calendar",
@@ -147,7 +148,7 @@ export async function GET(req: Request) {
     const ids = lateLeadsByTeam.get(tid) ?? [];
     if (ids.length === 0) continue;
     await notify(ids, {
-      type: "due",
+      type: "late",
       title: `⚠ 우리 팀 지연 업무 ${titles.length}건`,
       body: `${titles.slice(0, 3).join(", ")}${titles.length > 3 ? ` 외 ${titles.length - 3}건` : ""}`,
       link: "/team",
@@ -181,15 +182,41 @@ export async function GET(req: Request) {
     overdueResvNotified += 1;
   }
 
+  // 5-1) 내일 수령 예약 사전 알림 — 예약자에게 (당일 아침에 미리 준비)
+  const tomorrowResv: any[] = await Reservation.find({
+    status: "booked",
+    startAt: { $gte: end, $lt: new Date(end.getTime() + 86_400_000) },
+  }).populate("resourceId", "name").select("resourceId reservedBy startAt").sort({ startAt: 1 }).lean();
+  const pickupByUser = new Map<string, string[]>();
+  for (const r of tomorrowResv) {
+    const uid = String(r.reservedBy);
+    if (!pickupByUser.has(uid)) pickupByUser.set(uid, []);
+    pickupByUser.get(uid)!.push(r.resourceId?.name ?? "장비");
+  }
+  let pickupNotified = 0;
+  for (const [uid, names] of Array.from(pickupByUser.entries())) {
+    await notify([uid], {
+      type: "reservation",
+      title: `📦 내일 수령할 장비 예약이 ${names.length}건 있어요`,
+      body: names.slice(0, 5).join(", ") + (names.length > 5 ? ` 외 ${names.length - 5}건` : ""),
+      link: "/resources",
+    });
+    pickupNotified += 1;
+  }
+
   // 6) 팀 그룹방 아침 브리핑 — 그룹 챗 ID를 등록한 팀에 오늘 일정·장비 대여 요약
   let briefed = 0;
   if (telegramEnabled()) {
     const teams: any[] = await Team.find({ isActive: true, telegramChatId: { $nin: ["", null] } })
       .select("name telegramChatId")
       .lean();
-    const kstDow = ["일", "월", "화", "수", "목", "금", "토"][new Date(Date.now() + 9 * 3600_000).getUTCDay()];
+    const kstDay = new Date(Date.now() + 9 * 3600_000).getUTCDay();
+    const kstDow = ["일", "월", "화", "수", "목", "금", "토"][kstDay];
+    const isMonday = kstDay === 1;
+    const weekEnd = new Date(start.getTime() + 7 * 86_400_000); // 월~일
     const fmtT = (d: Date) =>
       new Date(d).toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
+    const dowOf = (d: Date) => ["일", "월", "화", "수", "목", "금", "토"][new Date(new Date(d).getTime() + 9 * 3600_000).getUTCDay()];
     for (const team of teams) {
       const dayTasks: any[] = await Task.find({
         teamIds: team._id, startDate: { $lt: end }, endDate: { $gt: start },
@@ -197,29 +224,75 @@ export async function GET(req: Request) {
       const dayResv: any[] = await Reservation.find({
         teamId: team._id, status: "booked", startAt: { $lt: end }, endAt: { $gt: start },
       }).populate("resourceId", "name").populate("reservedBy", "name").sort({ startAt: 1 }).limit(12).lean();
-      if (dayTasks.length === 0 && dayResv.length === 0) continue; // 빈 브리핑은 보내지 않음
+
+      // 월요일엔 이번 주(월~일) 요약을 함께 — 오늘 이후 요일별 일정
+      let weekSection = "";
+      if (isMonday) {
+        const weekTasks: any[] = await Task.find({
+          teamIds: team._id, startDate: { $lt: weekEnd }, endDate: { $gt: end }, // 오늘(위에 이미 표시) 이후
+        }).sort({ startDate: 1 }).limit(20).select("title allDay startDate").lean();
+        if (weekTasks.length > 0) {
+          const lines = weekTasks.map((t) =>
+            `· ${dowOf(t.startDate)} ${t.allDay ? "" : fmtT(t.startDate) + " "}${esc(t.title)}`);
+          weekSection = `\n🗓 이번 주 일정 ${weekTasks.length}건\n${lines.join("\n")}`;
+        }
+      }
+
+      if (dayTasks.length === 0 && dayResv.length === 0 && !weekSection) continue; // 빈 브리핑은 보내지 않음
 
       const taskLines = dayTasks.map((t) =>
         `· ${t.allDay ? "종일" : fmtT(t.startDate)} ${esc(t.title)}${t.status === "done" ? " ✔" : ""}`);
       const resvLines = dayResv.map((r) =>
         `· ${esc(r.resourceId?.name ?? "?")} ${fmtT(r.startAt)}~${fmtT(r.endAt)}${r.reservedBy?.name ? ` (${esc(r.reservedBy.name)})` : ""}`);
       const text = [
-        `☀️ <b>${esc(team.name)} 오늘 브리핑</b> (${kst.getUTCMonth() + 1}/${kst.getUTCDate()} ${kstDow})`,
-        dayTasks.length > 0 ? `\n📅 일정 ${dayTasks.length}건\n${taskLines.join("\n")}` : "",
+        `☀️ <b>${esc(team.name)} ${isMonday ? "주간" : "오늘"} 브리핑</b> (${kst.getUTCMonth() + 1}/${kst.getUTCDate()} ${kstDow})`,
+        dayTasks.length > 0 ? `\n📅 오늘 일정 ${dayTasks.length}건\n${taskLines.join("\n")}` : "",
         dayResv.length > 0 ? `\n📦 장비 대여 ${dayResv.length}건\n${resvLines.join("\n")}` : "",
+        weekSection,
       ].filter(Boolean).join("\n");
       if (await sendTelegram(team.telegramChatId, text, { html: true })) briefed += 1;
     }
   }
 
-  // 7) 소프트 삭제된 행사 완전 삭제 (30일 경과분)
+  // 7) 소프트 삭제된 행사·업무 완전 삭제 (30일 경과분)
   const purge = await Event.deleteMany({ deletedAt: { $lt: new Date(Date.now() - 30 * 86_400_000) } });
+  const purgeTasks = await Task.deleteMany({ deletedAt: { $ne: null, $lt: new Date(Date.now() - 30 * 86_400_000) } });
+
+  // 8) 반복 일정 롤링 연장 — 한 번에 60개 상한으로 잘렸던 시리즈를 이어서 생성
+  let recurExtended = 0;
+  const horizon = new Date(Date.now() + 90 * 86_400_000); // 90일 앞까지만 미리 생성
+  const seriesIds: any[] = await Task.distinct("recurrenceId", {
+    recurrenceId: { $ne: null }, repeatFreq: { $ne: null }, repeatUntil: { $gt: new Date() }, deletedAt: null,
+  });
+  for (const rid of seriesIds) {
+    const last: any = await Task.findOne({ recurrenceId: rid }).sort({ startDate: -1 }).lean();
+    if (!last?.repeatFreq || !last.repeatUntil) continue;
+    const untilEnd = new Date(last.repeatUntil);
+    const duration = new Date(last.endDate).getTime() - new Date(last.startDate).getTime();
+    const docs: any[] = [];
+    for (let i = 1; docs.length < RECUR_BATCH_CAP; i++) {
+      const s = addInterval(new Date(last.startDate), last.repeatFreq, i);
+      if (s >= untilEnd || s > horizon) break;
+      docs.push({
+        title: last.title, description: last.description, teamIds: last.teamIds, categoryId: last.categoryId,
+        assignees: last.assignees, createdBy: last.createdBy, allDay: last.allDay, priority: last.priority,
+        tags: last.tags, location: last.location,
+        recurrenceId: rid, repeatFreq: last.repeatFreq, repeatUntil: last.repeatUntil,
+        startDate: s, endDate: new Date(s.getTime() + duration),
+      });
+    }
+    if (docs.length > 0) {
+      await Task.insertMany(docs);
+      recurExtended += docs.length;
+    }
+  }
 
   return json({
     tasksDue: tasks.length, taskNotified, directivesDue: dirs.length, dirNotified,
     eventItemsDue: events.length, eventNotified,
     lateTasks: lateTasks.length, lateUserNotified, lateLeadNotified,
-    overdueReservations: overdueResv.length, overdueResvNotified, teamBriefings: briefed,
-    purgedEvents: purge.deletedCount,
+    overdueReservations: overdueResv.length, overdueResvNotified,
+    tomorrowPickups: tomorrowResv.length, pickupNotified, teamBriefings: briefed,
+    purgedEvents: purge.deletedCount, purgedTasks: purgeTasks.deletedCount, recurExtended,
   });
 }

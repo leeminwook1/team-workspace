@@ -10,7 +10,7 @@ import {
   canCreateTaskInAll, canReserve, visibleTeamIds, canChangeStatusAny, canDeleteTaskDoc, canMarkReturned,
   type SessionUser, type Role,
 } from "./permissions";
-import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, postCreateGuard, cancelTaskReservations } from "./taskReservations";
+import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, postCreateGuard, cancelTaskReservations, findUnavailableResources, unavailableMessage } from "./taskReservations";
 import { logActivity, reservationLabel } from "./activity";
 import { rateLimit } from "./rateLimit";
 import { notify } from "./notify";
@@ -41,8 +41,11 @@ const HELP = `📖 사용법
   예) /예약 캐논 R6, 배터리(7-1) 내일 14-16
 
 /오늘 · /내일 · /이번주 — 일정 조회
-/내일정 — 내가 담당인 업무
+/내일정 — 내가 담당인 업무 (번호 표시)
+/완료 3 — /내일정의 3번 업무 완료 처리 (제목 일부로도 가능)
+/검색 키워드 — 일정 제목 검색
 /예약현황 [날짜] — 장비 예약 현황
+/내예약 — 내 장비 예약 (반납·취소 버튼)
 /연동 123456 — 계정 연결 (코드는 CHQ 설정에서 발급)
 /챗아이디 — 이 대화방 챗 ID (팀 그룹방 브리핑 등록용)`;
 
@@ -216,7 +219,10 @@ export async function handleTelegramCommand(chatId: string, text: string, fromId
       case "/내일": case "/tomorrow": return await listDay(user, 1);
       case "/이번주": case "/week": return await listWeek(user);
       case "/내일정": case "/mytasks": return await listMyTasks(user);
+      case "/완료": case "/complete": return await completeMyTask(user, args);
+      case "/검색": case "/find": return await searchTasks(user, args);
       case "/예약현황": case "/reservations": return await listReservations(rest[0] ?? "오늘");
+      case "/내예약": case "/mybookings": return await listMyReservations(user);
       default:
         return `모르는 명령이에요: ${cmd}\n\n${HELP}`;
     }
@@ -330,6 +336,8 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
     const m = await matchResources(equipNames);
     if ("error" in m) return m.error;
     equipment = m.picked;
+    const unavailable = await findUnavailableResources(equipment.map((p) => p.id));
+    if (unavailable.length > 0) return `❌ ${unavailableMessage(unavailable)}`;
     const conflicts = await findConflicts(equipment.map((p) => p.id), window);
     if (conflicts.length > 0) return `❌ ${conflictMessage(conflicts)}`;
   }
@@ -462,6 +470,8 @@ async function createReservation(user: SessionUser, args: string): Promise<TgRep
   const endAt = time ? kstDate(date.start, time.eh, time.em) : kstDate(date.end, 24, 0);
   if (endAt <= startAt) return "❌ 종료 시각이 시작보다 빨라요.";
 
+  const unavailable = await findUnavailableResources(picked.map((p) => p.id));
+  if (unavailable.length > 0) return `❌ ${unavailableMessage(unavailable)}`;
   const conflicts = await findConflicts(picked.map((p) => p.id), { startAt, endAt });
   if (conflicts.length > 0) return `❌ ${conflictMessage(conflicts)}`;
 
@@ -568,16 +578,115 @@ async function listMyTasks(user: SessionUser): Promise<TgReply> {
   if (tasks.length === 0) return "담당 중인 미완료 업무가 없어요. 🎉";
 
   const now = Date.now();
-  const lines = tasks.map((t) => {
+  const lines = tasks.map((t, i) => {
     const end = new Date(t.endDate);
     // allDay는 UTC 자정으로 저장 → 그날 KST 24시(= UTC+15h)를 지나야 지연
     const overdue = now > end.getTime() + (t.allDay ? 15 * 3600_000 : 0);
     const d = t.allDay ? end : new Date(end.getTime() + KST);
     const dueStr = `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
     const team = (t.teamIds ?? []).map((tm: any) => tm.name).join("·");
-    return `· ${overdue ? "⚠ " : ""}${dueStr}까지 ${esc(t.title)}${team ? ` (${esc(team)})` : ""}`;
+    return `${i + 1}. ${overdue ? "⚠ " : ""}${dueStr}까지 ${esc(t.title)}${team ? ` (${esc(team)})` : ""}`;
   });
-  return { text: `👤 <b>내 담당 업무 ${tasks.length}건</b>\n${lines.join("\n")}`, html: true };
+  return {
+    text: `👤 <b>내 담당 업무 ${tasks.length}건</b>\n${lines.join("\n")}\n\n완료 처리는 <b>/완료 번호</b> (예: /완료 1)`,
+    html: true,
+  };
+}
+
+// ── /완료 — /내일정의 번호 또는 제목 일부로 완료 처리 ──
+async function completeMyTask(user: SessionUser, args: string): Promise<TgReply> {
+  const key = args.trim();
+  if (!key) return "사용법: /완료 3 (번호는 /내일정에서 확인) 또는 /완료 제목 일부";
+  // /내일정과 같은 정렬·범위로 다시 조회해 번호를 맞춘다
+  const tasks: any[] = await Task.find({ assignees: user.id, status: { $in: ["todo", "in_progress"] } })
+    .sort({ endDate: 1 })
+    .limit(15)
+    .lean();
+  if (tasks.length === 0) return "담당 중인 미완료 업무가 없어요. 🎉";
+
+  let target: any = null;
+  if (/^\d+$/.test(key)) {
+    const n = parseInt(key, 10);
+    if (n < 1 || n > tasks.length) return `❌ ${n}번 업무가 없어요. /내일정으로 번호를 확인해주세요.`;
+    target = tasks[n - 1];
+  } else {
+    const q = key.toLowerCase();
+    const matches = tasks.filter((t) => (t.title ?? "").toLowerCase().includes(q));
+    if (matches.length === 0) return `❌ "${key}" 제목의 담당 업무를 못 찾았어요. /내일정으로 확인해주세요.`;
+    if (matches.length > 1) {
+      return `❌ "${key}"에 ${matches.length}건이 걸려요: ${matches.slice(0, 3).map((t) => t.title).join(", ")}\n/내일정 번호로 지정해주세요.`;
+    }
+    target = matches[0];
+  }
+
+  const doc: any = await Task.findById(target._id);
+  if (!doc) return "❌ 이미 삭제된 업무예요.";
+  if (doc.status === "done") return "이미 완료된 업무예요.";
+  doc.status = "done";
+  await doc.save();
+  await logActivity({ actorId: user.id, actorName: user.name ?? "", action: "status", targetTitle: doc.title, meta: { status: "done", detail: "텔레그램 /완료" } });
+  return `✅ 완료 처리했어요: ${doc.title} 👏`;
+}
+
+// ── /검색 — 일정 제목 검색 (조회 범위는 역할에 따름, 최근 30일~미래) ──
+async function searchTasks(user: SessionUser, keyword: string): Promise<TgReply> {
+  const key = keyword.trim();
+  if (!key) return "사용법: /검색 키워드 (예: /검색 촬영)";
+  const safe = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // 정규식 이스케이프
+  const q: any = {
+    title: { $regex: safe, $options: "i" },
+    endDate: { $gt: new Date(Date.now() - 30 * 86_400_000) },
+  };
+  const scope = visibleTeamIds(user);
+  if (scope !== "all") {
+    if (scope.length === 0) return "소속 팀이 없어 조회할 일정이 없어요.";
+    q.teamIds = { $in: scope };
+  }
+  const tasks: any[] = await Task.find(q).populate("teamIds", "name").sort({ startDate: 1 }).limit(15).lean();
+  if (tasks.length === 0) return `🔍 "${key}" 일정을 못 찾았어요. (최근 30일~미래 기준)`;
+
+  const lines = tasks.map((t) => {
+    const s = new Date(new Date(t.startDate).getTime() + KST);
+    const dateStr = `${s.getUTCMonth() + 1}/${s.getUTCDate()}`;
+    const time = t.allDay ? "" : ` ${fmtT(t.startDate)}`;
+    const team = (t.teamIds ?? []).map((tm: any) => tm.name).join("·");
+    return `· ${dateStr}${time} ${esc(t.title)}${team ? ` (${esc(team)})` : ""}${t.status === "done" ? " ✔" : ""}`;
+  });
+  return { text: `🔍 <b>"${esc(key)}" 검색 결과 ${tasks.length}건</b>\n${lines.join("\n")}`, html: true };
+}
+
+// ── /내예약 — 내 장비 예약 조회 + 반납·취소 버튼 ──
+async function listMyReservations(user: SessionUser): Promise<TgReply> {
+  const now = new Date();
+  const list: any[] = await Reservation.find({
+    reservedBy: user.id, status: "booked",
+    endAt: { $gt: new Date(now.getTime() - 7 * 86_400_000) }, // 미반납(지난 7일)도 포함
+  })
+    .populate("resourceId", "name")
+    .sort({ startAt: 1 })
+    .limit(10)
+    .lean();
+  if (list.length === 0) return "예약 중인 장비가 없어요.";
+
+  const fmtDT = (d: Date) => {
+    const k = new Date(new Date(d).getTime() + KST);
+    return `${k.getUTCMonth() + 1}/${k.getUTCDate()} ${String(k.getUTCHours()).padStart(2, "0")}:${String(k.getUTCMinutes()).padStart(2, "0")}`;
+  };
+  const lines = list.map((r) => {
+    const started = new Date(r.startAt) <= now;
+    const overdue = now.getTime() > new Date(r.endAt).getTime() + 10 * 60_000;
+    const st = overdue ? "⚠ 미반납" : started ? "사용 중" : "예정";
+    return `· ${esc(r.resourceId?.name ?? "?")} ${fmtDT(r.startAt)}~${fmtDT(r.endAt)} — ${st}`;
+  });
+  // 사용 중(수령 후)은 반납 버튼, 예정은 취소 버튼
+  const buttons: TgButton[][] = list.slice(0, 8).map((r) => {
+    const started = new Date(r.startAt) <= now;
+    const name = r.resourceId?.name ?? "장비";
+    return [started
+      ? { text: `✅ ${name} 반납 처리`, data: `ret:${String(r._id)}` }
+      : { text: `↩ ${name} 예약 취소`, data: `delres:${String(r._id)}` }];
+  });
+  return { text: `📦 <b>내 예약 ${list.length}건</b>\n${lines.join("\n")}`, html: true, buttons };
 }
 
 // ── 인라인 버튼 콜백 처리 ──

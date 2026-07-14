@@ -188,11 +188,15 @@ function DirectiveCard({
 
   async function setStatus(status: string) {
     setBusy(true);
-    await fetch(`/api/directives/${dir.id}`, {
+    const res = await fetch(`/api/directives/${dir.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
     setBusy(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      await confirm({ title: "상태 변경 실패", message: data.error ?? "상태를 변경하지 못했어요. 잠시 후 다시 시도해주세요.", confirmText: "확인", alert: true });
+    }
     onChanged();
   }
   async function convert(assignmentId?: string) {

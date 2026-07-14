@@ -1,5 +1,5 @@
 import { Reservation } from "@/models/Reservation";
-import "@/models/Resource";
+import { Resource } from "@/models/Resource";
 
 // 업무 ↔ 자원(장비) 예약 연동.
 // 업무 기간을 예약 시간창으로 변환하고, 선택된 장비 목록과 기존 연동 예약을 동기화한다.
@@ -58,6 +58,23 @@ export async function postCreateGuard(resv: { _id: any; resourceId: any; startAt
   if (!other) return null;
   await Reservation.deleteOne({ _id: resv._id });
   return other;
+}
+
+/** 수리중·고장·비활성 장비 검사 — 예약 불가 장비 목록 반환 (비면 통과) */
+export async function findUnavailableResources(resourceIds: string[]) {
+  if (resourceIds.length === 0) return [];
+  const rows: any[] = await Resource.find({
+    _id: { $in: resourceIds },
+    $or: [{ isActive: false }, { status: { $in: ["maintenance", "broken"] } }],
+  }).select("name status isActive").lean();
+  return rows.map((r) => ({
+    name: r.name as string,
+    reason: !r.isActive ? "비활성" : r.status === "broken" ? "고장" : "수리·점검 중",
+  }));
+}
+
+export function unavailableMessage(rows: { name: string; reason: string }[]) {
+  return `예약할 수 없는 장비가 있어요: ${rows.map((r) => `${r.name}(${r.reason})`).join(", ")}`;
 }
 
 export function conflictMessage(conflicts: { resource: string; by: string; startAt: Date; endAt: Date }[]) {

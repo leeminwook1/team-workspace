@@ -209,7 +209,10 @@ function PersonalEventModal({ event, defaultDate, onClose, onSaved }: {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setErr(""); setBusy(true);
+    setErr("");
+    if (allDay && endDate < startDate) { setErr("종료일이 시작일보다 빠를 수 없어요."); return; }
+    if (!allDay && endTime <= startTime) { setErr("종료 시각이 시작 시각보다 빨라요."); return; }
+    setBusy(true);
     const when = allDay
       ? { startDate, endDate, allDay: true }
       : {
@@ -257,8 +260,8 @@ function PersonalEventModal({ event, defaultDate, onClose, onSaved }: {
           </div>
           {allDay ? (
             <div className="form-grid-2">
-              <div className="field"><label>시작일</label><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required /></div>
-              <div className="field"><label>종료일</label><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required /></div>
+              <div className="field"><label>시작일</label><input type="date" value={startDate} onChange={(e) => { const v = e.target.value; setStartDate(v); setEndDate((d) => (d < v ? v : d)); }} required /></div>
+              <div className="field"><label>종료일</label><input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} required /></div>
             </div>
           ) : (
             <>

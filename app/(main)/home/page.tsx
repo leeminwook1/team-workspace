@@ -54,7 +54,7 @@ export default async function HomePage() {
   // 대시보드 쿼리는 상호 독립 — 병렬 실행으로 첫 로딩 단축
   const dirQ: any = { status: "todo" };
   if (!canCreateDirective(user)) dirQ.teamId = user.teamId ?? null;
-  const [todayTasks, eventsRaw, pendingDirs, todayResv, pendingUsers, monthTasks, upcomingTasks, meDoc] = (await Promise.all([
+  const [todayTasks, eventsRaw, pendingDirs, todayResv, pendingUsers, monthTasks, upcomingTasks, meDoc, myTasks] = (await Promise.all([
     // 1) 오늘 일정 (조회 범위 내)
     noScope ? [] : Task.find(scoped({ startDate: { $lt: end }, endDate: { $gt: start } }))
       .populate("teamIds", "name color").sort({ allDay: -1, startDate: 1 }).limit(6).lean(),
@@ -77,7 +77,10 @@ export default async function HomePage() {
       .populate("teamIds", "name color").populate("categoryId", "name color").sort({ startDate: 1 }).limit(5).lean(),
     // 8) 내 위젯 배치
     User.findById(user.id).select("homeLayout").lean(),
-  ])) as [any[], any[], any[], any[], number, any[], any[], any];
+    // 9) 내 담당 업무 — 미완료, 마감 임박순 (모든 역할)
+    Task.find({ assignees: user.id, status: { $in: ["todo", "in_progress"] } })
+      .populate("teamIds", "name color").populate("categoryId", "name color").sort({ endDate: 1 }).limit(6).lean(),
+  ])) as [any[], any[], any[], any[], number, any[], any[], any, any[]];
 
   const upcoming = eventsRaw
     .filter((e) => !e.eventDate || new Date(e.eventDate) >= start)
@@ -121,6 +124,7 @@ export default async function HomePage() {
 
   const widgetData = {
     monthTasks: monthTasks.map(mapTask),
+    mytasks: myTasks.map(mapTask),
     upcoming: upcomingTasks.map(mapTask),
     todo: pendingDirs.map((d: any) => ({
       id: String(d._id), title: d.title,

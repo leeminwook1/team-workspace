@@ -114,6 +114,7 @@ export const meUpdateSchema = z.object({
     .object({
       assign: z.boolean().optional(),
       due: z.boolean().optional(),
+      late: z.boolean().optional(),
       directive: z.boolean().optional(),
       equip: z.boolean().optional(),
     })

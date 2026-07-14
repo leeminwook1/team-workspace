@@ -23,6 +23,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (body.managerId !== undefined) r.managerId = body.managerId || null;
   if (!r.ownerTeamId) r.managerId = null; // 팀 없이 담당자만 남는 상태 방지
   if (typeof body.isActive === "boolean") r.isActive = body.isActive;
+  if (["available", "maintenance", "broken"].includes(body.status)) r.status = body.status;
   await r.save();
 
   return json({ id: String(r._id) });

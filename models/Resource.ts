@@ -13,6 +13,8 @@ const ResourceSchema = new Schema(
     ownerTeamId: { type: Schema.Types.ObjectId, ref: "Team", default: null }, // 관리 팀 (null = 공용)
     managerId: { type: Schema.Types.ObjectId, ref: "User", default: null }, // 관리 담당자 (선택)
     isActive: { type: Boolean, default: true },
+    // 장비 상태 — available 외에는 예약 불가 (비활성과 달리 목록에는 배지로 표시)
+    status: { type: String, enum: ["available", "maintenance", "broken"], default: "available" },
   },
   { timestamps: true }
 );

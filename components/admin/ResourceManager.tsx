@@ -13,6 +13,11 @@ type ResourceRow = {
   id: string; name: string; category: { id: string; name: string } | null;
   ownerTeam: TeamOpt | null; manager: Member | null; // 관리 팀 · 담당자
   isActive: boolean;
+  status: "available" | "maintenance" | "broken"; // 장비 상태 (available 외 예약 불가)
+};
+
+const RES_STATUS_LABEL: Record<ResourceRow["status"], string> = {
+  available: "사용 가능", maintenance: "수리·점검 중", broken: "고장",
 };
 
 // 팀별 활성 멤버 로드 (담당자 선택용)
@@ -197,6 +202,9 @@ export default function ResourceManager({
                         </span>
                       )}
                       {!r.isActive && <span className="status-pill pill-off">비활성</span>}
+                      {r.isActive && r.status !== "available" && (
+                        <span className={`status-pill ${r.status === "broken" ? "pill-broken" : "pill-maint"}`}>{RES_STATUS_LABEL[r.status]}</span>
+                      )}
                     </div>
                     <div className="admin-item-actions">
                       <button className="btn btn-line btn-sm" onClick={() => setEditing(r)}>수정</button>
@@ -245,6 +253,7 @@ function EditModal({
   const [managerId, setManagerId] = useState(res.manager?.id ?? "");
   const [members, setMembers] = useState<Member[]>([]);
   const [active, setActive] = useState(res.isActive);
+  const [status, setStatus] = useState<ResourceRow["status"]>(res.status ?? "available");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -261,7 +270,7 @@ function EditModal({
     setBusy(true); setErr("");
     const r = await fetch(`/api/resources/${res.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, categoryId, ownerTeamId: ownerTeamId || null, managerId: managerId || null, isActive: active }),
+      body: JSON.stringify({ name, categoryId, ownerTeamId: ownerTeamId || null, managerId: managerId || null, isActive: active, status }),
     });
     const data = await r.json();
     setBusy(false);
@@ -300,6 +309,14 @@ function EditModal({
                 {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
+          </div>
+          <div className="field">
+            <label>장비 상태</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value as ResourceRow["status"])}>
+              <option value="available">사용 가능</option>
+              <option value="maintenance">수리·점검 중 (예약 불가)</option>
+              <option value="broken">고장 (예약 불가)</option>
+            </select>
           </div>
           <div className="field">
             <div className="switch-row">

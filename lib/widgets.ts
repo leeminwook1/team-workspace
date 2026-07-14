@@ -1,6 +1,7 @@
 // 홈 위젯 정의 — 서버(검증·기본배치)와 클라이언트(편집 UI)가 공유
 export const WIDGET_IDS = [
   "minical", // 미니 달력 + 선택일 일정 (1d)
+  "mytasks", // 내 담당 업무 (모든 역할)
   "upcoming", // 다가오는 일정
   "progress", // 이번 달 진행 현황
   "todo", // 대기 중 TODO(지시)
@@ -14,6 +15,7 @@ export type WidgetSlot = { id: WidgetId; size: 1 | 2 };
 
 export const WIDGET_META: Record<WidgetId, { label: string; desc: string }> = {
   minical: { label: "미니 달력", desc: "도트 달력 + 선택한 날짜의 일정" },
+  mytasks: { label: "내 담당 업무", desc: "내가 담당인 미완료 업무 (마감 임박순)" },
   upcoming: { label: "다가오는 일정", desc: "오늘 이후 예정된 일정" },
   progress: { label: "이번 달 진행 현황", desc: "완료·진행중·예정 비율" },
   todo: { label: "대기 중 TODO", desc: "처리 대기 중인 TODO" },
@@ -25,6 +27,7 @@ export const WIDGET_META: Record<WidgetId, { label: string; desc: string }> = {
 // 기본 배치 — 위젯을 한 번도 편집하지 않은 계정
 export const DEFAULT_LAYOUT: WidgetSlot[] = [
   { id: "minical", size: 2 },
+  { id: "mytasks", size: 1 },
   { id: "upcoming", size: 1 },
   { id: "progress", size: 1 },
   { id: "todo", size: 1 },

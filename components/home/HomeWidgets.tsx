@@ -21,6 +21,7 @@ export type WDue = { eventId: string; eventTitle: string; title: string; dueDate
 export type WEvent = { id: string; title: string; total: number; pct: number };
 export type WidgetData = {
   monthTasks: WTask[];
+  mytasks: WTask[];
   upcoming: WTask[];
   todo: WTodo[];
   reservations: WResv[];
@@ -185,6 +186,46 @@ function MiniCalWidget({ initialTasks }: { initialTasks: WTask[] }) {
           </button>
         )}
       </div>
+    </>
+  );
+}
+
+/* ══════════ ①-1 내 담당 업무 — 미완료, 마감 임박순 ══════════ */
+function MyTasksWidget({ tasks }: { tasks: WTask[] }) {
+  const today = ymd(new Date());
+  return (
+    <>
+      <WidgetHead icon="check" tint="var(--st-prog)" title="내 담당 업무" href="/calendar" hrefLabel="달력" />
+      {tasks.length === 0 ? (
+        <EmptyMsg icon="check" text="담당 중인 미완료 업무가 없어요. 🎉" />
+      ) : (
+        <div className="up-list">
+          {tasks.map((t) => {
+            const end = new Date(t.endDate);
+            const overdue = ymd(end) < today;
+            const color = overdue ? "var(--danger)" : taskColor(t);
+            return (
+              <Link key={t.id} href={`/calendar?task=${t.id}`} className="up-item">
+                <span className="up-date" style={{ background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}>
+                  <b>{end.getDate()}</b>
+                  <span>{overdue ? "지남" : WEEKDAYS[end.getDay()]}</span>
+                </span>
+                <span className="up-body">
+                  <span className="up-title">
+                    {t.title}
+                    {overdue && <b className="ev1c-urgent">지연</b>}
+                    {!overdue && t.priority === "urgent" && <b className="ev1c-urgent">긴급</b>}
+                  </span>
+                  <span className="up-sub">
+                    {fmtMD(t.endDate)}까지
+                    {t.teams.length > 0 && ` · ${t.teams.map((tm) => tm.name).join("·")}`}
+                  </span>
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }
@@ -409,6 +450,7 @@ export default function HomeWidgets({ initialLayout, canDirectives, data }: {
   function renderWidget(id: WidgetId) {
     switch (id) {
       case "minical": return <MiniCalWidget initialTasks={data.monthTasks} />;
+      case "mytasks": return <MyTasksWidget tasks={data.mytasks} />;
       case "upcoming": return <UpcomingWidget tasks={data.upcoming} />;
       case "progress": return <ProgressWidget tasks={data.monthTasks} />;
       case "todo": return <TodoWidget items={data.todo} />;

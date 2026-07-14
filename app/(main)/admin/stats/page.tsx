@@ -67,7 +67,7 @@ export default async function AdminStatsPage() {
     ResourceCategory.find({ isActive: true }).select("name color order").lean(),
     // 팀별 이번 달 업무 수 (다중 팀 협업은 각 팀에 카운트)
     Task.aggregate([
-      { $match: { startDate: { $lt: end }, endDate: { $gt: start } } },
+      { $match: { deletedAt: null, startDate: { $lt: end }, endDate: { $gt: start } } },
       { $unwind: "$teamIds" },
       { $group: { _id: "$teamIds", count: { $sum: 1 } } },
     ]),

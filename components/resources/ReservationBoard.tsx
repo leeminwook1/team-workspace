@@ -15,6 +15,7 @@ type ResourceOpt = {
   category: { id: string; name: string; color?: string; order: number } | null;
   ownerTeam?: { name: string; color: string } | null; // 관리 팀
   manager?: { id: string; name: string } | null; // 관리 담당자
+  status?: "available" | "maintenance" | "broken"; // 장비 상태 (available 외 예약 불가)
 };
 type TeamOpt = { id: string; name: string; color: string };
 type ReservationItem = {
@@ -71,6 +72,9 @@ export default function ReservationBoard({
   const [editing, setEditing] = useState<ReservationItem | null>(null); // 수정 중인 예약
   const [tlGroup, setTlGroup] = useState<ReservationItem[] | null>(null); // 타임라인 묶음 상세
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set()); // 리스트 묶음 펼침
+  // 모바일(<640px)은 7일 열이 안 들어가므로 3일 보기 — 마운트 후 판정해 그때 달력 렌더
+  const [tlMobile, setTlMobile] = useState<boolean | null>(null);
+  useEffect(() => { setTlMobile(window.innerWidth < 640); }, []);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | RsvState>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all"); // 종류(분류) 필터
@@ -425,9 +429,11 @@ export default function ReservationBoard({
           )}
         </div>
         <div className="card cal-card" style={{ padding: 14 }}>
+          {tlMobile !== null && (
           <FullCalendar
             plugins={[timeGridPlugin]}
-            initialView="timeGridWeek"
+            initialView={tlMobile ? "timeGridThree" : "timeGridWeek"}
+            views={{ timeGridThree: { type: "timeGrid", duration: { days: 3 } } }}
             locale={koLocale}
             height="auto"
             headerToolbar={{ left: "title", right: "prev,today,next" }}
@@ -450,6 +456,7 @@ export default function ReservationBoard({
             }}
             noEventsContent="이 주에 예약이 없습니다"
           />
+          )}
           <p className="rsv-tip">예약을 클릭하면 상세를 볼 수 있어요. (본인 예약은 삭제 가능)</p>
         </div>
         </>
@@ -622,6 +629,31 @@ function ReserveModal({
   const [err, setErr] = useState("");
   const [fails, setFails] = useState<{ name: string; reason: string }[]>([]);
   const [busy, setBusy] = useState(false);
+  // 선택한 기간에 이미 예약 중인 장비 — resourceId → 예약자 이름
+  const [busyMap, setBusyMap] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    const { startDate, endDate, startTime, endTime } = form;
+    if (!startDate || !endDate || endDate < startDate) { setBusyMap(new Map()); return; }
+    const from = new Date(`${startDate}T${startTime || "00:00"}:00`);
+    const to = new Date(`${endDate}T${endTime || "23:59"}:00`);
+    if (isNaN(from.getTime()) || isNaN(to.getTime()) || to <= from) { setBusyMap(new Map()); return; }
+    let alive = true;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/reservations?from=${from.toISOString()}&to=${to.toISOString()}`);
+        if (!res.ok || !alive) return;
+        const data = await res.json();
+        const map = new Map<string, string>();
+        for (const r of data.reservations ?? []) {
+          if (r.status !== "booked" || !r.resource) continue;
+          if (!map.has(r.resource.id)) map.set(r.resource.id, r.reservedBy?.name ?? "?");
+        }
+        if (alive) setBusyMap(map);
+      } catch {}
+    }, 250); // 날짜 연타 시 요청 몰림 방지
+    return () => { alive = false; clearTimeout(t); };
+  }, [form.startDate, form.endDate, form.startTime, form.endTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleRes = (id: string) =>
     setResIds((prev) => {
@@ -657,10 +689,8 @@ function ReserveModal({
     const ids = Array.from(resIds);
     if (ids.length === 0) { setErr("장비를 하나 이상 선택하세요."); return; }
     setBusy(true);
-    const failures: { id: string; name: string; reason: string }[] = [];
-    let okCount = 0;
-    // 선택한 장비마다 같은 기간으로 예약 (충돌은 그 장비만 실패로 표시)
-    for (const id of ids) {
+    // 선택한 장비마다 같은 기간으로 예약 — 병렬 요청 (충돌은 그 장비만 실패로 표시)
+    const results = await Promise.all(ids.map(async (id) => {
       const res = await fetch("/api/reservations", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -671,9 +701,12 @@ function ReserveModal({
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) okCount++;
-      else failures.push({ id, name: resources.find((r) => r.id === id)?.name ?? "장비", reason: data.error ?? "예약 실패" });
-    }
+      return { id, ok: res.ok, reason: data.error ?? "예약 실패" };
+    }));
+    const failures = results.filter((r) => !r.ok).map((r) => ({
+      id: r.id, name: resources.find((x) => x.id === r.id)?.name ?? "장비", reason: r.reason,
+    }));
+    const okCount = results.length - failures.length;
     setBusy(false);
     onRefresh(); // 성공분은 즉시 목록 반영
     if (failures.length === 0) { onClose(); return; }
@@ -716,11 +749,23 @@ function ReserveModal({
                   <div key={g.id} className="rsv2-picker-group">
                     <div className="rsv2-picker-cat"><span className="dot" style={{ background: g.color }} />{g.name} <span className="kb-count">{g.items.length}</span></div>
                     <div className="rsv2-picker-chips">
-                      {g.items.map((r) => (
-                        <button type="button" key={r.id} className={`chip chip-btn${resIds.has(r.id) ? " sel" : ""}`} onClick={() => toggleRes(r.id)}>
-                          {resIds.has(r.id) && <span aria-hidden style={{ marginRight: 3 }}>✓</span>}{r.name}
-                        </button>
-                      ))}
+                      {g.items.map((r) => {
+                        const bad = r.status && r.status !== "available";
+                        const busyBy = !bad ? busyMap.get(r.id) : undefined;
+                        if (bad || busyBy) {
+                          return (
+                            <span key={r.id} className="chip rsv2-chip-off" title={bad ? (r.status === "broken" ? "고장" : "수리·점검 중") : `${busyBy} 예약 중`}>
+                              {r.name}
+                              <b className={bad ? "off-bad" : "off-busy"}>{bad ? (r.status === "broken" ? "고장" : "수리중") : `${busyBy} 예약중`}</b>
+                            </span>
+                          );
+                        }
+                        return (
+                          <button type="button" key={r.id} className={`chip chip-btn${resIds.has(r.id) ? " sel" : ""}`} onClick={() => toggleRes(r.id)}>
+                            {resIds.has(r.id) && <span aria-hidden style={{ marginRight: 3 }}>✓</span>}{r.name}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}

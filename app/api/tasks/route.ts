@@ -10,7 +10,8 @@ import { taskCreateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
 import { Reservation } from "@/models/Reservation";
-import { taskWindow, findConflicts, conflictMessage, syncTaskReservations } from "@/lib/taskReservations";
+import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, findUnavailableResources, unavailableMessage } from "@/lib/taskReservations";
+import { addInterval, RECUR_BATCH_CAP } from "@/lib/recurrence";
 
 function serialize(t: any, resourcesByTask?: Map<string, { id: string; name: string }[]>) {
   return {
@@ -41,16 +42,6 @@ function serialize(t: any, resourcesByTask?: Map<string, { id: string; name: str
   };
 }
 
-// 반복 오커런스 시작일 계산 — monthly는 말일 클램프 (1/31 → 2/28)
-function addInterval(d: Date, repeat: string, n: number): Date {
-  if (repeat === "daily") return new Date(d.getTime() + n * 86_400_000);
-  if (repeat === "weekly") return new Date(d.getTime() + n * 7 * 86_400_000);
-  if (repeat === "biweekly") return new Date(d.getTime() + n * 14 * 86_400_000);
-  // monthly
-  const y = d.getUTCFullYear(), m = d.getUTCMonth(), day = d.getUTCDate();
-  const lastDay = new Date(Date.UTC(y, m + n + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(y, m + n, Math.min(day, lastDay), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()));
-}
 
 // GET /api/tasks?from=&to=&team= — 기간·팀별 업무 조회 (조회 범위는 역할에 따름)
 export async function GET(req: Request) {
@@ -67,6 +58,10 @@ export async function GET(req: Request) {
   if (from && to) {
     q.startDate = { $lt: new Date(to) };
     q.endDate = { $gt: new Date(from) };
+  } else {
+    // 기간 미지정 시 전량 반환 방지 — 최근 1년 ~ 1년 뒤 창으로 제한
+    q.startDate = { $lt: new Date(Date.now() + 365 * 86400_000) };
+    q.endDate = { $gt: new Date(Date.now() - 365 * 86400_000) };
   }
 
   // 설계 3.2 — 전사 역할은 전체, 그 외는 소속 팀만 (teamIds 배열에 하나라도 포함되면 매치)
@@ -147,6 +142,8 @@ export async function POST(req: Request) {
   }
   const window = taskWindow({ startDate: start, endDate: end, allDay: d.allDay });
   if (equip.length > 0) {
+    const unavailable = await findUnavailableResources(equip);
+    if (unavailable.length > 0) return json({ error: unavailableMessage(unavailable) }, 409);
     const conflicts = await findConflicts(equip, window);
     if (conflicts.length > 0) return json({ error: conflictMessage(conflicts) }, 409);
   }
@@ -178,10 +175,11 @@ export async function POST(req: Request) {
   const duration = end.getTime() - start.getTime();
   const recurrenceId = new mongoose.Types.ObjectId();
   const docs: any[] = [];
-  for (let i = 0; docs.length < 60; i++) {
+  // 상한을 넘는 나머지 회차는 크론이 repeatFreq/repeatUntil을 보고 이어서 생성
+  for (let i = 0; docs.length < RECUR_BATCH_CAP; i++) {
     const s = addInterval(start, repeat, i);
     if (s >= untilEnd) break;
-    docs.push({ ...base, recurrenceId, startDate: s, endDate: new Date(s.getTime() + duration) });
+    docs.push({ ...base, recurrenceId, repeatFreq: repeat, repeatUntil: untilEnd, startDate: s, endDate: new Date(s.getTime() + duration) });
   }
   const created = await Task.insertMany(docs);
   await logActivity({
