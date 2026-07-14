@@ -1,25 +1,12 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import koLocale from "@fullcalendar/core/locales/ko";
 import { Icon } from "@/components/icons";
 import { useAutoRefresh } from "@/components/useAutoRefresh";
-
-export type MemberStat = {
-  id: string;
-  name: string;
-  roleLabel: string;
-  isLeader: boolean;
-  inProgress: number;
-  weekDue: number;
-  overdue: number;
-  overdueItems: { id: string; title: string }[];
-  doneWeek: number;
-};
 
 type OverlayEvent = { id: string; userId: string; title: string; startDate: string; endDate: string; allDay: boolean };
 type OverlayMember = { id: string; name: string; role: string };
@@ -28,13 +15,12 @@ type OverlayMember = { id: string; name: string; role: string };
 const PALETTE = ["#3182f6", "#f04452", "#12b3a6", "#8b5cf6", "#e8951b", "#f0466e", "#22c55e", "#0ea5e9", "#f97316", "#64748b"];
 
 export default function TeamBoard({
-  teamName, teamColor, teamId, teams, stats,
+  teamName, teamColor, teamId, teams,
 }: {
   teamName: string;
   teamColor: string;
   teamId: string;
   teams: { id: string; name: string; color: string }[]; // 전사 역할만 채워짐 (팀 전환용)
-  stats: MemberStat[];
 }) {
   const router = useRouter();
   const calRef = useRef<FullCalendar>(null);
@@ -107,7 +93,7 @@ export default function TeamBoard({
             <span className="dot" style={{ background: teamColor, width: 12, height: 12, marginRight: 8 }} />
             {teamName} 팀 현황
           </h1>
-          <p className="page-sub">팀원별 업무 부하와 개인 일정을 한눈에 확인하세요.</p>
+          <p className="page-sub">팀원들의 개인 일정을 한눈에 겹쳐서 확인하세요.</p>
         </div>
         {teams.length > 0 && (
           <select className="pc-viewer" value={teamId} onChange={(e) => router.push(`/team?team=${e.target.value}`)} aria-label="팀 선택">
@@ -115,39 +101,6 @@ export default function TeamBoard({
           </select>
         )}
       </div>
-
-      {/* 팀원별 현황 카드 */}
-      {stats.length === 0 ? (
-        <p className="muted-note">이 팀에 등록된 팀원이 없습니다.</p>
-      ) : (
-        <div className="tb-grid">
-          {stats.map((s) => (
-            <div className={`tb-card${s.overdue ? " late" : ""}`} key={s.id}>
-              <div className="tb-card-head">
-                <span className="avatar" aria-hidden>{s.name.slice(0, 1)}</span>
-                <div>
-                  <div className="tb-name">{s.name}</div>
-                  <div className="tb-role">{s.roleLabel}</div>
-                </div>
-                {s.overdue > 0 && <span className="rsv-st rsv-st-overdue tb-late-badge">⚠ 지연 {s.overdue}</span>}
-              </div>
-              <div className="tb-nums">
-                <div className="tb-num"><b>{s.inProgress}</b><span>진행 중</span></div>
-                <div className="tb-num"><b>{s.weekDue}</b><span>주 마감</span></div>
-                <div className="tb-num"><b className={s.overdue ? "danger" : ""}>{s.overdue}</b><span>지연</span></div>
-                <div className="tb-num"><b>{s.doneWeek}</b><span>주 완료</span></div>
-              </div>
-              {s.overdueItems.length > 0 && (
-                <div className="tb-overdue-list">
-                  {s.overdueItems.map((t) => (
-                    <Link key={t.id} href={`/calendar?task=${t.id}`} className="tb-overdue-item">· {t.title}</Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* 개인일정 겹쳐보기 */}
       <div className="tb-cal-head">
@@ -180,7 +133,7 @@ export default function TeamBoard({
         <p className="err-msg" style={{ marginBottom: 10 }}>개인 일정을 불러오지 못했어요. 네트워크 확인 후 달을 이동하면 다시 시도합니다.</p>
       )}
 
-      <div className="card cal-card" style={{ padding: 14 }}>
+      <div className="card cal-card pc-cal" style={{ padding: 14 }}>
         <FullCalendar
           ref={calRef}
           plugins={[dayGridPlugin]}
