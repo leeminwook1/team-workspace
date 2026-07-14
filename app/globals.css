@@ -529,7 +529,7 @@ a { color: inherit; text-decoration: none; }
 .rtl-card { padding: 0 0 6px; overflow: hidden; }
 .rtl-card .rsv-tip { margin: 8px 12px 6px; text-align: left; }
 .rtl-scroll { overflow-x: auto; }
-.rtl-inner { min-width: 760px; }
+.rtl-inner { min-width: 980px; }
 .rtl-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
 .rtl-res {
   position: sticky; left: 0; z-index: 2; background: var(--surface);
@@ -540,9 +540,9 @@ a { color: inherit; text-decoration: none; }
 .rtl-res .status-pill { flex: none; padding: 2px 7px; font-size: 10px; }
 .rtl-res-h { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: var(--ink-faint); }
 .rtl-track {
-  position: relative; flex: 1; min-height: 40px;
+  position: relative; flex: 1; min-height: 40px; user-select: none;
   background-image: linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: calc(100% / 16) 100%;
+  background-size: calc(100% / 24) 100%;
 }
 .rtl-headrow { border-bottom: 1px solid var(--line); }
 .rtl-headrow .rtl-track-h { min-height: 30px; background-image: none; }
@@ -554,7 +554,7 @@ a { color: inherit; text-decoration: none; }
 .rtl-hour:last-child { transform: translateX(-100%); }
 .rtl-cat { border-bottom: 1px solid var(--line); background: var(--surface-2); }
 .rtl-cat .avb-cat-toggle { position: sticky; left: 0; max-width: 100vw; width: auto; }
-.rtl-track.can { cursor: copy; }
+.rtl-track.can { cursor: crosshair; }
 .rtl-track.can:hover { background-color: color-mix(in srgb, var(--primary) 4%, transparent); }
 .rtl-track.off { background-color: transparent; background-image: repeating-linear-gradient(-45deg, transparent 0 6px, color-mix(in srgb, var(--ink-faint) 8%, transparent) 6px 12px); }
 .rtl-bar {
@@ -574,9 +574,103 @@ a { color: inherit; text-decoration: none; }
   position: absolute; top: 0; bottom: 0; width: 2px; background: var(--danger);
   pointer-events: none; opacity: 0.75;
 }
+.rtl-bar.movable { cursor: grab; }
+.rtl-bar.moving { cursor: grabbing; opacity: 0.85; z-index: 3; box-shadow: var(--shadow); }
+/* 드래그 시간 선택 박스 */
+.rtl-selbox {
+  position: absolute; top: 4px; bottom: 4px; z-index: 2; pointer-events: none;
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  border: 1.5px dashed var(--primary); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.rtl-selbox b { font-size: 11px; font-weight: 800; color: var(--primary); white-space: nowrap; }
+/* 장비 이름 = 주간 보기 링크 */
+.rtl-res-link {
+  border: 0; background: transparent; padding: 0; cursor: pointer; font-family: inherit;
+  font-size: 12.5px; font-weight: 700; color: var(--ink); text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.rtl-res-link:hover { color: var(--primary); text-decoration: underline; }
+
+/* ── 왼쪽 분류·장비 패널 ── */
+.rtl-layout { display: flex; gap: 14px; align-items: flex-start; }
+.rtl-side {
+  flex: none; width: 158px; position: sticky; top: 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--shadow); padding: 8px; display: flex; flex-direction: column; gap: 1px;
+  max-height: calc(100vh - 90px); overflow-y: auto;
+}
+.rtl-side-item {
+  display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 9px;
+  border: 0; background: transparent; border-radius: 9px; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 600; color: var(--ink-soft); text-align: left;
+  overflow: hidden; white-space: nowrap;
+}
+.rtl-side-item .dot { flex: none; }
+.rtl-side-item b { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--ink-faint); }
+.rtl-side-item:hover { background: var(--surface-2); }
+.rtl-side-item.on { background: var(--accent-soft); color: var(--primary); font-weight: 800; }
+.rtl-side-item.on b { color: var(--primary); }
+.rtl-side-item.root { font-weight: 800; }
+.rtl-side-item.sub { padding-left: 26px; font-size: 12.5px; text-overflow: ellipsis; display: block; }
+.rtl-main { flex: 1; min-width: 0; }
+
+/* ── 장비 주간 뷰 — 7일 × 세로 시간축 ── */
+.rtw-toolbar { justify-content: space-between; }
+.rtw-title { font-size: 15.5px; font-weight: 800; color: var(--ink); display: inline-flex; align-items: center; gap: 7px; }
+.rtw { min-width: 680px; }
+.rtw-head { display: flex; border-bottom: 1px solid var(--line); }
+.rtw-hcol { flex: none; width: 44px; position: relative; }
+.rtw-dh {
+  flex: 1; text-align: center; padding: 8px 0; font-size: 12px; font-weight: 700; color: var(--ink-soft);
+  border-left: 1px solid var(--line);
+}
+.rtw-dh.sun { color: var(--danger); }
+.rtw-dh.sat { color: var(--primary); }
+.rtw-dh.today { color: var(--primary); background: color-mix(in srgb, var(--primary) 6%, transparent); }
+.rtw-body { display: flex; height: 576px; /* 24h × 24px */ }
+.rtw-hlabel {
+  position: absolute; right: 8px; transform: translateY(-50%);
+  font-size: 10px; font-weight: 700; color: var(--ink-faint);
+}
+.rtw-col {
+  flex: 1; position: relative; border-left: 1px solid var(--line); user-select: none;
+  background-image: linear-gradient(180deg, var(--line) 1px, transparent 1px);
+  background-size: 100% calc(100% / 12); /* 2시간 눈금 */
+}
+.rtw-col.today { background-color: color-mix(in srgb, var(--primary) 4%, transparent); }
+.rtw-col.can { cursor: crosshair; }
+.rtw-col.off { background-image: repeating-linear-gradient(-45deg, transparent 0 6px, color-mix(in srgb, var(--ink-faint) 8%, transparent) 6px 12px); }
+.rtw-block {
+  position: absolute; left: 3px; right: 3px; z-index: 1;
+  border: 1.5px solid; border-radius: 7px; padding: 2px 6px; cursor: pointer;
+  font-size: 10.5px; font-weight: 800; font-family: inherit; text-align: left;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.rtw-block:hover { filter: brightness(1.12); z-index: 2; }
+.rtw-block.mine { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent); }
+.rtw-sel {
+  position: absolute; left: 3px; right: 3px; z-index: 3; pointer-events: none;
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  border: 1.5px dashed var(--primary); border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 800; color: var(--primary); white-space: nowrap;
+}
+.rtw-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--danger); opacity: 0.75; pointer-events: none; }
+
+@media (max-width: 760px) {
+  .rtl-layout { display: block; }
+  .rtl-side {
+    position: static; width: auto; max-height: none; flex-direction: row; overflow-x: auto;
+    margin-bottom: 10px; padding: 6px; gap: 4px; scrollbar-width: none;
+  }
+  .rtl-side-item { width: auto; flex: none; }
+  .rtl-side-item.sub { padding-left: 9px; }
+  .rtl-side-item b { margin-left: 5px; }
+}
 @media (max-width: 640px) {
   .rtl-res { width: 108px; padding-left: 10px; }
-  .rtl-inner { min-width: 640px; }
+  .rtl-inner { min-width: 760px; }
 }
 
 /* 타임라인 묶음 상세 모달 — 장비 N개 목록 */
