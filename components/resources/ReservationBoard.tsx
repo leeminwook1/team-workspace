@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -63,18 +63,79 @@ export default function ReservationBoard({
 
   const [list, setList] = useState<ReservationItem[]>([]);
   const [err, setErr] = useState("");
-  const [view, setView] = useState<"list" | "timeline">("timeline"); // 기본은 타임라인
+  const [view, setView] = useState<"board" | "list" | "timeline">("board"); // 기본은 현황판
   const [weekRaw, setWeekRaw] = useState<ReservationItem[]>([]); // 그 주 원본 예약 (필터 전)
   const [weekRange, setWeekRange] = useState<{ from: string; to: string } | null>(null);
   const [tlCategory, setTlCategory] = useState("all"); // 타임라인 종류 필터
   const [tlTeam, setTlTeam] = useState("all"); // 타임라인 팀 필터
   const [modalOpen, setModalOpen] = useState(false);
+  // 예약 모달 초기값 — 현황판 빈 칸 클릭 시 그 장비·그 날짜로 바로 열기
+  const [modalInit, setModalInit] = useState<{ resourceIds?: string[]; startDate?: string } | null>(null);
   const [editing, setEditing] = useState<ReservationItem | null>(null); // 수정 중인 예약
   const [tlGroup, setTlGroup] = useState<ReservationItem[] | null>(null); // 타임라인 묶음 상세
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set()); // 리스트 묶음 펼침
   // 모바일(<640px)은 7일 열이 안 들어가므로 3일 보기 — 마운트 후 판정해 그때 달력 렌더
   const [tlMobile, setTlMobile] = useState<boolean | null>(null);
   useEffect(() => { setTlMobile(window.innerWidth < 640); }, []);
+
+  // ── 현황판 (장비 × 날짜 그리드) ──
+  const todayYmd = useMemo(() => {
+    const d = new Date(); const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }, []);
+  const [boardStart, setBoardStart] = useState<string>(() => {
+    const d = new Date(); const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  });
+  const boardDays = tlMobile ? 7 : 14;
+  const [boardRaw, setBoardRaw] = useState<ReservationItem[]>([]);
+  const [boardQuery, setBoardQuery] = useState(""); // 장비 이름 검색
+  const [boardClosed, setBoardClosed] = useState<Set<string>>(new Set()); // 접은 분류
+
+  const fetchBoard = useCallback(async () => {
+    const from = new Date(boardStart + "T00:00:00");
+    const to = new Date(addDays(boardStart, boardDays - 1) + "T23:59:59");
+    try {
+      const res = await fetch(`/api/reservations?from=${from.toISOString()}&to=${to.toISOString()}`);
+      if (!res.ok) return;
+      const d = await res.json();
+      setBoardRaw((d.reservations ?? []).filter((r: ReservationItem) => r.status === "booked"));
+    } catch {}
+  }, [boardStart, boardDays]);
+  useEffect(() => { if (tlMobile !== null) fetchBoard(); }, [fetchBoard, tlMobile]);
+
+  const boardDayList = useMemo(
+    () => Array.from({ length: boardDays }, (_, i) => addDays(boardStart, i)),
+    [boardStart, boardDays]
+  );
+  // 장비별 예약 구간 — [시작 열, 끝 열] 인덱스로 변환 (열 단위는 하루)
+  const segsByResource = useMemo(() => {
+    const map = new Map<string, { r: ReservationItem; s: number; e: number }[]>();
+    const rangeStart = new Date(boardStart + "T00:00:00").getTime();
+    const dayMs = 86_400_000;
+    for (const r of boardRaw) {
+      if (!r.resource) continue;
+      const s = Math.max(0, Math.floor((new Date(r.startAt).getTime() - rangeStart) / dayMs));
+      const e = Math.min(boardDays - 1, Math.floor((new Date(r.endAt).getTime() - 1 - rangeStart) / dayMs));
+      if (e < 0 || s > boardDays - 1 || e < s) continue;
+      const arr = map.get(r.resource.id);
+      if (arr) arr.push({ r, s, e }); else map.set(r.resource.id, [{ r, s, e }]);
+    }
+    for (const arr of Array.from(map.values())) arr.sort((a, b) => a.s - b.s);
+    return map;
+  }, [boardRaw, boardStart, boardDays]);
+  // 분류별 장비 행 (이름 검색 적용)
+  const boardGroups = useMemo(() => {
+    const q = boardQuery.trim().toLowerCase();
+    const map = new Map<string, { id: string; name: string; color: string; order: number; items: ResourceOpt[] }>();
+    for (const r of resources) {
+      if (q && !r.name.toLowerCase().includes(q)) continue;
+      const key = r.category?.id ?? "__none";
+      if (!map.has(key)) map.set(key, { id: key, name: r.category?.name ?? "미분류", color: r.category?.color ?? "#8b95a1", order: r.category?.order ?? 999, items: [] });
+      map.get(key)!.items.push(r);
+    }
+    return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  }, [resources, boardQuery]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | RsvState>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all"); // 종류(분류) 필터
@@ -184,6 +245,7 @@ export default function ReservationBoard({
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(() => {
     load();
+    if (view === "board") fetchBoard();
     if (view === "timeline" && weekRange) fetchWeek(weekRange.from, weekRange.to);
   }, ["reservation"]);
 
@@ -197,6 +259,7 @@ export default function ReservationBoard({
     const data = await res.json();
     if (!res.ok) { setErr(data.error ?? "삭제 실패"); return false; }
     load();
+    fetchBoard();
     if (weekRange) fetchWeek(weekRange.from, weekRange.to);
     return true;
   }
@@ -212,6 +275,7 @@ export default function ReservationBoard({
     const data = await res.json();
     if (!res.ok) { setErr(data.error ?? "반납 처리 실패"); return false; }
     setErr(""); load();
+    fetchBoard();
     if (weekRange) fetchWeek(weekRange.from, weekRange.to);
     return true;
   }
@@ -279,17 +343,143 @@ export default function ReservationBoard({
       {/* 상단 툴바 — 뷰 전환 + 예약 버튼 */}
       <div className="rsv2-topbar">
         <div className="seg" role="tablist" aria-label="보기 전환">
-          <button className={view === "list" ? "on" : ""} onClick={() => setView("list")}>리스트</button>
+          <button className={view === "board" ? "on" : ""} onClick={() => setView("board")}>현황판</button>
           <button className={view === "timeline" ? "on" : ""} onClick={() => setView("timeline")}>타임라인</button>
+          <button className={view === "list" ? "on" : ""} onClick={() => setView("list")}>대여 내역</button>
         </div>
         {canReserve && (
-          <button className="btn btn-primary rsv2-book" onClick={() => setModalOpen(true)}>
+          <button className="btn btn-primary rsv2-book" onClick={() => { setModalInit(null); setModalOpen(true); }}>
             <Icon name="plus" size={16} strokeWidth={2.5} /> 예약하기
           </button>
         )}
       </div>
 
       {err && <p className="err-msg">{err}</p>}
+
+      {/* 현황판 — 장비(행) × 날짜(열), 빈 칸 클릭 = 그 장비·그 날짜로 바로 예약 */}
+      {view === "board" && tlMobile !== null && (
+        <>
+          <div className="rsv2-filters">
+            <div className="rsv2-search">
+              <Icon name="search" size={15} />
+              <input value={boardQuery} onChange={(e) => setBoardQuery(e.target.value)} placeholder="장비 이름 검색" aria-label="장비 검색" />
+              {boardQuery && <button className="rsv2-clear" aria-label="지우기" onClick={() => setBoardQuery("")}>×</button>}
+            </div>
+            <div className="avb-nav">
+              <button className="avb-nav-btn" aria-label="이전 기간" onClick={() => setBoardStart(addDays(boardStart, -boardDays))}>‹</button>
+              <button className="avb-nav-btn avb-nav-today" onClick={() => setBoardStart(todayYmd)}>오늘</button>
+              <button className="avb-nav-btn" aria-label="다음 기간" onClick={() => setBoardStart(addDays(boardStart, boardDays))}>›</button>
+              <span className="avb-range">
+                {(() => { const s = new Date(boardStart + "T00:00:00"), e = new Date(addDays(boardStart, boardDays - 1) + "T00:00:00");
+                  return `${s.getMonth() + 1}/${s.getDate()} ~ ${e.getMonth() + 1}/${e.getDate()}`; })()}
+              </span>
+            </div>
+          </div>
+          <div className="card avb-card">
+            <div className="avb-scroll">
+              <table className="avb">
+                <colgroup>
+                  <col style={{ width: tlMobile ? 118 : 150 }} />
+                  {boardDayList.map((d) => <col key={d} />)}
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className="avb-res-h">장비</th>
+                    {boardDayList.map((day) => {
+                      const d = new Date(day + "T00:00:00");
+                      const wd = d.getDay();
+                      return (
+                        <th key={day} className={`avb-day-h${day === todayYmd ? " today" : ""}${wd === 0 ? " sun" : wd === 6 ? " sat" : ""}`}>
+                          <span className="avb-dow">{["일", "월", "화", "수", "목", "금", "토"][wd]}</span>
+                          <span className="avb-dnum">{d.getDate()}</span>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {boardGroups.length === 0 && (
+                    <tr><td className="avb-empty" colSpan={boardDays + 1}>검색 결과가 없습니다.</td></tr>
+                  )}
+                  {boardGroups.map((g) => {
+                    const closed = boardClosed.has(g.id);
+                    return (
+                      <Fragment key={g.id}>
+                        <tr className="avb-cat-row">
+                          <td colSpan={boardDays + 1}>
+                            <button
+                              type="button" className="avb-cat-toggle" aria-expanded={!closed}
+                              onClick={() => setBoardClosed((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(g.id)) next.delete(g.id); else next.add(g.id);
+                                return next;
+                              })}
+                            >
+                              <span className={`rsv-caret${closed ? "" : " open"}`} aria-hidden>▸</span>
+                              <span className="dot" style={{ background: g.color }} />
+                              {g.name} <span className="kb-count">{g.items.length}</span>
+                            </button>
+                          </td>
+                        </tr>
+                        {!closed && g.items.map((res) => {
+                          const bad = res.status && res.status !== "available";
+                          const segs = segsByResource.get(res.id) ?? [];
+                          const cells: JSX.Element[] = [];
+                          for (let i = 0; i < boardDays; ) {
+                            const seg = segs.find((x) => x.s <= i && i <= x.e);
+                            if (seg) {
+                              const span = seg.e - i + 1;
+                              const color = seg.r.team?.color ?? "#8b95a1";
+                              const mine = seg.r.reservedBy?.id === user?.id;
+                              cells.push(
+                                <td key={i} colSpan={span} className="avb-cell">
+                                  <button
+                                    type="button"
+                                    className={`avb-bar${mine ? " mine" : ""}`}
+                                    style={{ background: `color-mix(in srgb, ${color} 16%, transparent)`, borderColor: color, color }}
+                                    title={`${seg.r.resource?.name ?? ""} · ${seg.r.reservedBy?.name ?? "?"}${seg.r.team ? ` (${seg.r.team.name})` : ""}\n${fmtShort(seg.r.startAt)} ~ ${fmtShort(seg.r.endAt)}${seg.r.note ? `\n${seg.r.note}` : ""}`}
+                                    onClick={() => setTlGroup([seg.r])}
+                                  >
+                                    {seg.r.reservedBy?.name ?? ""}
+                                  </button>
+                                </td>
+                              );
+                              i = seg.e + 1;
+                            } else {
+                              const day = boardDayList[i];
+                              const wd = new Date(day + "T00:00:00").getDay();
+                              const clickable = canReserve && !bad;
+                              cells.push(
+                                <td
+                                  key={i}
+                                  className={`avb-cell avb-free${day === todayYmd ? " today" : ""}${wd === 0 || wd === 6 ? " wkend" : ""}${clickable ? " can" : ""}${bad ? " off" : ""}`}
+                                  onClick={clickable ? () => { setModalInit({ resourceIds: [res.id], startDate: day }); setModalOpen(true); } : undefined}
+                                  title={bad ? (res.status === "broken" ? "고장" : "수리·점검 중") : clickable ? `${res.name} · ${day.slice(5).replace("-", "/")} 예약하기` : undefined}
+                                />
+                              );
+                              i++;
+                            }
+                          }
+                          return (
+                            <tr key={res.id} className={bad ? "avb-row-off" : ""}>
+                              <td className="avb-res">
+                                <span className="avb-res-nm" title={res.name}>{res.name}</span>
+                                {bad && <span className={`status-pill ${res.status === "broken" ? "pill-broken" : "pill-maint"}`}>{res.status === "broken" ? "고장" : "수리중"}</span>}
+                              </td>
+                              {cells}
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="rsv-tip">막대를 클릭하면 예약 상세, 빈 칸을 클릭하면 그 장비·그 날짜로 바로 예약할 수 있어요.</p>
+          </div>
+        </>
+      )}
 
       {/* 리스트 뷰 */}
       {view === "list" && (
@@ -467,7 +657,7 @@ export default function ReservationBoard({
         <div className="modal-overlay" onClick={() => setTlGroup(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <ModalClose onClose={() => setTlGroup(null)} />
-            <h2>장비 {tlGroup.length}개 예약</h2>
+            <h2>{tlGroup.length > 1 ? `장비 ${tlGroup.length}개 예약` : tlGroup[0].resource?.name ?? "예약 상세"}</h2>
             <p className="rsv-form-hint" style={{ marginTop: -8 }}>
               <b>{tlGroup[0].reservedBy?.name ?? "?"}</b>
               {tlGroup[0].team ? ` · ${tlGroup[0].team.name}` : ""} · {fmt(tlGroup[0].startAt)} ~ {fmt(tlGroup[0].endAt)}
@@ -487,6 +677,9 @@ export default function ReservationBoard({
                         <button className="btn btn-primary btn-sm" onClick={async () => {
                           if (await markReturned(r.id)) setTlGroup((g) => g?.map((x) => x.id === r.id ? { ...x, status: "returned" as const } : x) ?? null);
                         }}>반납</button>
+                      )}
+                      {isOwnerOrAdmin && st !== "returned" && (
+                        <button className="btn btn-line btn-sm" onClick={() => { setTlGroup(null); setEditing(r); }}>수정</button>
                       )}
                       {isOwnerOrAdmin && (
                         <button className="btn btn-danger btn-sm" onClick={async () => {
@@ -509,8 +702,9 @@ export default function ReservationBoard({
         <ReserveModal
           resources={resources}
           teams={reservableTeams}
-          onClose={() => setModalOpen(false)}
-          onRefresh={() => { load(); if (weekRange) fetchWeek(weekRange.from, weekRange.to); }}
+          initial={modalInit}
+          onClose={() => { setModalOpen(false); setModalInit(null); }}
+          onRefresh={() => { load(); fetchBoard(); if (weekRange) fetchWeek(weekRange.from, weekRange.to); }}
         />
       )}
 
@@ -519,7 +713,7 @@ export default function ReservationBoard({
           resv={editing}
           teams={reservableTeams}
           onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); load(); if (weekRange) fetchWeek(weekRange.from, weekRange.to); }}
+          onSaved={() => { setEditing(null); load(); fetchBoard(); if (weekRange) fetchWeek(weekRange.from, weekRange.to); }}
         />
       )}
     </div>
@@ -618,14 +812,22 @@ function EditReservationModal({
 
 /* ── 예약 모달 — 여러 장비 선택(검색+분류) + 기간 대여 ── */
 function ReserveModal({
-  resources, teams, onClose, onRefresh,
+  resources, teams, initial, onClose, onRefresh,
 }: {
-  resources: ResourceOpt[]; teams: TeamOpt[]; onClose: () => void; onRefresh: () => void;
+  resources: ResourceOpt[]; teams: TeamOpt[];
+  initial?: { resourceIds?: string[]; startDate?: string } | null; // 현황판에서 장비·날짜 지정 진입
+  onClose: () => void; onRefresh: () => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [resIds, setResIds] = useState<Set<string>>(new Set());
+  const [resIds, setResIds] = useState<Set<string>>(new Set(initial?.resourceIds ?? []));
   const [resQuery, setResQuery] = useState("");
-  const [form, setForm] = useState({ teamId: teams[0]?.id ?? "", startDate: today, endDate: addDays(today, 6), startTime: "10:00", endTime: "18:00", note: "" });
+  const [form, setForm] = useState({
+    teamId: teams[0]?.id ?? "",
+    startDate: initial?.startDate ?? today,
+    // 현황판에서 날짜를 찍고 들어오면 하루 대여가 기본, 일반 진입은 일주일
+    endDate: initial?.startDate ?? addDays(today, 6),
+    startTime: "10:00", endTime: "18:00", note: "",
+  });
   const [err, setErr] = useState("");
   const [fails, setFails] = useState<{ name: string; reason: string }[]>([]);
   const [busy, setBusy] = useState(false);
