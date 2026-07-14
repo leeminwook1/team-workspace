@@ -40,6 +40,7 @@ export default function HelpPage() {
     ["resources", "장비 예약"],
     ["events", "행사"],
     ["todo", "TODO"],
+    ["notices", "공지·피드백"],
     ["telegram", "텔레그램"],
     ["ical", "캘린더 구독"],
     ["roles", "권한"],
@@ -119,6 +120,14 @@ export default function HelpPage() {
           <Row k="하달">과장단·서기가 팀장에게 할 일을 내려줘요. 팀장이 확인하면 발신자에게 읽음이 표시돼요.</Row>
           <Row k="처리">팀장은 상태를 바꾸고 팀원에게 분배하거나, 일정으로 등록해 달력에 올려요.</Row>
           <Row k="리포트">팀별 리포트 탭에서 완료율과 평균 처리일을 확인해요.</Row>
+        </div>
+      </Sec>
+
+      <Sec id="notices" icon="megaphone" tint="#f0466e" title="공지사항 · 피드백">
+        <div className="help-rows">
+          <Row k="공지사항">과장단·서기가 올리는 전체 소식이에요. 새 공지가 올라오면 알림이 가고, 안 읽은 공지는 메뉴에 숫자로 표시돼요. 중요한 공지는 📌 고정으로 맨 위에 둬요.</Row>
+          <Row k="피드백">쓰다가 느낀 <b>기능 제안 · 버그 · 개선사항</b>을 누구나 남길 수 있어요. 다른 사람 피드백에 👍 공감과 댓글도 달 수 있어요.</Row>
+          <Row k="처리">남긴 피드백은 접수 → 진행중 → 반영 완료 순으로 처리되고, 상태가 바뀌면 작성자에게 알림이 가요.</Row>
         </div>
       </Sec>
 

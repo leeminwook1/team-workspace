@@ -102,6 +102,35 @@ export const directiveUpdateSchema = z.object({
   assignments: z.array(assignmentSchema).optional(),
 });
 
+// 공지사항
+export const noticeCreateSchema = z.object({
+  title: z.string().min(1, "공지 제목을 입력하세요").max(200),
+  body: z.string().max(5000).optional().default(""),
+  pinned: z.boolean().optional().default(false),
+});
+export const noticeUpdateSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  body: z.string().max(5000).optional(),
+  pinned: z.boolean().optional(),
+});
+
+// 피드백 게시판
+export const feedbackCreateSchema = z.object({
+  type: z.enum(["feature", "bug", "improve"]),
+  title: z.string().min(1, "제목을 입력하세요").max(200),
+  body: z.string().max(3000).optional().default(""),
+});
+export const feedbackUpdateSchema = z.object({
+  type: z.enum(["feature", "bug", "improve"]).optional(),
+  title: z.string().min(1).max(200).optional(),
+  body: z.string().max(3000).optional(),
+  status: z.enum(["open", "in_progress", "done", "declined"]).optional(),
+  vote: z.boolean().optional(), // true=공감, false=공감 취소
+});
+export const feedbackCommentSchema = z.object({
+  body: z.string().min(1, "댓글 내용을 입력하세요").max(1000),
+});
+
 // 내 계정 — 이름·비밀번호 변경 (이메일은 로그인 식별자라 수정 불가)
 export const meUpdateSchema = z.object({
   name: z.string().min(2, "이름은 2자 이상").max(30).optional(),

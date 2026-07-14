@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 
 export type IconName =
   | "calendar" | "resources" | "admin" | "logout" | "plus" | "chevronL" | "chevronR"
-  | "check" | "clock" | "mapPin" | "userLine" | "inbox" | "filter" | "board" | "home" | "search" | "bell" | "users" | "gear";
+  | "check" | "clock" | "mapPin" | "userLine" | "inbox" | "filter" | "board" | "home" | "search" | "bell" | "users" | "gear"
+  | "megaphone" | "chat";
 
 const PATHS: Record<IconName, ReactNode> = {
   calendar: (
@@ -98,6 +99,19 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <circle cx="12" cy="12" r="3.2" />
       <path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1" />
+    </>
+  ),
+  megaphone: (
+    <>
+      <path d="M3.5 10v4a1.5 1.5 0 0 0 1.5 1.5h2L18.5 20V4L7 8.5H5A1.5 1.5 0 0 0 3.5 10z" />
+      <path d="M8.5 16l1 4.5h2.5l-1-4.3" />
+      <path d="M21 10v4" />
+    </>
+  ),
+  chat: (
+    <>
+      <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H12l-4.5 3.5V17h-1A2.5 2.5 0 0 1 4 14.5v-8z" />
+      <path d="M8.5 9.5h7M8.5 12.5h4.5" />
     </>
   ),
 };

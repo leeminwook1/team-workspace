@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import Link from "next/link";
 import { connectDB } from "@/lib/mongodb";
 import { Directive } from "@/models/Directive";
+import { Notice } from "@/models/Notice";
 import { canApproveUsers, canCreateDirective, canManageTeams, canUseDirectives, canViewAllTeams, ROLE_LABEL, type SessionUser } from "@/lib/permissions";
 import LogoutButton from "@/components/LogoutButton";
 import NavLinks, { BottomNav, type NavItem } from "@/components/NavLinks";
@@ -30,6 +31,16 @@ async function pendingDirectiveCount(user: SessionUser): Promise<number> {
   }
 }
 
+// 안 읽은 공지 개수 — 사이드바 뱃지용. 실패해도 화면을 막지 않는다.
+async function unreadNoticeCount(userId: string): Promise<number> {
+  try {
+    await connectDB();
+    return await Notice.countDocuments({ readBy: { $ne: userId } });
+  } catch {
+    return 0;
+  }
+}
+
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -37,7 +48,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   const user = session.user as SessionUser & { name: string };
   const showAdmin = canApproveUsers(user) || canManageTeams(user);
-  const todoBadge = await pendingDirectiveCount(user);
+  const [todoBadge, noticeBadge] = await Promise.all([
+    pendingDirectiveCount(user),
+    unreadNoticeCount(user.id),
+  ]);
 
   const showTeamBoard = canViewAllTeams(user) || user.role === "leader" || user.role === "vice_leader";
   const navItems: NavItem[] = [
@@ -48,6 +62,8 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     { href: "/resources", label: "자원 예약", icon: "resources" },
     { href: "/events", label: "행사 관리", icon: "board" },
     ...(canUseDirectives(user) ? [{ href: "/directives", label: "TODO", icon: "inbox" as const, badge: todoBadge }] : []),
+    { href: "/notices", label: "공지사항", icon: "megaphone", badge: noticeBadge },
+    { href: "/feedback", label: "피드백", icon: "chat" },
     ...(showAdmin ? [{ href: "/admin", label: "관리자", icon: "admin" as const }] : []),
   ];
 

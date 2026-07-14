@@ -127,6 +127,24 @@ export function canViewPersonalCalendar(viewer: SessionUser, target: { id: strin
     && String(viewer.teamId) === String(target.teamId);
 }
 
+// ── 공지사항 ──
+// 조회: 전체 활성 사용자. 작성: 전사 역할. 수정·삭제: 작성자 본인 또는 admin.
+export function canCreateNotice(u: SessionUser) {
+  return isActive(u) && ALL_TEAM_EDITORS.includes(u.role);
+}
+export function canEditNotice(u: SessionUser, createdById: string) {
+  return isActive(u) && (u.role === "admin" || String(u.id) === String(createdById));
+}
+
+// ── 피드백 게시판 ──
+// 작성·댓글·공감: 전체 활성 사용자. 상태 변경(접수→진행중→반영): admin. 삭제·본문 수정: 작성자 또는 admin.
+export function canManageFeedback(u: SessionUser) {
+  return isActive(u) && u.role === "admin";
+}
+export function canEditFeedback(u: SessionUser, createdById: string) {
+  return isActive(u) && (u.role === "admin" || String(u.id) === String(createdById));
+}
+
 export function canApproveUsers(u: SessionUser) {
   return isActive(u) && APPROVERS.includes(u.role); // admin·과장·부과장 (서기 ✕)
 }
