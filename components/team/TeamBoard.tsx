@@ -98,10 +98,6 @@ export default function TeamBoard({
 
   const api = () => calRef.current?.getApi();
   const monthLabel = curStart ? `${curStart.getFullYear()}년 ${curStart.getMonth() + 1}월` : "";
-  const totals = stats.reduce(
-    (acc, s) => ({ inProgress: acc.inProgress + s.inProgress, overdue: acc.overdue + s.overdue, weekDue: acc.weekDue + s.weekDue }),
-    { inProgress: 0, overdue: 0, weekDue: 0 }
-  );
 
   return (
     <div className="teamboard">
@@ -118,14 +114,6 @@ export default function TeamBoard({
             {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         )}
-      </div>
-
-      {/* 팀 요약 */}
-      <div className="tb-summary">
-        <span>진행 중 <b>{totals.inProgress}</b></span>
-        <span>이번 주 마감 <b>{totals.weekDue}</b></span>
-        <span className={totals.overdue ? "danger" : ""}>지연 <b>{totals.overdue}</b></span>
-        <span className="tb-summary-note">담당자 기준 · 이번 주(오늘부터 7일)</span>
       </div>
 
       {/* 팀원별 현황 카드 */}
