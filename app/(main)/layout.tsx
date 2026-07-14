@@ -70,6 +70,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         <GlobalSearch />
         <NavLinks items={navItems} />
         <div className="side-foot">
+          <Link href="/help" className="side-help">📖 사용 안내</Link>
           <div className="side-user-row">
             <Link href="/settings" className="side-user" title="내 계정">
               <span className="avatar" aria-hidden>{user.name.slice(0, 1)}</span>
