@@ -66,6 +66,7 @@ export default function ReservationBoard({
   const [weekEvents, setWeekEvents] = useState<any[]>([]);
   const [weekRange, setWeekRange] = useState<{ from: string; to: string } | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<ReservationItem | null>(null); // 수정 중인 예약
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | RsvState>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all"); // 종류(분류) 필터
@@ -303,8 +304,10 @@ export default function ReservationBoard({
             <div className="rsv2-list">
               {shownList.map(({ r, st }) => {
                 const days = Math.ceil((new Date(r.endAt).getTime() - new Date(r.startAt).getTime()) / 86400_000);
-                // 삭제 — 본인이 올린 예약(잘못 등록 정정) 또는 최고관리자는 전체. 모든 상태에서 가능.
-                const canDelete = r.reservedBy?.id === user?.id || user?.role === "admin";
+                // 본인이 올린 예약 또는 최고관리자 — 삭제는 모든 상태, 수정은 진행 중(반납 전)만
+                const isOwnerOrAdmin = r.reservedBy?.id === user?.id || user?.role === "admin";
+                const canDelete = isOwnerOrAdmin;
+                const canEdit = isOwnerOrAdmin && st !== "returned";
                 const canReturn = (st === "inuse" || st === "overdue") && canReturnUi(r);
                 return (
                   <div className={`rsv2-item${st === "returned" ? " done" : ""}`} key={r.id}>
@@ -322,9 +325,10 @@ export default function ReservationBoard({
                         {st === "returned" && r.returnedAt && <span className="rsv2-item-note">· 반납 {fmt(r.returnedAt)}{r.returnedByName ? ` (${r.returnedByName})` : ""}</span>}
                       </div>
                     </div>
-                    {(canDelete || canReturn) && (
+                    {(canEdit || canDelete || canReturn) && (
                       <div className="rsv2-item-actions">
                         {canReturn && <button className="btn btn-primary btn-sm" onClick={() => markReturned(r.id)}>반납</button>}
+                        {canEdit && <button className="btn btn-line btn-sm" onClick={() => setEditing(r)}>수정</button>}
                         {canDelete && <button className="btn btn-danger btn-sm" onClick={() => removeReservation(r.id)}>삭제</button>}
                       </div>
                     )}
@@ -369,6 +373,105 @@ export default function ReservationBoard({
           onRefresh={() => { load(); if (weekRange) fetchWeek(weekRange.from, weekRange.to); }}
         />
       )}
+
+      {editing && (
+        <EditReservationModal
+          resv={editing}
+          teams={reservableTeams}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); load(); if (weekRange) fetchWeek(weekRange.from, weekRange.to); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── 예약 수정 모달 — 장비는 고정, 기간·팀·메모 수정 ── */
+function EditReservationModal({
+  resv, teams, onClose, onSaved,
+}: {
+  resv: ReservationItem; teams: TeamOpt[]; onClose: () => void; onSaved: () => void;
+}) {
+  const toDate = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+  const toTime = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, "0"); return `${p(d.getHours())}:${p(d.getMinutes())}`; };
+  const [form, setForm] = useState({
+    teamId: resv.team?.id ?? teams[0]?.id ?? "",
+    startDate: toDate(resv.startAt), endDate: toDate(resv.endAt),
+    startTime: toTime(resv.startAt), endTime: toTime(resv.endAt),
+    note: resv.note ?? "",
+  });
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const rentalDays = (() => {
+    const s = new Date(form.startDate), e = new Date(form.endDate);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
+    return Math.round((e.getTime() - s.getTime()) / 86400_000) + 1;
+  })();
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(""); setBusy(true);
+    const res = await fetch(`/api/reservations/${resv.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        teamId: form.teamId,
+        startAt: `${form.startDate}T${form.startTime}:00`,
+        endAt: `${form.endDate}T${form.endTime}:00`,
+        note: form.note,
+      }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) { setErr(data.error ?? "수정 실패"); return; }
+    onSaved();
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
+        <h2>예약 수정</h2>
+        <p className="rsv-form-hint" style={{ marginTop: -8 }}>장비 <b>{resv.resource?.name ?? "?"}</b> · 기간·팀·메모를 수정할 수 있어요 (장비 변경은 삭제 후 다시 예약).</p>
+        <form onSubmit={submit}>
+          <div className="field">
+            <label>예약 팀</label>
+            <select value={form.teamId} onChange={(e) => setForm({ ...form, teamId: e.target.value })}>
+              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+          <div className="rsv2-daterow">
+            <div className="field">
+              <label>시작일</label>
+              <input type="date" value={form.startDate} required
+                onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, startDate: v, endDate: f.endDate < v ? v : f.endDate })); }} />
+            </div>
+            <div className="field">
+              <label>종료일 (반납일)</label>
+              <input type="date" value={form.endDate} min={form.startDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
+            </div>
+            <div className="field">
+              <label>수령 시각</label>
+              <input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} required />
+            </div>
+            <div className="field">
+              <label>반납 시각</label>
+              <input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} required />
+            </div>
+          </div>
+          <p className="rsv-form-hint" style={{ margin: "-2px 0 12px" }}>
+            <b>{rentalDays >= 1 ? `${rentalDays}일 대여` : "기간 오류"}</b>{rentalDays === 1 && " (하루)"}
+          </p>
+          <div className="field">
+            <label>메모 (선택)</label>
+            <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="예: 신제품 화보 촬영" />
+          </div>
+          {err && <p className="err-msg">{err}</p>}
+          <div className="modal-actions">
+            <button className="btn btn-primary" disabled={busy}>{busy ? "저장 중…" : "수정 저장"}</button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
