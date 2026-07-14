@@ -19,6 +19,7 @@ export type WTodo = { id: string; title: string; dueDate: string | null; teamCol
 export type WResv = { id: string; start: string; end: string; resource: string; teamColor: string | null };
 export type WDue = { eventId: string; eventTitle: string; title: string; dueDate: string; overdue: boolean };
 export type WEvent = { id: string; title: string; total: number; pct: number };
+export type WNotice = { id: string; title: string; pinned: boolean; isNew: boolean; author: string; createdAt: string };
 export type WidgetData = {
   monthTasks: WTask[];
   mytasks: WTask[];
@@ -27,6 +28,7 @@ export type WidgetData = {
   reservations: WResv[];
   duesoon: WDue[];
   events: WEvent[];
+  notices: WNotice[];
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -367,6 +369,32 @@ function DueSoonWidget({ items }: { items: WDue[] }) {
   );
 }
 
+function NoticesWidget({ items }: { items: WNotice[] }) {
+  return (
+    <>
+      <WidgetHead icon="megaphone" tint="#f0466e" title="공지사항" href="/notices" hrefLabel="전체" />
+      {items.length === 0 ? (
+        <EmptyMsg icon="megaphone" text="아직 공지가 없어요." />
+      ) : (
+        <ul className="dash-list">
+          {items.map((n) => (
+            <li key={n.id}>
+              <Link href="/notices" className="dash-row">
+                <span className="dash-row-title">
+                  {n.pinned && <span title="고정 공지">📌 </span>}
+                  {n.title}
+                  {n.isNew && <b className="wnotice-new">N</b>}
+                </span>
+                <span className="dash-row-sub">{n.author && `${n.author} · `}{fmtMD(n.createdAt)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
 function EventsWidget({ items }: { items: WEvent[] }) {
   return (
     <>
@@ -457,6 +485,7 @@ export default function HomeWidgets({ initialLayout, canDirectives, data }: {
       case "reservations": return <ReservationsWidget items={data.reservations} />;
       case "duesoon": return <DueSoonWidget items={data.duesoon} />;
       case "events": return <EventsWidget items={data.events} />;
+      case "notices": return <NoticesWidget items={data.notices} />;
     }
   }
 

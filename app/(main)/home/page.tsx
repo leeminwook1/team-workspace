@@ -6,6 +6,7 @@ import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
 import { Event } from "@/models/Event";
 import { Directive } from "@/models/Directive";
+import { Notice } from "@/models/Notice";
 import { Reservation } from "@/models/Reservation";
 import { User } from "@/models/User";
 import "@/models/Team";
@@ -54,7 +55,7 @@ export default async function HomePage() {
   // 대시보드 쿼리는 상호 독립 — 병렬 실행으로 첫 로딩 단축
   const dirQ: any = { status: "todo" };
   if (!canCreateDirective(user)) dirQ.teamId = user.teamId ?? null;
-  const [todayTasks, eventsRaw, pendingDirs, todayResv, pendingUsers, monthTasks, upcomingTasks, meDoc, myTasks] = (await Promise.all([
+  const [todayTasks, eventsRaw, pendingDirs, todayResv, pendingUsers, monthTasks, upcomingTasks, meDoc, myTasks, recentNotices] = (await Promise.all([
     // 1) 오늘 일정 (조회 범위 내)
     noScope ? [] : Task.find(scoped({ startDate: { $lt: end }, endDate: { $gt: start } }))
       .populate("teamIds", "name color").sort({ allDay: -1, startDate: 1 }).limit(6).lean(),
@@ -80,7 +81,9 @@ export default async function HomePage() {
     // 9) 내 담당 업무 — 미완료, 마감 임박순 (모든 역할)
     Task.find({ assignees: user.id, status: { $in: ["todo", "in_progress"] } })
       .populate("teamIds", "name color").populate("categoryId", "name color").sort({ endDate: 1 }).limit(6).lean(),
-  ])) as [any[], any[], any[], any[], number, any[], any[], any, any[]];
+    // 10) 최근 공지 — 고정 우선 (위젯용, 읽음 처리는 공지 페이지에서만)
+    Notice.find({}).populate("createdBy", "name").sort({ pinned: -1, createdAt: -1 }).limit(4).lean(),
+  ])) as [any[], any[], any[], any[], number, any[], any[], any, any[], any[]];
 
   const upcoming = eventsRaw
     .filter((e) => !e.eventDate || new Date(e.eventDate) >= start)
@@ -138,6 +141,14 @@ export default async function HomePage() {
     })),
     duesoon: dueSoon.map((d) => ({ ...d, dueDate: new Date(d.dueDate).toISOString() })),
     events: upcoming.map((e) => ({ id: e.id, title: e.title, total: e.total, pct: e.pct })),
+    notices: recentNotices.map((n: any) => ({
+      id: String(n._id),
+      title: n.title,
+      pinned: !!n.pinned,
+      isNew: !(n.readBy ?? []).some((id: any) => String(id) === user.id),
+      author: n.createdBy?.name ?? "",
+      createdAt: new Date(n.createdAt).toISOString(),
+    })),
   };
 
   const dateLabel = kst.toLocaleDateString("ko-KR", { timeZone: "UTC", month: "long", day: "numeric", weekday: "long" });
