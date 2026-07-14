@@ -477,6 +477,17 @@ a { color: inherit; text-decoration: none; }
 .rsv2-item-actions .btn { padding: 4px 12px; font-size: 12px; }
 .rsv2-empty { padding: 40px 20px; text-align: center; color: var(--ink-faint); font-size: 14px; }
 
+/* 타임라인 묶음 상세 모달 — 장비 N개 목록 */
+.tlg-list { max-height: 46vh; overflow-y: auto; margin-top: 4px; }
+.tlg-row {
+  display: flex; align-items: center; gap: 10px; padding: 9px 2px;
+  border-bottom: 1px solid var(--line);
+}
+.tlg-row:last-child { border-bottom: 0; }
+.tlg-name { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tlg-actions { display: flex; gap: 6px; flex: none; }
+.tlg-actions .btn { padding: 3px 10px; font-size: 12px; }
+
 /* 예약 모달 — 큰 폭, 장비 피커 */
 .modal.modal-lg { max-width: 640px; }
 .rsv2-picked { font-weight: 700; color: var(--primary); font-size: 12.5px; }
@@ -1057,23 +1068,36 @@ a { color: inherit; text-decoration: none; }
 /* 대여 장비 피커 — 검색 + 분류 그룹 + 스크롤 목록 */
 .equip-box { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); overflow: hidden; }
 .equip-selected {
-  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px;
+  padding: 10px 12px;
   background: var(--surface); border-bottom: 1px solid var(--line);
 }
 .equip-tag {
   display: inline-flex; align-items: center; gap: 6px; border: 0; cursor: pointer;
   font-size: 12px; font-weight: 700; color: var(--primary); background: var(--accent-soft);
   padding: 5px 10px; border-radius: 999px; transition: opacity 0.12s;
+  min-width: 0;
 }
 .equip-tag span { font-size: 10px; opacity: 0.65; }
+.equip-tag .equip-tag-nm { font-size: 12px; opacity: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .equip-tag:hover { opacity: 0.75; }
+/* 담당자 일괄 지정 줄 */
+.equip-bulk {
+  display: flex; align-items: center; gap: 8px; padding-bottom: 8px; margin-bottom: 8px;
+  border-bottom: 1px dashed var(--line); font-size: 12px; font-weight: 600; color: var(--ink-faint);
+}
+/* 선택된 장비 — 2단 그리드(모바일 1단), 많으면 스크롤 */
+.equip-sel-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 4px 14px; max-height: 232px; overflow-y: auto;
+}
 /* 선택된 장비 한 줄 — 장비 태그 + 담당자 셀렉트 */
-.equip-sel-row { display: flex; align-items: center; gap: 8px; width: 100%; }
-.equip-owner {
-  flex: none; max-width: 190px; padding: 4px 8px; border-radius: 8px;
+.equip-sel-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.field select.equip-owner {
+  flex: none; width: 110px; padding: 5px 6px; border-radius: 8px;
   border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   font-size: 12px; font-weight: 600;
 }
+.field .equip-bulk select.equip-owner { width: auto; max-width: 170px; }
 .equip-search {
   display: flex; align-items: center; gap: 8px; padding: 9px 12px;
   border-bottom: 1px solid var(--line); color: var(--ink-faint);

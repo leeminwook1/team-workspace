@@ -894,31 +894,59 @@ function TaskFormModal({
                     const ownerOpts = members.filter((mem) => assignees.has(mem.id));
                     return (
                       <div className="equip-selected">
-                        {selectedResources.map((r) => (
-                          <div className="equip-sel-row" key={r.id}>
-                            <button type="button" className="equip-tag" onClick={() => toggleResource(r.id)}>
-                              {r.name} <span aria-hidden>✕</span>
-                            </button>
-                            {ownerOpts.length > 0 && (
-                              <select
-                                className="equip-owner"
-                                value={resourceOwners[r.id] ?? ""}
-                                onChange={(e) => setResourceOwners((prev) => {
+                        {ownerOpts.length > 0 && selectedResources.length > 1 && (
+                          <div className="equip-bulk">
+                            <span>담당자 한 번에 지정</span>
+                            <select
+                              className="equip-owner"
+                              value=""
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (!v) return;
+                                setResourceOwners((prev) => {
                                   const next = { ...prev };
-                                  if (e.target.value) next[r.id] = e.target.value;
-                                  else delete next[r.id];
+                                  for (const r of selectedResources) {
+                                    if (v === "__clear") delete next[r.id];
+                                    else next[r.id] = v;
+                                  }
                                   return next;
-                                })}
-                                aria-label={`${r.name} 담당자`}
-                              >
-                                <option value="">담당자 (기본: 등록자)</option>
-                                {ownerOpts.map((mem) => <option key={mem.id} value={mem.id}>{mem.name}</option>)}
-                              </select>
-                            )}
+                                });
+                              }}
+                              aria-label="모든 장비 담당자 일괄 지정"
+                            >
+                              <option value="">선택…</option>
+                              {ownerOpts.map((mem) => <option key={mem.id} value={mem.id}>{mem.name}</option>)}
+                              <option value="__clear">기본(등록자)으로</option>
+                            </select>
                           </div>
-                        ))}
+                        )}
+                        <div className="equip-sel-grid">
+                          {selectedResources.map((r) => (
+                            <div className="equip-sel-row" key={r.id}>
+                              <button type="button" className="equip-tag" onClick={() => toggleResource(r.id)} title={r.name}>
+                                <span className="equip-tag-nm">{r.name}</span> <span aria-hidden>✕</span>
+                              </button>
+                              {ownerOpts.length > 0 && (
+                                <select
+                                  className="equip-owner"
+                                  value={resourceOwners[r.id] ?? ""}
+                                  onChange={(e) => setResourceOwners((prev) => {
+                                    const next = { ...prev };
+                                    if (e.target.value) next[r.id] = e.target.value;
+                                    else delete next[r.id];
+                                    return next;
+                                  })}
+                                  aria-label={`${r.name} 담당자`}
+                                >
+                                  <option value="">등록자</option>
+                                  {ownerOpts.map((mem) => <option key={mem.id} value={mem.id}>{mem.name}</option>)}
+                                </select>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                         {ownerOpts.length > 0 && (
-                          <p className="equip-hint" style={{ padding: "2px 2px 0" }}>
+                          <p className="equip-hint" style={{ padding: "6px 2px 0" }}>
                             장비마다 담당자를 정하면 그 사람 이름으로 예약돼요 (반납 책임)
                           </p>
                         )}

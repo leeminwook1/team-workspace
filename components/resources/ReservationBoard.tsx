@@ -69,6 +69,7 @@ export default function ReservationBoard({
   const [tlTeam, setTlTeam] = useState("all"); // 타임라인 팀 필터
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ReservationItem | null>(null); // 수정 중인 예약
+  const [tlGroup, setTlGroup] = useState<ReservationItem[] | null>(null); // 타임라인 묶음 상세
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | RsvState>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all"); // 종류(분류) 필터
@@ -88,27 +89,35 @@ export default function ReservationBoard({
   }, [resources]);
 
   // 타임라인 이벤트 — 종류·팀 필터 적용 후 FullCalendar 형식으로 매핑
+  // 같은 시간·팀·예약자의 여러 장비는 막대 하나("장비 N개")로 묶어 겹침을 줄인다
   const weekEvents = useMemo(() => {
-    return weekRaw
-      .filter((r) => {
-        if (tlCategory !== "all" && resCatId.get(r.resource?.id ?? "") !== tlCategory) return false;
-        if (tlTeam !== "all" && r.team?.id !== tlTeam) return false;
-        return true;
-      })
-      .map((r) => {
+    const filtered = weekRaw.filter((r) => {
+      if (tlCategory !== "all" && resCatId.get(r.resource?.id ?? "") !== tlCategory) return false;
+      if (tlTeam !== "all" && r.team?.id !== tlTeam) return false;
+      return true;
+    });
+    const groups = new Map<string, ReservationItem[]>();
+    for (const r of filtered) {
+      const key = [r.startAt, r.endAt, r.team?.id ?? "", r.reservedBy?.id ?? "", r.status === "returned" ? 1 : 0].join("|");
+      const arr = groups.get(key);
+      if (arr) arr.push(r); else groups.set(key, [r]);
+    }
+    return Array.from(groups.values()).map((items) => {
+        const r = items[0];
         const color = r.team?.color ?? "#8b95a1";
         const returned = r.status === "returned";
         const start = new Date(r.startAt);
         const end = new Date(r.endAt);
         // 하루를 넘는 기간 대여 → 상단 종일 줄에 가로 막대로
         const multiDay = end.getTime() - start.getTime() >= 20 * 3600_000 || start.toDateString() !== end.toDateString();
+        const name = items.length > 1 ? `장비 ${items.length}개` : r.resource?.name ?? "?";
         const base = {
           id: r.id,
-          title: `${r.resource?.name ?? "?"}${r.team ? ` · ${r.team.name}` : ""}${returned ? " ✓" : ""}`,
+          title: `${name}${r.team ? ` · ${r.team.name}` : ""}${returned ? " ✓" : ""}`,
           backgroundColor: color + (returned ? "12" : "26"),
           borderColor: returned ? color + "55" : color,
           textColor: returned ? color + "99" : color,
-          extendedProps: { resId: r.id, byId: r.reservedBy?.id, byName: r.reservedBy?.name ?? "?", returned },
+          extendedProps: { resId: r.id, byId: r.reservedBy?.id, byName: r.reservedBy?.name ?? "?", returned, items },
         };
         if (multiDay) {
           const endDay = new Date(end);
@@ -178,12 +187,13 @@ export default function ReservationBoard({
       title: "예약 삭제", message: "이 예약을 삭제할까요? 목록에서 사라집니다.",
       confirmText: "삭제", cancelText: "닫기", danger: true,
     });
-    if (!confirmed) return;
+    if (!confirmed) return false;
     const res = await fetch(`/api/reservations/${id}`, { method: "DELETE" });
     const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
+    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return false; }
     load();
     if (weekRange) fetchWeek(weekRange.from, weekRange.to);
+    return true;
   }
 
   async function markReturned(id: string) {
@@ -192,12 +202,13 @@ export default function ReservationBoard({
       message: "이 장비를 반납 처리할까요? 반납하면 남은 시간에 다른 팀이 예약할 수 있어요.",
       confirmText: "반납 완료", cancelText: "닫기",
     });
-    if (!confirmed) return;
+    if (!confirmed) return false;
     const res = await fetch(`/api/reservations/${id}/return`, { method: "POST" });
     const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "반납 처리 실패"); return; }
+    if (!res.ok) { setErr(data.error ?? "반납 처리 실패"); return false; }
     setErr(""); load();
     if (weekRange) fetchWeek(weekRange.from, weekRange.to);
+    return true;
   }
 
   const isReturnManager = ["admin", "manager", "deputy"].includes(user?.role ?? "");
@@ -384,13 +395,63 @@ export default function ReservationBoard({
             nowIndicator
             eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
             events={weekEvents}
+            eventMaxStack={3}
+            dayMaxEvents={4}
+            moreLinkText={(n) => `+${n}건`}
             datesSet={(arg) => fetchWeek(arg.startStr, arg.endStr)}
-            eventClick={(arg) => onTimelineClick(arg.event.extendedProps.resId, arg.event.extendedProps.byId, arg.event.extendedProps.byName, arg.event.extendedProps.returned)}
+            eventClick={(arg) => {
+              const p = arg.event.extendedProps;
+              if ((p.items as ReservationItem[])?.length > 1) setTlGroup(p.items as ReservationItem[]);
+              else onTimelineClick(p.resId, p.byId, p.byName, p.returned);
+            }}
             noEventsContent="이 주에 예약이 없습니다"
           />
           <p className="rsv-tip">예약을 클릭하면 상세를 볼 수 있어요. (본인 예약은 삭제 가능)</p>
         </div>
         </>
+      )}
+
+      {/* 타임라인 묶음 상세 — 같은 시간·예약자의 장비 여러 개 */}
+      {tlGroup && tlGroup.length > 0 && (
+        <div className="modal-overlay" onClick={() => setTlGroup(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <ModalClose onClose={() => setTlGroup(null)} />
+            <h2>장비 {tlGroup.length}개 예약</h2>
+            <p className="rsv-form-hint" style={{ marginTop: -8 }}>
+              <b>{tlGroup[0].reservedBy?.name ?? "?"}</b>
+              {tlGroup[0].team ? ` · ${tlGroup[0].team.name}` : ""} · {fmt(tlGroup[0].startAt)} ~ {fmt(tlGroup[0].endAt)}
+              {tlGroup[0].note ? ` · ${tlGroup[0].note}` : ""}
+            </p>
+            <div className="tlg-list">
+              {tlGroup.map((r) => {
+                const st = rsvState(r);
+                const isOwnerOrAdmin = r.reservedBy?.id === user?.id || user?.role === "admin";
+                const canReturn = (st === "inuse" || st === "overdue") && canReturnUi(r);
+                return (
+                  <div className="tlg-row" key={r.id}>
+                    <span className="tlg-name">{r.resource?.name ?? "?"}</span>
+                    <span className={`rsv-st rsv-st-${st}`}>{st === "overdue" && "⚠ "}{STATE_LABEL[st]}</span>
+                    <span className="tlg-actions">
+                      {canReturn && (
+                        <button className="btn btn-primary btn-sm" onClick={async () => {
+                          if (await markReturned(r.id)) setTlGroup((g) => g?.map((x) => x.id === r.id ? { ...x, status: "returned" as const } : x) ?? null);
+                        }}>반납</button>
+                      )}
+                      {isOwnerOrAdmin && (
+                        <button className="btn btn-danger btn-sm" onClick={async () => {
+                          if (await removeReservation(r.id)) setTlGroup((g) => {
+                            const next = g?.filter((x) => x.id !== r.id) ?? [];
+                            return next.length > 0 ? next : null;
+                          });
+                        }}>삭제</button>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       )}
 
       {modalOpen && (
