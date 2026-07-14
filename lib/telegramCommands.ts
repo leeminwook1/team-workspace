@@ -16,9 +16,10 @@ import { rateLimit } from "./rateLimit";
 import { notify } from "./notify";
 import { touchChanged } from "./changes";
 import { esc, answerCallback, editTelegramMessage, type TgButton } from "./telegram";
+import { findSimilarTasks } from "./similarTasks";
 
-// 명령 응답 — 문자열(플레인) 또는 서식·버튼 포함 객체
-export type TgReply = string | { text: string; html?: boolean; buttons?: TgButton[][] };
+// 명령 응답 — 문자열(플레인) 또는 서식·버튼 포함 객체. warn = 등록 안 됨(중복 경고 등)
+export type TgReply = string | { text: string; html?: boolean; buttons?: TgButton[][]; warn?: boolean };
 
 // 텔레그램 인바운드 명령 v1 — /일정 /예약 /오늘 /내일 /예약현황 /연동 /도움말
 // 시간은 숫자 형식만 지원: 14:00-16:00 또는 14-16
@@ -33,6 +34,8 @@ const HELP = `📖 사용법
   · 옵션: @팀이름 #카테고리 !긴급 !높음 장소:내용
   · 담당: 장비: 는 맨 뒤에 — 쉼표로 여러 명·여러 개
   · 줄을 바꿔 여러 개 적으면 한 번에 등록 (최대 10건)
+  · 비슷한 일정이 이미 있으면 알려줘요 — 같은 일정이면 버튼으로 팀만 추가,
+    다른 일정이면 제목 앞에 ! 를 붙여 등록 (예: /일정 !국화축제 …)
   예) /일정 노방활동 금요일 14-16 #촬영 담당:이민욱 장비:캐논 R6(7-1)
 
 /개인 제목 날짜 [시간] [장소:내용] — 내 캘린더에만 표시
@@ -263,26 +266,35 @@ async function createBatch(args: string, one: (line: string) => Promise<TgReply>
   if (lines.length > BATCH_MAX) return `❌ 한 번에 최대 ${BATCH_MAX}건까지 등록할 수 있어요. (보낸 건수: ${lines.length}건)\n나눠서 보내주세요.`;
 
   const parts: string[] = [];
-  const buttons: TgButton[][] = [];
-  let ok = 0;
+  const undoRows: TgButton[][] = []; // 등록 건 취소 버튼 (4개씩 묶음)
+  const joinRows: TgButton[][] = []; // 중복 경고의 참여 버튼 (라벨 그대로 한 줄씩)
+  let ok = 0, warns = 0;
   for (let i = 0; i < lines.length; i++) {
     const r = await one(lines[i]);
     if (typeof r === "string") {
       // 실패 — 안내문이 길 수 있어 첫 줄만 (원문은 플레인이라 이스케이프)
       parts.push(`${i + 1}. ${esc(r.split("\n")[0])}\n   <i>${esc(lines[i])}</i>`);
+    } else if (r.warn) {
+      // 등록 안 됨 (중복 경고) — 경고·기존 일정 목록만 붙이고, 참여 버튼은 라벨 그대로 전달
+      warns++;
+      parts.push(`${i + 1}. ${r.text.split("\n\n")[0]}\n   <i>${esc(lines[i])}</i>`);
+      joinRows.push(...(r.buttons ?? []));
     } else {
       ok++;
       parts.push(`${i + 1}. ${r.text}`);
       const undo = r.buttons?.[0]?.[0];
       if (undo) {
-        if (buttons.length === 0 || buttons[buttons.length - 1].length >= 4) buttons.push([]);
-        buttons[buttons.length - 1].push({ text: `↩ ${i + 1}번 취소`, data: undo.data });
+        if (undoRows.length === 0 || undoRows[undoRows.length - 1].length >= 4) undoRows.push([]);
+        undoRows[undoRows.length - 1].push({ text: `↩ ${i + 1}번 취소`, data: undo.data });
       }
     }
   }
+  const buttons = [...joinRows, ...undoRows];
   const head = ok === lines.length
     ? `📦 <b>${lines.length}건 모두 등록 완료</b>`
-    : `📦 <b>${lines.length}건 중 ${ok}건 등록</b> — 실패한 줄만 고쳐서 다시 보내면 돼요.`;
+    : `📦 <b>${lines.length}건 중 ${ok}건 등록</b> — 실패한 줄만 고쳐서 다시 보내면 돼요.${
+        warns > 0 ? "\n중복 경고(⚠️)는 같은 일정이면 버튼으로 참여, 다른 일정이면 제목 앞에 ! 를 붙여 주세요." : ""
+      }`;
   return { text: `${head}\n\n${parts.join("\n\n")}`, html: true, buttons: buttons.length > 0 ? buttons : undefined };
 }
 
@@ -331,7 +343,10 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
     if (t.startsWith("장소:")) { location = t.slice(3); continue; }
     titleParts.push(t);
   }
-  const title = titleParts.join(" ").trim();
+  let title = titleParts.join(" ").trim();
+  // 제목 앞 ! = 중복 경고 무시하고 강제 등록
+  let force = false;
+  if (title.startsWith("!")) { force = true; title = title.slice(1).trim(); }
   if (!title) return "❌ 제목이 없어요.\n예) /일정 주간회의 내일 14:00-15:00";
   if (!date) return "❌ 날짜를 못 찾았어요. 7/20, 2026-07-20, 오늘, 내일 형식으로 써주세요.";
   if (time && time.eh * 60 + time.em <= time.sh * 60 + time.sm) return "❌ 종료 시각이 시작보다 빨라요.";
@@ -370,6 +385,32 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
   const allDay = !time;
   const startDate = allDay ? new Date(ymd(date.start)) : kstDate(date.start, time!.sh, time!.sm);
   const endDate = allDay ? new Date(ymd(date.end)) : kstDate(date.start, time!.eh, time!.em);
+
+  // 중복 감지 — 같은 기간에 비슷한 제목의 일정이 있으면 새로 만들지 않고 참여를 제안 (!제목 = 강제 등록)
+  if (!force) {
+    const dupFrom = allDay ? new Date(startDate.getTime() - 1) : startDate;
+    const dupTo = allDay ? new Date(endDate.getTime() + 86_400_000) : endDate;
+    const dups = await findSimilarTasks(title, dupFrom, dupTo, 2);
+    if (dups.length > 0) {
+      const fmtRange = (s: { startDate: Date; endDate: Date }) => {
+        const md = (d: Date) => { const k = new Date(new Date(d).getTime() + KST); return `${k.getUTCMonth() + 1}/${k.getUTCDate()}`; };
+        const a = md(s.startDate), b = md(s.endDate);
+        return a === b ? a : `${a}~${b}`;
+      };
+      const lines = dups.map((s) =>
+        `· <b>${esc(s.title)}</b> ${fmtRange(s)}${s.teams.length ? ` (${esc(s.teams.map((t) => t.name).join("·"))})` : ""}`);
+      const buttons: TgButton[][] = dups
+        .filter((s) => !s.teams.some((t) => t.id === teamId))
+        .slice(0, 2)
+        .map((s) => [{ text: `➕ "${s.title.slice(0, 18)}"에 ${teamLabel || "우리 팀"} 추가`, data: `tjoin:${s.id}:${teamId}` }]);
+      return {
+        text: `⚠️ 비슷한 일정이 이미 있어요 — 중복 등록 대신 참여할 수 있어요.\n${lines.join("\n")}\n\n같은 일정이면 아래 버튼으로 팀만 추가하세요.\n다른 일정이면 제목 앞에 ! 를 붙여 다시 보내주세요.\n예) /일정 !${esc(title)} …`,
+        html: true,
+        buttons: buttons.length > 0 ? buttons : undefined,
+        warn: true,
+      };
+    }
+  }
 
   // 장비 연동 — 웹과 동일하게 일정 생성 전에 충돌 검사, 생성 후 연동 예약
   let equipment: { id: string; name: string }[] = [];
@@ -734,7 +775,7 @@ async function listMyReservations(user: SessionUser): Promise<TgReply> {
 
 // ── 인라인 버튼 콜백 처리 ──
 // data 형식 — undo:<taskId> 방금 등록 취소 / pundo:<id> 개인일정 취소 / done:<taskId> 업무 완료 /
-//            delres:<rid> 예약 취소 / ret:<rid> 반납 처리
+//            delres:<rid> 예약 취소 / ret:<rid> 반납 처리 / tjoin:<taskId>:<teamId> 기존 일정에 팀 참여
 export async function handleTelegramCallback(p: {
   fromId: string; // 누른 사람의 개인 텔레그램 ID (그룹방에서도 개인 식별)
   chatId: string;
@@ -777,6 +818,34 @@ export async function handleTelegramCallback(p: {
       await PersonalEvent.deleteOne({ _id: ev._id });
       await touchChanged("personal");
       await finish("등록을 취소했어요.", `↩ 개인 일정 등록이 취소되었습니다. (${user.name ?? ""})`);
+      return;
+    }
+
+    if (action === "tjoin") {
+      // 중복 경고에서 "기존 일정에 팀 추가" — 웹 /api/tasks/:id/join 과 같은 규칙 (등록 권한 = 참여 권한)
+      const joinTeamId = p.data.split(":")[2];
+      const task: any = await Task.findById(id);
+      if (!task) { await finish("이미 삭제된 일정이에요.", "⚠ 삭제된 일정이라 참여할 수 없습니다."); return; }
+      if (!joinTeamId || !canCreateTaskInAll(user, [joinTeamId])) {
+        await answerCallback(p.callbackId, "그 팀으로 일정에 참여할 권한이 없어요."); return;
+      }
+      if ((task.teamIds ?? []).map(String).includes(joinTeamId)) {
+        await answerCallback(p.callbackId, "이미 이 일정에 참여 중인 팀이에요."); return;
+      }
+      const team: any = await Team.findById(joinTeamId).select("name").lean();
+      task.teamIds.push(joinTeamId);
+      await task.save();
+      await logActivity({ actorId: user.id, actorName: user.name ?? "", action: "update", targetTitle: `${task.title} (팀 참여 — 텔레그램)` });
+      // 일정 등록자에게 알림 (본인 제외) — 웹 참여와 동일
+      if (task.createdBy && String(task.createdBy) !== user.id) {
+        await notify([String(task.createdBy)], {
+          type: "task_assigned",
+          title: "일정에 팀이 참여했어요",
+          body: task.title,
+          link: `/calendar?task=${task._id}`,
+        });
+      }
+      await finish("팀을 추가했어요!", `➕ "${task.title}"에 ${team?.name ?? "팀"} 참여 완료 (${user.name ?? ""})`);
       return;
     }
 

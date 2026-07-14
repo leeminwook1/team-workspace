@@ -36,6 +36,8 @@ type TaskItem = {
 };
 
 type ResourceOpt = { id: string; name: string; category: { id: string; name: string; color?: string; order?: number } | null; status?: "available" | "maintenance" | "broken" };
+// 등록 전 중복 감지 결과 — /api/tasks/similar
+type SimilarItem = { id: string; title: string; startDate: string; endDate: string; allDay: boolean; teams: TeamRef[] };
 
 const STATUS_LABEL: Record<string, [string, string]> = {
   todo: ["예정", "var(--st-todo)"],
@@ -775,6 +777,44 @@ function TaskFormModal({
     return () => { alive = false; clearTimeout(t); };
   }, [startDate, endDate]);
 
+  // 중복 감지 — 같은 기간에 비슷한 제목의 일정(다른 팀 포함)이 있으면 등록 대신 참여를 제안
+  const [similar, setSimilar] = useState<SimilarItem[]>([]);
+  const [joining, setJoining] = useState(""); // 참여 요청 중인 일정 id
+  const [joinErr, setJoinErr] = useState("");
+  useEffect(() => {
+    if (isEdit) { return; } // 수정 모달에서는 검사하지 않음
+    if (title.trim().length < 2 || !startDate || !endDate || endDate < startDate) { setSimilar([]); return; }
+    const from = allDay ? new Date(`${startDate}T00:00:00`) : new Date(`${startDate}T${startTime || "00:00"}`);
+    const to = allDay ? new Date(`${endDate}T23:59:59`) : new Date(`${startDate}T${endTime || "23:59"}`);
+    if (isNaN(from.getTime()) || isNaN(to.getTime()) || to <= from) { setSimilar([]); return; }
+    let alive = true;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/tasks/similar?title=${encodeURIComponent(title)}&from=${from.toISOString()}&to=${to.toISOString()}`);
+        if (!res.ok || !alive) return;
+        const data = await res.json();
+        if (alive) setSimilar(data.similar ?? []);
+      } catch {}
+    }, 400);
+    return () => { alive = false; clearTimeout(t); };
+  }, [isEdit, title, startDate, endDate, startTime, endTime, allDay]);
+
+  // 기존 일정에 참여 — 새로 만들지 않고 선택한 팀·담당자만 추가
+  async function joinExisting(s: SimilarItem) {
+    setJoinErr("");
+    if (teamIds.length === 0) { setJoinErr("참여할 팀을 먼저 선택하세요."); return; }
+    setJoining(s.id);
+    const res = await fetch(`/api/tasks/${s.id}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ teamIds, assignees: Array.from(assignees) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setJoining("");
+    if (!res.ok) { setJoinErr(data.error ?? "참여에 실패했습니다."); return; }
+    onSaved();
+  }
+
   // 이 기간에 이미 예약 중인 장비 — resourceId → 예약자 이름 (수정 중엔 이 일정의 연동 예약 제외)
   const [equipBusy, setEquipBusy] = useState<Map<string, string>>(new Map());
   useEffect(() => {
@@ -886,6 +926,41 @@ function TaskFormModal({
           <div className="field">
             <label>제목</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 홍보영상 본 촬영" required />
+            {!isEdit && similar.length > 0 && (
+              <div className="dup-warn">
+                <p className="dup-warn-head">⚠️ 비슷한 일정이 이미 있어요 — 같은 일정이면 등록 대신 참여하세요</p>
+                {similar.map((s) => {
+                  const d1 = new Date(s.startDate), d2 = new Date(s.endDate);
+                  const md = (d: Date) => (s.allDay ? `${d.getUTCMonth() + 1}/${d.getUTCDate()}` : `${d.getMonth() + 1}/${d.getDate()}`);
+                  const range = md(d1) === md(d2) ? md(d1) : `${md(d1)}~${md(d2)}`;
+                  const joined = teamIds.length > 0 && teamIds.every((id) => s.teams.some((t) => t.id === id));
+                  return (
+                    <div className="dup-row" key={s.id}>
+                      <div className="dup-info">
+                        <b>{s.title}</b>
+                        <span className="dup-meta">
+                          {range}
+                          {s.teams.map((t) => (
+                            <span className="chip" key={t.id} style={{ marginLeft: 4 }}>
+                              <span className="dot" style={{ background: t.color }} />{t.name}
+                            </span>
+                          ))}
+                        </span>
+                      </div>
+                      {joined ? (
+                        <span className="dup-joined">참여 중</span>
+                      ) : (
+                        <button type="button" className="btn btn-sm" disabled={!!joining} onClick={() => joinExisting(s)}>
+                          {joining === s.id ? "참여 중…" : "이 일정에 참여"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+                {joinErr && <p className="err-msg" style={{ margin: "6px 0 0" }}>{joinErr}</p>}
+                <p className="dup-hint">다른 일정이 맞으면 그대로 아래 등록 버튼을 누르면 돼요.</p>
+              </div>
+            )}
           </div>
 
           <div className="field">

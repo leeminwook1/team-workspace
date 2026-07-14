@@ -73,6 +73,7 @@ export default function HelpPage() {
       <Sec id="calendar" icon="calendar" tint="var(--primary)" title="달력 · 업무">
         <div className="help-rows">
           <Row k="등록">제목·팀·기간·담당자를 넣어 팀 일정을 올려요. 매일·매주·매월 <b>반복</b>도 등록할 때 설정해요.</Row>
+          <Row k="중복 방지">같은 기간에 비슷한 제목의 일정이 이미 있으면 등록 전에 알려드려요. 같은 행사면 <b>참여</b> 버튼으로 기존 일정에 팀만 추가하세요 — 달력에 두 번 뜨지 않아요.</Row>
           <Row k="장비 연동">대여 장비를 고르면 그 시간에 자원 예약이 함께 잡혀요. 장비마다 <b>담당자</b>를 정하면 반납 책임도 그 사람에게 넘어가요.</Row>
           <Row k="진행">일정을 클릭해 상태(예정·진행중·완료·보류)를 바꾸고 댓글을 남겨요. 달력에서 <b>드래그</b>로 날짜를 옮길 수 있어요.</Row>
           <Row k="필터">팀·분류·상태·내 일정만 골라 보거나 목록 보기로 전환해요.</Row>
@@ -141,7 +142,7 @@ export default function HelpPage() {
           <table className="help-tbl">
             <thead><tr><th>명령</th><th>하는 일</th></tr></thead>
             <tbody>
-              <tr><td><code>/일정 제목 날짜 시간</code></td><td>팀 일정 등록 — <code>담당:이름</code> <code>장비:이름</code> 옵션, 줄바꿈으로 여러 건 한 번에</td></tr>
+              <tr><td><code>/일정 제목 날짜 시간</code></td><td>팀 일정 등록 — <code>담당:이름</code> <code>장비:이름</code> 옵션, 줄바꿈으로 여러 건 한 번에. 비슷한 일정이 있으면 버튼으로 참여, 제목 앞 <code>!</code>는 강제 등록</td></tr>
               <tr><td><code>/개인 제목 날짜 시간</code></td><td>내 캘린더에 개인 일정 등록 — 줄바꿈으로 여러 건 한 번에</td></tr>
               <tr><td><code>/예약 장비명 날짜 시간</code></td><td>장비 예약 — 쉼표로 여러 개</td></tr>
               <tr><td><code>/오늘 · /내일 · /이번주</code></td><td>일정 조회</td></tr>
