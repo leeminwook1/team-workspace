@@ -25,6 +25,8 @@ const UserSchema = new Schema(
       type: [{ _id: false, id: { type: String, required: true }, size: { type: Number, default: 1 } }],
       default: undefined,
     },
+    // 즐겨찾기 장비 — 자원 타임라인 트리 상단에 고정
+    favResources: [{ type: Schema.Types.ObjectId, ref: "Resource" }],
     // 텔레그램 알림 — 봇과 대화하는 챗 ID (빈 문자열 = 미연동)
     telegramChatId: { type: String, default: "" },
     // 텔레그램 알림 수신 설정 — false인 항목은 텔레그램 발송 생략 (앱 내 알림은 항상 생성)

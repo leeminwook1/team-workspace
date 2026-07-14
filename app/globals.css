@@ -576,6 +576,28 @@ a { color: inherit; text-decoration: none; }
 }
 .rtl-bar.movable { cursor: grab; }
 .rtl-bar.moving { cursor: grabbing; opacity: 0.85; z-index: 3; box-shadow: var(--shadow); }
+.rtl-bar.done { opacity: 0.55; cursor: pointer; }
+/* 막대 끝 리사이즈 핸들 */
+.rtl-rz {
+  position: absolute; top: 0; bottom: 0; width: 9px; cursor: ew-resize; z-index: 2;
+}
+.rtl-rz.l { left: -2px; }
+.rtl-rz.r { right: -2px; }
+.rtl-rz::after {
+  content: ""; position: absolute; top: 6px; bottom: 6px; left: 3px; width: 3px;
+  border-radius: 2px; background: currentColor; opacity: 0;
+}
+.rtl-bar:hover .rtl-rz::after { opacity: 0.5; }
+.rtl-selbox.clash { background: color-mix(in srgb, var(--danger) 14%, transparent); border-color: var(--danger); }
+.rtl-selbox.clash b { color: var(--danger); }
+/* 즐겨찾기 별 */
+.rtl-fav-btn {
+  border: 0; background: transparent; cursor: pointer; font-family: inherit;
+  font-size: 15px; line-height: 1; color: var(--ink-faint); padding: 2px 3px; flex: none;
+}
+.rtl-fav-btn.sm { font-size: 13px; padding: 1px 2px; }
+.rtl-fav-btn:hover { color: #f59e0b; }
+.rtl-fav-btn.on { color: #f59e0b; }
 /* 드래그 시간 선택 박스 */
 .rtl-selbox {
   position: absolute; top: 4px; bottom: 4px; z-index: 2; pointer-events: none;
@@ -613,6 +635,16 @@ a { color: inherit; text-decoration: none; }
 .rtl-side-item.on b { color: var(--primary); }
 .rtl-side-item.root { font-weight: 800; }
 .rtl-side-item.sub { padding-left: 26px; font-size: 12.5px; text-overflow: ellipsis; display: block; }
+.rtl-side-item.fav { padding-left: 12px; }
+.rtl-side-label { font-size: 10.5px; font-weight: 800; letter-spacing: 0.05em; color: var(--ink-faint); padding: 4px 9px 3px; }
+.rtl-side-sep { border-bottom: 1px solid var(--line); margin: 5px 4px 6px; }
+/* 트리 상태 점 — 수리중(주황)/고장(빨강) */
+.rtl-side-st {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 5px; flex: none;
+  vertical-align: middle;
+}
+.rtl-side-st.warn { background: #f59e0b; }
+.rtl-side-st.bad { background: var(--danger); }
 .rtl-main { flex: 1; min-width: 0; }
 
 /* ── 장비 주간 뷰 — 7일 × 세로 시간축 ── */
@@ -649,6 +681,9 @@ a { color: inherit; text-decoration: none; }
 }
 .rtw-block:hover { filter: brightness(1.12); z-index: 2; }
 .rtw-block.mine { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent); }
+.rtw-block.done { opacity: 0.55; }
+.rtw-block.movable { cursor: grab; }
+.rtw-block.moving { cursor: grabbing; opacity: 0.85; z-index: 3; box-shadow: var(--shadow); }
 .rtw-sel {
   position: absolute; left: 3px; right: 3px; z-index: 3; pointer-events: none;
   background: color-mix(in srgb, var(--primary) 16%, transparent);

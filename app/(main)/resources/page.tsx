@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/mongodb";
 import { Resource } from "@/models/Resource";
 import { Team } from "@/models/Team";
+import { User } from "@/models/User";
 import "@/models/ResourceCategory";
 import { ensureResourceCategories } from "@/lib/resourceCategories";
 import ReservationBoard from "@/components/resources/ReservationBoard";
@@ -15,7 +16,7 @@ export default async function ResourcesPage() {
   if (!session) redirect("/login");
 
   await ensureResourceCategories();
-  const [resources, teams] = await Promise.all([
+  const [resources, teams, meDoc] = await Promise.all([
     Resource.find({ isActive: true })
       .populate("categoryId", "name color order")
       .populate("ownerTeamId", "name color")
@@ -23,6 +24,7 @@ export default async function ResourcesPage() {
       .sort({ name: 1 })
       .lean(),
     Team.find({ isActive: true }).sort({ createdAt: 1 }).lean(),
+    User.findById((session.user as any).id).select("favResources").lean(),
   ]);
 
   return (
@@ -40,6 +42,7 @@ export default async function ResourcesPage() {
           status: r.status ?? "available",
         }))}
         teams={teams.map((t: any) => ({ id: String(t._id), name: t.name, color: t.color }))}
+        initialFavs={((meDoc as any)?.favResources ?? []).map((x: any) => String(x))}
       />
     </div>
   );

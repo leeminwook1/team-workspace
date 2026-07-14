@@ -41,6 +41,9 @@ export async function PATCH(req: Request) {
     }
   }
 
+  // 즐겨찾기 장비 — 전체 교체
+  if (d.favResources !== undefined) me.favResources = d.favResources;
+
   // 텔레그램 알림 수신 설정 — 전달된 항목만 갱신
   if (d.notifyPrefs) {
     for (const k of ["assign", "due", "late", "directive", "equip"] as const) {

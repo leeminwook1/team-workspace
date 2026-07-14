@@ -109,6 +109,8 @@ export const meUpdateSchema = z.object({
   newPassword: z.string().min(8, "새 비밀번호는 8자 이상").max(100).optional(),
   // 텔레그램 챗 ID — 숫자(그룹은 음수 허용), 빈 문자열 = 연동 해제
   telegramChatId: z.string().max(32).regex(/^-?\d*$/, "챗 ID는 숫자만 입력하세요").optional(),
+  // 즐겨찾기 장비 (자원 타임라인)
+  favResources: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/)).max(100).optional(),
   // 텔레그램 알림 수신 설정 — 항목별 on/off (앱 내 알림은 항상 생성)
   notifyPrefs: z
     .object({
