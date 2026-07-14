@@ -2,9 +2,6 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import FullCalendar from "@fullcalendar/react";
-import timeGridPlugin from "@fullcalendar/timegrid";
-import koLocale from "@fullcalendar/core/locales/ko";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useAutoRefresh } from "@/components/useAutoRefresh";
 import { ModalClose } from "@/components/ModalClose";
@@ -63,70 +60,53 @@ export default function ReservationBoard({
 
   const [list, setList] = useState<ReservationItem[]>([]);
   const [err, setErr] = useState("");
-  const [view, setView] = useState<"board" | "list" | "timeline">("board"); // 기본은 현황판
-  const [weekRaw, setWeekRaw] = useState<ReservationItem[]>([]); // 그 주 원본 예약 (필터 전)
-  const [weekRange, setWeekRange] = useState<{ from: string; to: string } | null>(null);
-  const [tlCategory, setTlCategory] = useState("all"); // 타임라인 종류 필터
-  const [tlTeam, setTlTeam] = useState("all"); // 타임라인 팀 필터
+  const [view, setView] = useState<"rtl" | "list">("rtl"); // 기본은 장비별 타임라인
   const [modalOpen, setModalOpen] = useState(false);
-  // 예약 모달 초기값 — 현황판 빈 칸 클릭 시 그 장비·그 날짜로 바로 열기
-  const [modalInit, setModalInit] = useState<{ resourceIds?: string[]; startDate?: string } | null>(null);
+  // 예약 모달 초기값 — 타임라인 빈 트랙 클릭 시 그 장비·그 날짜·그 시각으로 바로 열기
+  const [modalInit, setModalInit] = useState<{ resourceIds?: string[]; startDate?: string; startTime?: string } | null>(null);
   const [editing, setEditing] = useState<ReservationItem | null>(null); // 수정 중인 예약
-  const [tlGroup, setTlGroup] = useState<ReservationItem[] | null>(null); // 타임라인 묶음 상세
+  const [tlGroup, setTlGroup] = useState<ReservationItem[] | null>(null); // 예약 상세(묶음) 모달
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set()); // 리스트 묶음 펼침
-  // 모바일(<640px)은 7일 열이 안 들어가므로 3일 보기 — 마운트 후 판정해 그때 달력 렌더
-  const [tlMobile, setTlMobile] = useState<boolean | null>(null);
-  useEffect(() => { setTlMobile(window.innerWidth < 640); }, []);
 
-  // ── 현황판 (장비 × 날짜 그리드) ──
+  // ── 장비별 타임라인 (하루 · 시간축 07~23시) ──
   const todayYmd = useMemo(() => {
     const d = new Date(); const p = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   }, []);
-  const [boardStart, setBoardStart] = useState<string>(() => {
+  const HOUR_S = 7, HOUR_E = 23; // 표시 시간창
+  const [rtlDate, setRtlDate] = useState<string>(() => {
     const d = new Date(); const p = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   });
-  const boardDays = tlMobile ? 7 : 14;
-  const [boardRaw, setBoardRaw] = useState<ReservationItem[]>([]);
-  const [boardQuery, setBoardQuery] = useState(""); // 장비 이름 검색
-  const [boardClosed, setBoardClosed] = useState<Set<string>>(new Set()); // 접은 분류
+  const [rtlRaw, setRtlRaw] = useState<ReservationItem[]>([]);
+  const [rtlQuery, setRtlQuery] = useState(""); // 장비 이름 검색
+  const [rtlClosed, setRtlClosed] = useState<Set<string>>(new Set()); // 접은 분류
 
-  const fetchBoard = useCallback(async () => {
-    const from = new Date(boardStart + "T00:00:00");
-    const to = new Date(addDays(boardStart, boardDays - 1) + "T23:59:59");
+  const fetchRtl = useCallback(async () => {
+    const from = new Date(rtlDate + "T00:00:00");
+    const to = new Date(rtlDate + "T23:59:59");
     try {
       const res = await fetch(`/api/reservations?from=${from.toISOString()}&to=${to.toISOString()}`);
       if (!res.ok) return;
       const d = await res.json();
-      setBoardRaw((d.reservations ?? []).filter((r: ReservationItem) => r.status === "booked"));
+      setRtlRaw((d.reservations ?? []).filter((r: ReservationItem) => r.status === "booked"));
     } catch {}
-  }, [boardStart, boardDays]);
-  useEffect(() => { if (tlMobile !== null) fetchBoard(); }, [fetchBoard, tlMobile]);
+  }, [rtlDate]);
+  useEffect(() => { fetchRtl(); }, [fetchRtl]);
 
-  const boardDayList = useMemo(
-    () => Array.from({ length: boardDays }, (_, i) => addDays(boardStart, i)),
-    [boardStart, boardDays]
-  );
-  // 장비별 예약 구간 — [시작 열, 끝 열] 인덱스로 변환 (열 단위는 하루)
-  const segsByResource = useMemo(() => {
-    const map = new Map<string, { r: ReservationItem; s: number; e: number }[]>();
-    const rangeStart = new Date(boardStart + "T00:00:00").getTime();
-    const dayMs = 86_400_000;
-    for (const r of boardRaw) {
+  // 장비 → 그 날의 예약 목록
+  const rtlByResource = useMemo(() => {
+    const map = new Map<string, ReservationItem[]>();
+    for (const r of rtlRaw) {
       if (!r.resource) continue;
-      const s = Math.max(0, Math.floor((new Date(r.startAt).getTime() - rangeStart) / dayMs));
-      const e = Math.min(boardDays - 1, Math.floor((new Date(r.endAt).getTime() - 1 - rangeStart) / dayMs));
-      if (e < 0 || s > boardDays - 1 || e < s) continue;
       const arr = map.get(r.resource.id);
-      if (arr) arr.push({ r, s, e }); else map.set(r.resource.id, [{ r, s, e }]);
+      if (arr) arr.push(r); else map.set(r.resource.id, [r]);
     }
-    for (const arr of Array.from(map.values())) arr.sort((a, b) => a.s - b.s);
     return map;
-  }, [boardRaw, boardStart, boardDays]);
+  }, [rtlRaw]);
   // 분류별 장비 행 (이름 검색 적용)
-  const boardGroups = useMemo(() => {
-    const q = boardQuery.trim().toLowerCase();
+  const rtlGroups = useMemo(() => {
+    const q = rtlQuery.trim().toLowerCase();
     const map = new Map<string, { id: string; name: string; color: string; order: number; items: ResourceOpt[] }>();
     for (const r of resources) {
       if (q && !r.name.toLowerCase().includes(q)) continue;
@@ -135,7 +115,7 @@ export default function ReservationBoard({
       map.get(key)!.items.push(r);
     }
     return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
-  }, [resources, boardQuery]);
+  }, [resources, rtlQuery]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | RsvState>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all"); // 종류(분류) 필터
@@ -154,50 +134,6 @@ export default function ReservationBoard({
     return m;
   }, [resources]);
 
-  // 타임라인 이벤트 — 종류·팀 필터 적용 후 FullCalendar 형식으로 매핑
-  // 같은 시간·팀·예약자의 여러 장비는 막대 하나("장비 N개")로 묶어 겹침을 줄인다
-  const weekEvents = useMemo(() => {
-    const filtered = weekRaw.filter((r) => {
-      if (tlCategory !== "all" && resCatId.get(r.resource?.id ?? "") !== tlCategory) return false;
-      if (tlTeam !== "all" && r.team?.id !== tlTeam) return false;
-      return true;
-    });
-    const groups = new Map<string, ReservationItem[]>();
-    for (const r of filtered) {
-      const key = [r.startAt, r.endAt, r.team?.id ?? "", r.reservedBy?.id ?? "", r.status === "returned" ? 1 : 0].join("|");
-      const arr = groups.get(key);
-      if (arr) arr.push(r); else groups.set(key, [r]);
-    }
-    return Array.from(groups.values()).map((items) => {
-        const r = items[0];
-        const color = r.team?.color ?? "#8b95a1";
-        const returned = r.status === "returned";
-        const start = new Date(r.startAt);
-        const end = new Date(r.endAt);
-        // 하루를 넘는 기간 대여 → 상단 종일 줄에 가로 막대로
-        const multiDay = end.getTime() - start.getTime() >= 20 * 3600_000 || start.toDateString() !== end.toDateString();
-        const name = items.length > 1 ? `장비 ${items.length}개` : r.resource?.name ?? "?";
-        const base = {
-          id: r.id,
-          title: `${name}${r.team ? ` · ${r.team.name}` : ""}${returned ? " ✓" : ""}`,
-          backgroundColor: color + (returned ? "12" : "26"),
-          borderColor: returned ? color + "55" : color,
-          textColor: returned ? color + "99" : color,
-          extendedProps: { resId: r.id, byId: r.reservedBy?.id, byName: r.reservedBy?.name ?? "?", returned, items },
-        };
-        if (multiDay) {
-          const endDay = new Date(end);
-          if (endDay.getHours() !== 0 || endDay.getMinutes() !== 0) endDay.setDate(endDay.getDate() + 1);
-          const ymd = (d: Date) => {
-            const p = (n: number) => String(n).padStart(2, "0");
-            return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-          };
-          return { ...base, start: ymd(start), end: ymd(endDay), allDay: true };
-        }
-        return { ...base, start: r.startAt, end: r.endAt };
-      });
-  }, [weekRaw, tlCategory, tlTeam, resCatId]);
-
   // 예약 가능한 팀 (팀 소속이면 팀원 포함 누구나 / 전사 편집자는 전체)
   const isOrgEditor = ["admin", "manager", "deputy", "secretary"].includes(user?.role ?? "");
   const canReserveOwn = ["leader", "vice_leader", "member"].includes(user?.role ?? "");
@@ -208,17 +144,6 @@ export default function ReservationBoard({
     return [];
   }, [teams, user, isOrgEditor, canReserveOwn]);
   const canReserve = reservableTeams.length > 0;
-
-  const fetchWeek = useCallback(async (from: string, to: string) => {
-    setWeekRange({ from, to });
-    let res: Response;
-    try {
-      res = await fetch(`/api/reservations?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
-    } catch { setErr("예약을 불러오지 못했어요. 네트워크를 확인해주세요."); return; }
-    if (!res.ok) return;
-    const data = await res.json();
-    setWeekRaw(data.reservations ?? []);
-  }, []);
 
   // 대여 목록 — 기간 필터 지정 시 그 범위, 없으면 어제~60일 뒤 (과거 조회는 기간 필터로)
   const load = useCallback(async () => {
@@ -245,8 +170,7 @@ export default function ReservationBoard({
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(() => {
     load();
-    if (view === "board") fetchBoard();
-    if (view === "timeline" && weekRange) fetchWeek(weekRange.from, weekRange.to);
+    if (view === "rtl") fetchRtl();
   }, ["reservation"]);
 
   async function removeReservation(id: string) {
@@ -259,8 +183,7 @@ export default function ReservationBoard({
     const data = await res.json();
     if (!res.ok) { setErr(data.error ?? "삭제 실패"); return false; }
     load();
-    fetchBoard();
-    if (weekRange) fetchWeek(weekRange.from, weekRange.to);
+    fetchRtl();
     return true;
   }
 
@@ -275,8 +198,7 @@ export default function ReservationBoard({
     const data = await res.json();
     if (!res.ok) { setErr(data.error ?? "반납 처리 실패"); return false; }
     setErr(""); load();
-    fetchBoard();
-    if (weekRange) fetchWeek(weekRange.from, weekRange.to);
+    fetchRtl();
     return true;
   }
 
@@ -285,15 +207,6 @@ export default function ReservationBoard({
     if (r.reservedBy?.id === user?.id || isReturnManager) return true;
     const res = resources.find((x) => x.id === r.resource?.id);
     return res?.manager?.id === user?.id;
-  }
-
-  async function onTimelineClick(resId: string, byId?: string, byName?: string, returned?: boolean) {
-    if (returned) {
-      await confirm({ title: "예약 정보", message: `${byName ?? "?"} 님이 사용 후 반납한 예약입니다.`, confirmText: "확인", alert: true });
-      return;
-    }
-    if (byId === user?.id || user?.role === "admin") await removeReservation(resId);
-    else await confirm({ title: "예약 정보", message: `${byName ?? "다른 팀"} 님이 예약한 시간입니다.`, confirmText: "확인", alert: true });
   }
 
   // 목록 필터 — 검색어(장비명·예약자·메모) + 상태, 이후 같은 시간·팀·예약자 묶음으로 그룹핑
@@ -343,8 +256,7 @@ export default function ReservationBoard({
       {/* 상단 툴바 — 뷰 전환 + 예약 버튼 */}
       <div className="rsv2-topbar">
         <div className="seg" role="tablist" aria-label="보기 전환">
-          <button className={view === "board" ? "on" : ""} onClick={() => setView("board")}>현황판</button>
-          <button className={view === "timeline" ? "on" : ""} onClick={() => setView("timeline")}>타임라인</button>
+          <button className={view === "rtl" ? "on" : ""} onClick={() => setView("rtl")}>타임라인</button>
           <button className={view === "list" ? "on" : ""} onClick={() => setView("list")}>대여 내역</button>
         </div>
         {canReserve && (
@@ -356,130 +268,123 @@ export default function ReservationBoard({
 
       {err && <p className="err-msg">{err}</p>}
 
-      {/* 현황판 — 장비(행) × 날짜(열), 빈 칸 클릭 = 그 장비·그 날짜로 바로 예약 */}
-      {view === "board" && tlMobile !== null && (
-        <>
-          <div className="rsv2-filters">
-            <div className="rsv2-search">
-              <Icon name="search" size={15} />
-              <input value={boardQuery} onChange={(e) => setBoardQuery(e.target.value)} placeholder="장비 이름 검색" aria-label="장비 검색" />
-              {boardQuery && <button className="rsv2-clear" aria-label="지우기" onClick={() => setBoardQuery("")}>×</button>}
+      {/* 장비별 타임라인 — 행=장비, 가로=시간(07~23시), 하루 단위 */}
+      {view === "rtl" && (() => {
+        const dayStart = new Date(rtlDate + "T00:00:00").getTime();
+        const winS = dayStart + HOUR_S * 3600_000;
+        const winE = dayStart + HOUR_E * 3600_000;
+        const winSpan = winE - winS;
+        const dayEnd = dayStart + 86_400_000;
+        const now = Date.now();
+        const nowPct = rtlDate === todayYmd && now >= winS && now <= winE ? ((now - winS) / winSpan) * 100 : null;
+        const dObj = new Date(rtlDate + "T00:00:00");
+        const dow = ["일", "월", "화", "수", "목", "금", "토"][dObj.getDay()];
+        const hourMarks: number[] = [];
+        for (let h = HOUR_S; h <= HOUR_E; h += 2) hourMarks.push(h);
+        return (
+          <>
+            <div className="rsv2-filters">
+              <div className="rsv2-search">
+                <Icon name="search" size={15} />
+                <input value={rtlQuery} onChange={(e) => setRtlQuery(e.target.value)} placeholder="장비 이름 검색" aria-label="장비 검색" />
+                {rtlQuery && <button className="rsv2-clear" aria-label="지우기" onClick={() => setRtlQuery("")}>×</button>}
+              </div>
+              <div className="avb-nav">
+                <button className="avb-nav-btn" aria-label="이전 날" onClick={() => setRtlDate(addDays(rtlDate, -1))}>‹</button>
+                <button className="avb-nav-btn" onClick={() => setRtlDate(todayYmd)}>오늘</button>
+                <button className="avb-nav-btn" aria-label="다음 날" onClick={() => setRtlDate(addDays(rtlDate, 1))}>›</button>
+                <input type="date" className="rtl-date" value={rtlDate} onChange={(e) => e.target.value && setRtlDate(e.target.value)} aria-label="날짜 선택" />
+                <span className="avb-range">{dObj.getMonth() + 1}/{dObj.getDate()} ({dow}){rtlDate === todayYmd ? " · 오늘" : ""}</span>
+              </div>
             </div>
-            <div className="avb-nav">
-              <button className="avb-nav-btn" aria-label="이전 기간" onClick={() => setBoardStart(addDays(boardStart, -boardDays))}>‹</button>
-              <button className="avb-nav-btn avb-nav-today" onClick={() => setBoardStart(todayYmd)}>오늘</button>
-              <button className="avb-nav-btn" aria-label="다음 기간" onClick={() => setBoardStart(addDays(boardStart, boardDays))}>›</button>
-              <span className="avb-range">
-                {(() => { const s = new Date(boardStart + "T00:00:00"), e = new Date(addDays(boardStart, boardDays - 1) + "T00:00:00");
-                  return `${s.getMonth() + 1}/${s.getDate()} ~ ${e.getMonth() + 1}/${e.getDate()}`; })()}
-              </span>
-            </div>
-          </div>
-          <div className="card avb-card">
-            <div className="avb-scroll">
-              <table className="avb">
-                <colgroup>
-                  <col style={{ width: tlMobile ? 118 : 150 }} />
-                  {boardDayList.map((d) => <col key={d} />)}
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className="avb-res-h">장비</th>
-                    {boardDayList.map((day) => {
-                      const d = new Date(day + "T00:00:00");
-                      const wd = d.getDay();
-                      return (
-                        <th key={day} className={`avb-day-h${day === todayYmd ? " today" : ""}${wd === 0 ? " sun" : wd === 6 ? " sat" : ""}`}>
-                          <span className="avb-dow">{["일", "월", "화", "수", "목", "금", "토"][wd]}</span>
-                          <span className="avb-dnum">{d.getDate()}</span>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {boardGroups.length === 0 && (
-                    <tr><td className="avb-empty" colSpan={boardDays + 1}>검색 결과가 없습니다.</td></tr>
-                  )}
-                  {boardGroups.map((g) => {
-                    const closed = boardClosed.has(g.id);
+            <div className="card rtl-card">
+              <div className="rtl-scroll">
+                <div className="rtl-inner">
+                  {/* 시간축 헤더 */}
+                  <div className="rtl-row rtl-headrow">
+                    <div className="rtl-res rtl-res-h">장비</div>
+                    <div className="rtl-track rtl-track-h">
+                      {hourMarks.map((h) => (
+                        <span key={h} className="rtl-hour" style={{ left: `${((h - HOUR_S) / (HOUR_E - HOUR_S)) * 100}%` }}>{h}시</span>
+                      ))}
+                    </div>
+                  </div>
+                  {rtlGroups.length === 0 && <div className="avb-empty">검색 결과가 없습니다.</div>}
+                  {rtlGroups.map((g) => {
+                    const closed = rtlClosed.has(g.id);
                     return (
                       <Fragment key={g.id}>
-                        <tr className="avb-cat-row">
-                          <td colSpan={boardDays + 1}>
-                            <button
-                              type="button" className="avb-cat-toggle" aria-expanded={!closed}
-                              onClick={() => setBoardClosed((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(g.id)) next.delete(g.id); else next.add(g.id);
-                                return next;
-                              })}
-                            >
-                              <span className={`rsv-caret${closed ? "" : " open"}`} aria-hidden>▸</span>
-                              <span className="dot" style={{ background: g.color }} />
-                              {g.name} <span className="kb-count">{g.items.length}</span>
-                            </button>
-                          </td>
-                        </tr>
+                        <div className="rtl-cat">
+                          <button
+                            type="button" className="avb-cat-toggle" aria-expanded={!closed}
+                            onClick={() => setRtlClosed((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(g.id)) next.delete(g.id); else next.add(g.id);
+                              return next;
+                            })}
+                          >
+                            <span className={`rsv-caret${closed ? "" : " open"}`} aria-hidden>▸</span>
+                            <span className="dot" style={{ background: g.color }} />
+                            {g.name} <span className="kb-count">{g.items.length}</span>
+                          </button>
+                        </div>
                         {!closed && g.items.map((res) => {
                           const bad = res.status && res.status !== "available";
-                          const segs = segsByResource.get(res.id) ?? [];
-                          const cells: JSX.Element[] = [];
-                          for (let i = 0; i < boardDays; ) {
-                            const seg = segs.find((x) => x.s <= i && i <= x.e);
-                            if (seg) {
-                              const span = seg.e - i + 1;
-                              const color = seg.r.team?.color ?? "#8b95a1";
-                              const mine = seg.r.reservedBy?.id === user?.id;
-                              cells.push(
-                                <td key={i} colSpan={span} className="avb-cell">
-                                  <button
-                                    type="button"
-                                    className={`avb-bar${mine ? " mine" : ""}`}
-                                    style={{ background: `color-mix(in srgb, ${color} 16%, transparent)`, borderColor: color, color }}
-                                    title={`${seg.r.resource?.name ?? ""} · ${seg.r.reservedBy?.name ?? "?"}${seg.r.team ? ` (${seg.r.team.name})` : ""}\n${fmtShort(seg.r.startAt)} ~ ${fmtShort(seg.r.endAt)}${seg.r.note ? `\n${seg.r.note}` : ""}`}
-                                    onClick={() => setTlGroup([seg.r])}
-                                  >
-                                    {seg.r.reservedBy?.name ?? ""}
-                                  </button>
-                                </td>
-                              );
-                              i = seg.e + 1;
-                            } else {
-                              const day = boardDayList[i];
-                              const wd = new Date(day + "T00:00:00").getDay();
-                              const clickable = canReserve && !bad;
-                              cells.push(
-                                <td
-                                  key={i}
-                                  className={`avb-cell avb-free${day === todayYmd ? " today" : ""}${wd === 0 || wd === 6 ? " wkend" : ""}${clickable ? " can" : ""}${bad ? " off" : ""}`}
-                                  onClick={clickable ? () => { setModalInit({ resourceIds: [res.id], startDate: day }); setModalOpen(true); } : undefined}
-                                  title={bad ? (res.status === "broken" ? "고장" : "수리·점검 중") : clickable ? `${res.name} · ${day.slice(5).replace("-", "/")} 예약하기` : undefined}
-                                />
-                              );
-                              i++;
-                            }
-                          }
+                          const items = rtlByResource.get(res.id) ?? [];
+                          const clickable = canReserve && !bad;
                           return (
-                            <tr key={res.id} className={bad ? "avb-row-off" : ""}>
-                              <td className="avb-res">
+                            <div className="rtl-row" key={res.id}>
+                              <div className={`rtl-res${bad ? " off" : ""}`}>
                                 <span className="avb-res-nm" title={res.name}>{res.name}</span>
                                 {bad && <span className={`status-pill ${res.status === "broken" ? "pill-broken" : "pill-maint"}`}>{res.status === "broken" ? "고장" : "수리중"}</span>}
-                              </td>
-                              {cells}
-                            </tr>
+                              </div>
+                              <div
+                                className={`rtl-track${clickable ? " can" : ""}${bad ? " off" : ""}`}
+                                title={bad ? (res.status === "broken" ? "고장" : "수리·점검 중") : clickable ? "빈 곳 클릭 → 이 장비 예약" : undefined}
+                                onClick={clickable ? (e) => {
+                                  if (e.target !== e.currentTarget) return; // 막대 클릭은 제외
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const h = Math.min(HOUR_E - 1, Math.max(HOUR_S, HOUR_S + Math.floor(((e.clientX - rect.left) / rect.width) * (HOUR_E - HOUR_S))));
+                                  setModalInit({ resourceIds: [res.id], startDate: rtlDate, startTime: `${String(h).padStart(2, "0")}:00` });
+                                  setModalOpen(true);
+                                } : undefined}
+                              >
+                                {items.map((r) => {
+                                  const s0 = new Date(r.startAt).getTime(), e0 = new Date(r.endAt).getTime();
+                                  const s = Math.max(s0, winS), e = Math.min(e0, winE);
+                                  if (e <= winS || s >= winE) return null; // 표시 창 밖(심야 전용)
+                                  const left = ((s - winS) / winSpan) * 100;
+                                  const width = Math.min(100 - left, Math.max(3.2, ((e - s) / winSpan) * 100));
+                                  const color = r.team?.color ?? "#8b95a1";
+                                  const mine = r.reservedBy?.id === user?.id;
+                                  const contL = s0 < dayStart, contR = e0 > dayEnd;
+                                  return (
+                                    <button
+                                      key={r.id} type="button"
+                                      className={`rtl-bar${mine ? " mine" : ""}${contL ? " cl" : ""}${contR ? " cr" : ""}`}
+                                      style={{ left: `${left}%`, width: `${width}%`, background: `color-mix(in srgb, ${color} 16%, transparent)`, borderColor: color, color }}
+                                      title={`${r.resource?.name ?? ""} · ${r.reservedBy?.name ?? "?"}${r.team ? ` (${r.team.name})` : ""}\n${fmtShort(r.startAt)} ~ ${fmtShort(r.endAt)}${r.note ? `\n${r.note}` : ""}`}
+                                      onClick={(ev) => { ev.stopPropagation(); setTlGroup([r]); }}
+                                    >
+                                      <span className="rtl-bar-nm">{contL ? "◀ " : ""}{r.reservedBy?.name ?? ""}{contR ? " ▶" : ""}</span>
+                                    </button>
+                                  );
+                                })}
+                                {nowPct !== null && <span className="rtl-now" style={{ left: `${nowPct}%` }} aria-hidden />}
+                              </div>
+                            </div>
                           );
                         })}
                       </Fragment>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+              </div>
+              <p className="rsv-tip">막대 = 예약 (클릭하면 상세·반납·수정) · 빈 곳을 클릭하면 그 장비·그 시각으로 바로 예약 · ◀▶ = 앞뒤 날로 이어지는 기간 대여</p>
             </div>
-            <p className="rsv-tip">막대를 클릭하면 예약 상세, 빈 칸을 클릭하면 그 장비·그 날짜로 바로 예약할 수 있어요.</p>
-          </div>
-        </>
-      )}
+          </>
+        );
+      })()}
 
       {/* 리스트 뷰 */}
       {view === "list" && (
@@ -602,56 +507,6 @@ export default function ReservationBoard({
         </>
       )}
 
-      {/* 타임라인 뷰 */}
-      {view === "timeline" && (
-        <>
-        <div className="rsv2-filters">
-          <select className="rsv2-select" value={tlCategory} onChange={(e) => setTlCategory(e.target.value)} aria-label="종류 필터">
-            <option value="all">전체 종류</option>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <select className="rsv2-select" value={tlTeam} onChange={(e) => setTlTeam(e.target.value)} aria-label="팀 필터">
-            <option value="all">전체 팀</option>
-            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-          {(tlCategory !== "all" || tlTeam !== "all") && (
-            <button type="button" className="rsv-linkbtn" onClick={() => { setTlCategory("all"); setTlTeam("all"); }}>필터 초기화</button>
-          )}
-        </div>
-        <div className="card cal-card" style={{ padding: 14 }}>
-          {tlMobile !== null && (
-          <FullCalendar
-            plugins={[timeGridPlugin]}
-            initialView={tlMobile ? "timeGridThree" : "timeGridWeek"}
-            views={{ timeGridThree: { type: "timeGrid", duration: { days: 3 } } }}
-            locale={koLocale}
-            height="auto"
-            headerToolbar={{ left: "title", right: "prev,today,next" }}
-            buttonText={{ today: "오늘" }}
-            allDaySlot
-            allDayText="기간"
-            slotLabelFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
-            scrollTime="08:00:00"
-            nowIndicator
-            eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
-            events={weekEvents}
-            eventMaxStack={3}
-            dayMaxEvents={4}
-            moreLinkText={(n) => `+${n}건`}
-            datesSet={(arg) => fetchWeek(arg.startStr, arg.endStr)}
-            eventClick={(arg) => {
-              const p = arg.event.extendedProps;
-              if ((p.items as ReservationItem[])?.length > 1) setTlGroup(p.items as ReservationItem[]);
-              else onTimelineClick(p.resId, p.byId, p.byName, p.returned);
-            }}
-            noEventsContent="이 주에 예약이 없습니다"
-          />
-          )}
-          <p className="rsv-tip">예약을 클릭하면 상세를 볼 수 있어요. (본인 예약은 삭제 가능)</p>
-        </div>
-        </>
-      )}
-
       {/* 타임라인 묶음 상세 — 같은 시간·예약자의 장비 여러 개 */}
       {tlGroup && tlGroup.length > 0 && (
         <div className="modal-overlay" onClick={() => setTlGroup(null)}>
@@ -704,7 +559,7 @@ export default function ReservationBoard({
           teams={reservableTeams}
           initial={modalInit}
           onClose={() => { setModalOpen(false); setModalInit(null); }}
-          onRefresh={() => { load(); fetchBoard(); if (weekRange) fetchWeek(weekRange.from, weekRange.to); }}
+          onRefresh={() => { load(); fetchRtl(); }}
         />
       )}
 
@@ -713,7 +568,7 @@ export default function ReservationBoard({
           resv={editing}
           teams={reservableTeams}
           onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); load(); fetchBoard(); if (weekRange) fetchWeek(weekRange.from, weekRange.to); }}
+          onSaved={() => { setEditing(null); load(); fetchRtl(); }}
         />
       )}
     </div>
@@ -815,7 +670,7 @@ function ReserveModal({
   resources, teams, initial, onClose, onRefresh,
 }: {
   resources: ResourceOpt[]; teams: TeamOpt[];
-  initial?: { resourceIds?: string[]; startDate?: string } | null; // 현황판에서 장비·날짜 지정 진입
+  initial?: { resourceIds?: string[]; startDate?: string; startTime?: string } | null; // 타임라인에서 장비·날짜·시각 지정 진입
   onClose: () => void; onRefresh: () => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
@@ -824,9 +679,13 @@ function ReserveModal({
   const [form, setForm] = useState({
     teamId: teams[0]?.id ?? "",
     startDate: initial?.startDate ?? today,
-    // 현황판에서 날짜를 찍고 들어오면 하루 대여가 기본, 일반 진입은 일주일
+    // 타임라인에서 날짜를 찍고 들어오면 하루 대여가 기본, 일반 진입은 일주일
     endDate: initial?.startDate ?? addDays(today, 6),
-    startTime: "10:00", endTime: "18:00", note: "",
+    startTime: initial?.startTime ?? "10:00",
+    endTime: initial?.startTime && initial.startTime >= "17:00"
+      ? `${String(Math.min(23, parseInt(initial.startTime, 10) + 2)).padStart(2, "0")}:00`
+      : "18:00",
+    note: "",
   });
   const [err, setErr] = useState("");
   const [fails, setFails] = useState<{ name: string; reason: string }[]>([]);

@@ -510,27 +510,7 @@ a { color: inherit; text-decoration: none; }
 }
 .avb-nav-btn:hover { background: var(--surface-2); }
 .avb-range { margin-left: 6px; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
-.avb-card { padding: 0 0 6px; overflow: hidden; }
-.avb-card .rsv-tip { margin: 8px 12px 6px; }
-.avb-scroll { overflow-x: auto; }
-.avb { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 560px; table-layout: fixed; }
-.avb th, .avb td { border-bottom: 1px solid var(--line); }
-.avb-res-h, .avb-res {
-  position: sticky; left: 0; z-index: 2; background: var(--surface);
-  text-align: left; padding: 8px 10px 8px 14px; border-right: 1px solid var(--line);
-}
-.avb-res-h { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: var(--ink-faint); }
-.avb-day-h { padding: 7px 0 6px; text-align: center; }
-.avb-day-h .avb-dow { display: block; font-size: 10px; font-weight: 700; color: var(--ink-faint); }
-.avb-day-h .avb-dnum {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; margin-top: 1px; border-radius: 50%;
-  font-size: 12.5px; font-weight: 800; color: var(--ink-soft);
-}
-.avb-day-h.sun .avb-dow, .avb-day-h.sun .avb-dnum { color: var(--danger); }
-.avb-day-h.sat .avb-dow, .avb-day-h.sat .avb-dnum { color: var(--primary); }
-.avb-day-h.today .avb-dnum { background: var(--primary); color: #fff; }
-.avb-cat-row td { background: var(--surface-2); padding: 0; }
+.avb-empty { padding: 28px; text-align: center; color: var(--ink-faint); font-size: 13.5px; }
 .avb-cat-toggle {
   display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 12px;
   border: 0; background: transparent; cursor: pointer; font-family: inherit;
@@ -540,25 +520,64 @@ a { color: inherit; text-decoration: none; }
   display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 12.5px; font-weight: 700; color: var(--ink); vertical-align: middle;
 }
-.avb-res .status-pill { margin-left: 5px; padding: 2px 7px; font-size: 10px; }
-.avb-row-off .avb-res-nm { opacity: 0.55; }
-.avb-cell { padding: 3px 2px; height: 36px; }
-.avb-free { cursor: default; }
-.avb-free.wkend { background: color-mix(in srgb, var(--ink-faint) 4%, transparent); }
-.avb-free.today { background: color-mix(in srgb, var(--primary) 5%, transparent); }
-.avb-free.off { background: repeating-linear-gradient(-45deg, transparent 0 6px, color-mix(in srgb, var(--ink-faint) 8%, transparent) 6px 12px); }
-.avb-free.can { cursor: pointer; }
-.avb-free.can:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--primary) 45%, transparent); border-radius: 8px; }
-.avb-bar {
-  display: flex; align-items: center; width: 100%; height: 28px;
-  border: 1.5px solid; border-radius: 8px; padding: 0 7px; cursor: pointer;
+
+/* ── 장비별 타임라인 — 행=장비, 가로=시간축 ── */
+.rtl-date {
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: 9px; padding: 5px 8px; font-size: 12.5px; font-weight: 600; font-family: inherit;
+}
+.rtl-card { padding: 0 0 6px; overflow: hidden; }
+.rtl-card .rsv-tip { margin: 8px 12px 6px; text-align: left; }
+.rtl-scroll { overflow-x: auto; }
+.rtl-inner { min-width: 760px; }
+.rtl-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
+.rtl-res {
+  position: sticky; left: 0; z-index: 2; background: var(--surface);
+  flex: none; width: 148px; padding: 8px 10px 8px 14px; border-right: 1px solid var(--line);
+  display: flex; align-items: center; gap: 4px; min-width: 0;
+}
+.rtl-res.off .avb-res-nm { opacity: 0.55; }
+.rtl-res .status-pill { flex: none; padding: 2px 7px; font-size: 10px; }
+.rtl-res-h { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: var(--ink-faint); }
+.rtl-track {
+  position: relative; flex: 1; min-height: 40px;
+  background-image: linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: calc(100% / 16) 100%;
+}
+.rtl-headrow { border-bottom: 1px solid var(--line); }
+.rtl-headrow .rtl-track-h { min-height: 30px; background-image: none; }
+.rtl-hour {
+  position: absolute; top: 8px; transform: translateX(-50%);
+  font-size: 10.5px; font-weight: 700; color: var(--ink-faint); white-space: nowrap;
+}
+.rtl-hour:first-child { transform: none; }
+.rtl-hour:last-child { transform: translateX(-100%); }
+.rtl-cat { border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.rtl-cat .avb-cat-toggle { position: sticky; left: 0; max-width: 100vw; width: auto; }
+.rtl-track.can { cursor: copy; }
+.rtl-track.can:hover { background-color: color-mix(in srgb, var(--primary) 4%, transparent); }
+.rtl-track.off { background-color: transparent; background-image: repeating-linear-gradient(-45deg, transparent 0 6px, color-mix(in srgb, var(--ink-faint) 8%, transparent) 6px 12px); }
+.rtl-bar {
+  position: absolute; top: 6px; height: 28px;
+  display: flex; align-items: center; padding: 0 7px;
+  border: 1.5px solid; border-radius: 8px; cursor: pointer;
   font-size: 11px; font-weight: 800; font-family: inherit;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  overflow: hidden; white-space: nowrap;
   transition: filter 0.12s;
 }
-.avb-bar:hover { filter: brightness(1.12); }
-.avb-bar.mine { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent); }
-.avb-empty { padding: 28px; text-align: center; color: var(--ink-faint); font-size: 13.5px; }
+.rtl-bar-nm { overflow: hidden; text-overflow: ellipsis; }
+.rtl-bar:hover { filter: brightness(1.12); z-index: 1; }
+.rtl-bar.mine { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent); }
+.rtl-bar.cl { border-top-left-radius: 2px; border-bottom-left-radius: 2px; }
+.rtl-bar.cr { border-top-right-radius: 2px; border-bottom-right-radius: 2px; }
+.rtl-now {
+  position: absolute; top: 0; bottom: 0; width: 2px; background: var(--danger);
+  pointer-events: none; opacity: 0.75;
+}
+@media (max-width: 640px) {
+  .rtl-res { width: 108px; padding-left: 10px; }
+  .rtl-inner { min-width: 640px; }
+}
 
 /* 타임라인 묶음 상세 모달 — 장비 N개 목록 */
 .tlg-list { max-height: 46vh; overflow-y: auto; margin-top: 4px; }
