@@ -32,9 +32,11 @@ const HELP = `📖 사용법
   · 시간: 14-16, 14:00-16:00, 14시-16시 (없으면 종일)
   · 옵션: @팀이름 #카테고리 !긴급 !높음 장소:내용
   · 담당: 장비: 는 맨 뒤에 — 쉼표로 여러 명·여러 개
+  · 줄을 바꿔 여러 개 적으면 한 번에 등록 (최대 10건)
   예) /일정 노방활동 금요일 14-16 #촬영 담당:이민욱 장비:캐논 R6(7-1)
 
 /개인 제목 날짜 [시간] [장소:내용] — 내 캘린더에만 표시
+  · 줄을 바꿔 여러 개 적으면 한 번에 등록 (최대 10건)
   예) /개인 병원 예약 내일 15-16
 
 /예약 장비명[, 장비명2] 날짜 [시간]
@@ -183,9 +185,10 @@ export async function handleTelegramCommand(chatId: string, text: string, fromId
   const trimmed = text.trim()
     .replace(/다음\s?주\s+([월화수목금토일])요일/g, "다음주$1요일")
     .replace(/이번\s?주\s+([월화수목금토일])요일/g, "$1요일");
-  const [cmdRaw, ...rest] = trimmed.split(/\s+/);
+  const cmdRaw = trimmed.match(/^\S+/)?.[0] ?? trimmed;
   const cmd = cmdRaw.split("@")[0]; // 그룹방에서는 /명령@봇이름 형태로 옴
-  const args = rest.join(" ");
+  const args = trimmed.slice(cmdRaw.length).trim(); // 줄바꿈 보존 — /일정·/개인 여러 줄 일괄 등록용
+  const rest = args.split(/\s+/).filter(Boolean);
 
   // 연동 없이 동작하는 명령
   if (cmd === "/연동" || cmd === "/link") {
@@ -212,8 +215,8 @@ export async function handleTelegramCommand(chatId: string, text: string, fromId
 
   try {
     switch (cmd) {
-      case "/일정": case "/schedule": return await createTask(user, args);
-      case "/개인": case "/private": return await createPersonalEvent(user, args);
+      case "/일정": case "/schedule": return await createBatch(args, (line) => createTask(user, line));
+      case "/개인": case "/private": return await createBatch(args, (line) => createPersonalEvent(user, line));
       case "/예약": case "/book": return await createReservation(user, args);
       case "/오늘": case "/today": return await listDay(user, 0);
       case "/내일": case "/tomorrow": return await listDay(user, 1);
@@ -249,6 +252,40 @@ async function linkAccount(chatId: string, code: string): Promise<string> {
   return `✅ 연동 완료! ${u.name} 님, 이제 알림을 여기로 받고 /일정 /예약 명령을 쓸 수 있어요.\n\n${HELP}`;
 }
 
+// ── 여러 줄 일괄 등록 — /일정·/개인 을 줄마다 한 건씩 처리 ──
+const BATCH_MAX = 10;
+async function createBatch(args: string, one: (line: string) => Promise<TgReply>): Promise<TgReply> {
+  // 줄 앞에 명령어를 다시 붙여 보내도 허용 (여러 명령을 통째로 붙여넣는 경우)
+  const lines = args.split("\n")
+    .map((l) => l.trim().replace(/^\/(일정|schedule|개인|private)(@\S+)?\s+/, ""))
+    .filter(Boolean);
+  if (lines.length <= 1) return one(lines[0] ?? "");
+  if (lines.length > BATCH_MAX) return `❌ 한 번에 최대 ${BATCH_MAX}건까지 등록할 수 있어요. (보낸 건수: ${lines.length}건)\n나눠서 보내주세요.`;
+
+  const parts: string[] = [];
+  const buttons: TgButton[][] = [];
+  let ok = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const r = await one(lines[i]);
+    if (typeof r === "string") {
+      // 실패 — 안내문이 길 수 있어 첫 줄만 (원문은 플레인이라 이스케이프)
+      parts.push(`${i + 1}. ${esc(r.split("\n")[0])}\n   <i>${esc(lines[i])}</i>`);
+    } else {
+      ok++;
+      parts.push(`${i + 1}. ${r.text}`);
+      const undo = r.buttons?.[0]?.[0];
+      if (undo) {
+        if (buttons.length === 0 || buttons[buttons.length - 1].length >= 4) buttons.push([]);
+        buttons[buttons.length - 1].push({ text: `↩ ${i + 1}번 취소`, data: undo.data });
+      }
+    }
+  }
+  const head = ok === lines.length
+    ? `📦 <b>${lines.length}건 모두 등록 완료</b>`
+    : `📦 <b>${lines.length}건 중 ${ok}건 등록</b> — 실패한 줄만 고쳐서 다시 보내면 돼요.`;
+  return { text: `${head}\n\n${parts.join("\n\n")}`, html: true, buttons: buttons.length > 0 ? buttons : undefined };
+}
+
 // ── /일정 ──
 async function createTask(user: SessionUser, args: string): Promise<TgReply> {
   if (!args) {
@@ -262,7 +299,12 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
 · @팀이름 — 다른 팀 일정 (예: @사진)
 · #카테고리 · !긴급 · !높음 · 장소:2층
 · 담당:이름,이름2 — 담당자 지정 (알림도 감)
-· 장비:캐논 R6, 배터리 — 장비 예약도 함께`;
+· 장비:캐논 R6, 배터리 — 장비 예약도 함께
+
+여러 개를 한 번에 (줄바꿈, 최대 10건)
+/일정 주간회의 내일 14-16
+회식 금요일 18-21 장소:역전할머니
+워크숍 7/20-7/22`;
   }
   const now = new Date();
 
@@ -386,6 +428,7 @@ async function createPersonalEvent(user: SessionUser, args: string): Promise<TgR
 · 날짜: 7/20, 오늘, 내일, 모레, 금요일, 다음주 화요일, 7/20-7/22(기간)
 · 시간: 14-16, 14:00-16:00 (없으면 종일)
 · 장소:내용 (선택)
+· 줄을 바꿔 여러 개 적으면 한 번에 등록 (최대 10건)
 🔒 개인 일정은 내 캘린더에만 표시돼요 (같은 팀 팀장·관리자만 열람).`;
   }
   const now = new Date();

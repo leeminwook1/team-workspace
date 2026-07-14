@@ -132,8 +132,8 @@ export default function HelpPage() {
           <table className="help-tbl">
             <thead><tr><th>명령</th><th>하는 일</th></tr></thead>
             <tbody>
-              <tr><td><code>/일정 제목 날짜 시간</code></td><td>팀 일정 등록 — <code>담당:이름</code> <code>장비:이름</code> 옵션</td></tr>
-              <tr><td><code>/개인 제목 날짜 시간</code></td><td>내 캘린더에 개인 일정 등록</td></tr>
+              <tr><td><code>/일정 제목 날짜 시간</code></td><td>팀 일정 등록 — <code>담당:이름</code> <code>장비:이름</code> 옵션, 줄바꿈으로 여러 건 한 번에</td></tr>
+              <tr><td><code>/개인 제목 날짜 시간</code></td><td>내 캘린더에 개인 일정 등록 — 줄바꿈으로 여러 건 한 번에</td></tr>
               <tr><td><code>/예약 장비명 날짜 시간</code></td><td>장비 예약 — 쉼표로 여러 개</td></tr>
               <tr><td><code>/오늘 · /내일 · /이번주</code></td><td>일정 조회</td></tr>
               <tr><td><code>/내일정</code></td><td>내 담당 업무 (번호 표시)</td></tr>
