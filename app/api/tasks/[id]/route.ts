@@ -32,11 +32,16 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   }
 
   const linked: any[] = await Reservation.find({ relatedTaskId: t._id, status: "booked" })
-    .populate("resourceId", "name").select("resourceId").lean();
+    .populate("resourceId", "name").populate("reservedBy", "name").select("resourceId reservedBy").lean();
 
   return json({
     task: {
-      resources: linked.filter((r) => r.resourceId).map((r) => ({ id: String(r.resourceId._id), name: r.resourceId.name })),
+      resources: linked.filter((r) => r.resourceId).map((r) => ({
+        id: String(r.resourceId._id),
+        name: r.resourceId.name,
+        ownerId: r.reservedBy ? String(r.reservedBy._id ?? r.reservedBy) : undefined,
+        ownerName: r.reservedBy?.name ?? undefined,
+      })),
       id: String(t._id),
       title: t.title,
       description: t.description,
@@ -124,7 +129,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   await task.save();
-  if (equipTarget !== null) await syncTaskReservations(task, equipTarget, window, user.id);
+  if (equipTarget !== null) {
+    // 장비별 담당자 — 이 일정의 담당자(또는 등록자·수정자)만 허용
+    const ownerAllowed = new Set([...(task.assignees ?? []).map(String), String(task.createdBy ?? ""), user.id]);
+    const owners: Record<string, string> = {};
+    for (const [rid, uid] of Object.entries(d.resourceOwners ?? {})) {
+      if (equipTarget.includes(rid) && ownerAllowed.has(uid)) owners[rid] = uid;
+    }
+    await syncTaskReservations(task, equipTarget, window, user.id, owners);
+  }
   await logActivity({
     actorId: user.id,
     actorName: user.name,

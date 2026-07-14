@@ -70,15 +70,18 @@ export function conflictMessage(conflicts: { resource: string; by: string; start
 /**
  * 업무의 연동 예약을 원하는 장비 목록·시간창에 맞춘다.
  * - 목록에서 빠진 장비 → 예약 취소
- * - 유지되는 장비 → 시간창 갱신
+ * - 유지되는 장비 → 시간창·담당자 갱신
  * - 새 장비 → 예약 생성
+ * owners: 장비별 담당자(resourceId → userId) — 그 사람 이름으로 예약이 잡혀
+ *         반납·수정 책임이 그 사람에게 간다 (미지정 = actorId).
  * 충돌 검사는 호출 측에서 findConflicts로 먼저 통과시킨 뒤 호출할 것.
  */
 export async function syncTaskReservations(
   task: { _id: any; teamIds: any[] },
   resourceIds: string[],
   window: { startAt: Date; endAt: Date },
-  actorId: string
+  actorId: string,
+  owners?: Record<string, string>
 ) {
   const existing: any[] = await Reservation.find({ relatedTaskId: task._id, status: "booked" }).lean();
   const wanted = new Set(resourceIds);
@@ -90,17 +93,22 @@ export async function syncTaskReservations(
   }
 
   for (const rid of resourceIds) {
+    const owner = owners?.[rid] ?? null;
     const cur = have.get(rid);
     if (cur) {
-      // 시간창이 달라졌으면 이동
+      // 시간창·담당자가 달라졌으면 갱신
+      const set: any = {};
       if (new Date(cur.startAt).getTime() !== window.startAt.getTime() || new Date(cur.endAt).getTime() !== window.endAt.getTime()) {
-        await Reservation.updateOne({ _id: cur._id }, { $set: { startAt: window.startAt, endAt: window.endAt } });
+        set.startAt = window.startAt;
+        set.endAt = window.endAt;
       }
+      if (owner && String(cur.reservedBy) !== owner) set.reservedBy = owner;
+      if (Object.keys(set).length > 0) await Reservation.updateOne({ _id: cur._id }, { $set: set });
     } else {
       await Reservation.create({
         resourceId: rid,
         teamId: task.teamIds[0],
-        reservedBy: actorId,
+        reservedBy: owner ?? actorId,
         relatedTaskId: task._id,
         startAt: window.startAt,
         endAt: window.endAt,

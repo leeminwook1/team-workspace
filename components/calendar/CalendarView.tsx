@@ -32,7 +32,7 @@ type TaskItem = {
   priority: string;
   location: string;
   recurrenceId?: string | null;
-  resources?: { id: string; name: string }[]; // 연동된 대여 장비
+  resources?: { id: string; name: string; ownerId?: string; ownerName?: string }[]; // 연동된 대여 장비 (+장비별 담당자)
 };
 
 type ResourceOpt = { id: string; name: string; category: { id: string; name: string; color?: string; order?: number } | null };
@@ -623,6 +623,10 @@ function TaskFormModal({
   const [repeatUntil, setRepeatUntil] = useState("");
   const [allResources, setAllResources] = useState<ResourceOpt[]>([]);
   const [resourceIds, setResourceIds] = useState<string[]>(task?.resources?.map((r) => r.id) ?? []);
+  // 장비별 담당자 (resourceId → userId) — 그 사람 이름으로 예약이 잡혀 반납 책임이 감
+  const [resourceOwners, setResourceOwners] = useState<Record<string, string>>(
+    () => Object.fromEntries((task?.resources ?? []).filter((r) => r.ownerId).map((r) => [r.id, r.ownerId!]))
+  );
   const [equipQuery, setEquipQuery] = useState("");
   const [equipTab, setEquipTab] = useState(""); // "" = 전체, 그 외 = 분류 id
 
@@ -674,6 +678,13 @@ function TaskFormModal({
 
   function toggleResource(id: string) {
     setResourceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    // 선택 해제 시 담당자 매핑도 제거
+    setResourceOwners((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   }
   const [description, setDescription] = useState(task?.description ?? "");
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
@@ -727,6 +738,10 @@ function TaskFormModal({
         title, teamIds, categoryId: categoryId || null, assignees: Array.from(assignees),
         priority, location, description, ...when,
         resourceIds: repeat !== "none" ? [] : resourceIds,
+        // 장비별 담당자 — 선택된 장비 + 현재 담당자로 지정된 사람만 전송
+        resourceOwners: repeat !== "none" ? undefined : Object.fromEntries(
+          Object.entries(resourceOwners).filter(([rid, uid]) => resourceIds.includes(rid) && assignees.has(uid))
+        ),
         ...(isEdit ? {} : { repeat, repeatUntil: repeat !== "none" && repeatUntil ? repeatUntil : undefined }),
       }),
     });
@@ -874,15 +889,42 @@ function TaskFormModal({
                 <p className="equip-hint">반복 일정에는 장비 예약을 함께 설정할 수 없어요.</p>
               ) : (
                 <div className="equip-box">
-                  {selectedResources.length > 0 && (
-                    <div className="equip-selected">
-                      {selectedResources.map((r) => (
-                        <button type="button" key={r.id} className="equip-tag" onClick={() => toggleResource(r.id)}>
-                          {r.name} <span aria-hidden>✕</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {selectedResources.length > 0 && (() => {
+                    // 장비별 담당자 후보 = 이 일정의 담당자로 지정된 사람들
+                    const ownerOpts = members.filter((mem) => assignees.has(mem.id));
+                    return (
+                      <div className="equip-selected">
+                        {selectedResources.map((r) => (
+                          <div className="equip-sel-row" key={r.id}>
+                            <button type="button" className="equip-tag" onClick={() => toggleResource(r.id)}>
+                              {r.name} <span aria-hidden>✕</span>
+                            </button>
+                            {ownerOpts.length > 0 && (
+                              <select
+                                className="equip-owner"
+                                value={resourceOwners[r.id] ?? ""}
+                                onChange={(e) => setResourceOwners((prev) => {
+                                  const next = { ...prev };
+                                  if (e.target.value) next[r.id] = e.target.value;
+                                  else delete next[r.id];
+                                  return next;
+                                })}
+                                aria-label={`${r.name} 담당자`}
+                              >
+                                <option value="">담당자 (기본: 등록자)</option>
+                                {ownerOpts.map((mem) => <option key={mem.id} value={mem.id}>{mem.name}</option>)}
+                              </select>
+                            )}
+                          </div>
+                        ))}
+                        {ownerOpts.length > 0 && (
+                          <p className="equip-hint" style={{ padding: "2px 2px 0" }}>
+                            장비마다 담당자를 정하면 그 사람 이름으로 예약돼요 (반납 책임)
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="equip-search">
                     <Icon name="search" size={15} />
                     <input
@@ -1126,7 +1168,9 @@ function TaskDetailModal({
           {(task.resources?.length ?? 0) > 0 && (
             <div className="meta">
               <div className="k">대여 장비</div>
-              <div className="v">{task.resources!.map((r) => r.name).join(", ")}</div>
+              <div className="v">
+                {task.resources!.map((r) => r.ownerName ? `${r.name} (${r.ownerName})` : r.name).join(", ")}
+              </div>
             </div>
           )}
           <div className="meta"><div className="k">등록자</div><div className="v">{task.createdBy?.name || "—"}</div></div>

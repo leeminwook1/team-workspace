@@ -1067,6 +1067,13 @@ a { color: inherit; text-decoration: none; }
 }
 .equip-tag span { font-size: 10px; opacity: 0.65; }
 .equip-tag:hover { opacity: 0.75; }
+/* 선택된 장비 한 줄 — 장비 태그 + 담당자 셀렉트 */
+.equip-sel-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.equip-owner {
+  flex: none; max-width: 190px; padding: 4px 8px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  font-size: 12px; font-weight: 600;
+}
 .equip-search {
   display: flex; align-items: center; gap: 8px; padding: 9px 12px;
   border-bottom: 1px solid var(--line); color: var(--ink-faint);

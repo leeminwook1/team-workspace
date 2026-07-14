@@ -86,17 +86,22 @@ export async function GET(req: Request) {
     .sort({ startDate: 1 })
     .lean();
 
-  // 연동 장비 — 일괄 조회로 taskId → 자원 목록 매핑
+  // 연동 장비 — 일괄 조회로 taskId → 자원 목록 매핑 (장비별 담당자 포함)
   const linked: any[] = await Reservation.find({
     relatedTaskId: { $in: tasks.map((t: any) => t._id) },
     status: "booked",
-  }).populate("resourceId", "name").select("relatedTaskId resourceId").lean();
-  const resourcesByTask = new Map<string, { id: string; name: string }[]>();
+  }).populate("resourceId", "name").populate("reservedBy", "name").select("relatedTaskId resourceId reservedBy").lean();
+  const resourcesByTask = new Map<string, { id: string; name: string; ownerId?: string; ownerName?: string }[]>();
   for (const r of linked) {
     if (!r.resourceId) continue;
     const key = String(r.relatedTaskId);
     if (!resourcesByTask.has(key)) resourcesByTask.set(key, []);
-    resourcesByTask.get(key)!.push({ id: String(r.resourceId._id), name: r.resourceId.name });
+    resourcesByTask.get(key)!.push({
+      id: String(r.resourceId._id),
+      name: r.resourceId.name,
+      ownerId: r.reservedBy ? String(r.reservedBy._id ?? r.reservedBy) : undefined,
+      ownerName: r.reservedBy?.name ?? undefined,
+    });
   }
 
   return json({ tasks: tasks.map((t: any) => serialize(t, resourcesByTask)) });
@@ -120,7 +125,13 @@ export async function POST(req: Request) {
   }
 
   await connectDB();
-  const { repeat, repeatUntil, resourceIds, ...fields } = d;
+  const { repeat, repeatUntil, resourceIds, resourceOwners, ...fields } = d;
+  // 장비별 담당자 — 이 일정의 담당자(또는 등록자)만 허용, 그 외 값은 무시(등록자로 대체)
+  const ownerAllowed = new Set([...(d.assignees ?? []), user.id]);
+  const owners: Record<string, string> = {};
+  for (const [rid, uid] of Object.entries(resourceOwners ?? {})) {
+    if ((resourceIds ?? []).includes(rid) && ownerAllowed.has(uid)) owners[rid] = uid;
+  }
   const base = {
     ...fields,
     categoryId: d.categoryId || null,
@@ -152,7 +163,7 @@ export async function POST(req: Request) {
   // 단건
   if (!repeat || repeat === "none") {
     const task = await Task.create({ ...base, startDate: start, endDate: end });
-    if (equip.length > 0) await syncTaskReservations(task, equip, window, user.id);
+    if (equip.length > 0) await syncTaskReservations(task, equip, window, user.id, owners);
     await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetTitle: task.title });
     await notifyAssignees(String(task._id));
     return json({ id: String(task._id) }, 201);
