@@ -10,6 +10,7 @@ import NavLinks, { BottomNav, type NavItem } from "@/components/NavLinks";
 import ThemeToggle from "@/components/ThemeToggle";
 import GlobalSearch from "@/components/GlobalSearch";
 import NotificationBell from "@/components/NotificationBell";
+import { Icon } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -72,8 +73,11 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         <div className="side-foot">
           <Link href="/help" className="side-help">📖 사용 안내</Link>
           <div className="side-user-row">
-            <Link href="/settings" className="side-user" title="내 계정">
-              <span className="avatar" aria-hidden>{user.name.slice(0, 1)}</span>
+            <Link href="/settings" className="side-user" title="내 계정 · 설정">
+              <span className="avatar avatar-set" aria-hidden>
+                {user.name.slice(0, 1)}
+                <span className="avatar-gear"><Icon name="gear" size={9} strokeWidth={2.4} /></span>
+              </span>
               <div className="side-user-info">
                 <div className="side-user-name">{user.name}</div>
                 <div className="side-user-role">{roleLabel}</div>
@@ -94,7 +98,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <GlobalSearch compact />
           <NotificationBell />
-          <Link href="/settings" className="avatar" aria-label="내 계정" style={{ textDecoration: "none" }}>{user.name.slice(0, 1)}</Link>
+          <Link href="/settings" className="avatar avatar-set" aria-label="내 계정 설정" style={{ textDecoration: "none" }}>
+            {user.name.slice(0, 1)}
+            <span className="avatar-gear" aria-hidden><Icon name="gear" size={9} strokeWidth={2.4} /></span>
+          </Link>
           <ThemeToggle />
           <LogoutButton small />
         </div>

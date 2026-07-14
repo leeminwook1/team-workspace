@@ -748,10 +748,9 @@ a { color: inherit; text-decoration: none; }
 .help-title { font-size: 24px; font-weight: 800; margin: 6px 0 10px; letter-spacing: -0.01em; }
 .help-sub { margin: 0 0 18px; font-size: 14.5px; line-height: 1.65; color: var(--ink-soft); }
 .help-toc {
-  position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto;
-  padding: 10px 0; margin-bottom: 4px; background: var(--paper); scrollbar-width: none;
+  position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 10px 0; margin-bottom: 4px; background: var(--paper);
 }
-.help-toc::-webkit-scrollbar { display: none; }
 .help-toc-chip {
   flex: none; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); text-decoration: none;
   background: var(--surface-2); border-radius: 999px; padding: 7px 13px; transition: 0.12s;
@@ -808,6 +807,17 @@ a { color: inherit; text-decoration: none; }
   .help-sec { padding: 18px 16px 14px; }
   .help-row { flex-direction: column; gap: 3px; }
   .help-row-k { width: auto; }
+}
+
+/* 내 계정(설정) 진입 표시 — 사이드바 기어 + 모바일 아바타 기어 배지 */
+.side-user-gear { flex: none; margin-left: auto; color: var(--ink-faint); display: flex; }
+.side-user:hover .side-user-gear { color: var(--primary); }
+.avatar-set { position: relative; }
+.avatar-gear {
+  position: absolute; right: -3px; bottom: -3px;
+  width: 15px; height: 15px; border-radius: 50%;
+  background: var(--surface); border: 1px solid var(--line); color: var(--ink-soft);
+  display: flex; align-items: center; justify-content: center;
 }
 
 /* 사이드바 도움말 링크 */
