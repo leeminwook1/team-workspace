@@ -1048,6 +1048,7 @@ function TaskDetailModal({
   const [comments, setComments] = useState<{ id: string; author: { id: string; name: string } | null; content: string; createdAt: string }[]>([]);
   const [commentText, setCommentText] = useState("");
   const [commentBusy, setCommentBusy] = useState(false);
+  const [equipOpen, setEquipOpen] = useState(false); // 대여 장비 목록 펼침
 
   const loadComments = useCallback(async () => {
     const res = await fetch(`/api/tasks/${task.id}/comments`);
@@ -1193,14 +1194,53 @@ function TaskDetailModal({
               <div className="v">{task.assignees.map((a) => a.name).join(", ")}</div>
             </div>
           )}
-          {(task.resources?.length ?? 0) > 0 && (
-            <div className="meta">
-              <div className="k">대여 장비</div>
-              <div className="v">
-                {task.resources!.map((r) => r.ownerName ? `${r.name} (${r.ownerName})` : r.name).join(", ")}
+          {(task.resources?.length ?? 0) > 0 && (() => {
+            const resList = task.resources!;
+            // 3개 이하면 그대로, 많으면 담당자별 개수 요약 + 펼치기
+            if (resList.length <= 3) {
+              return (
+                <div className="meta">
+                  <div className="k">대여 장비</div>
+                  <div className="v">{resList.map((r) => r.ownerName ? `${r.name} (${r.ownerName})` : r.name).join(", ")}</div>
+                </div>
+              );
+            }
+            const byOwner = new Map<string, typeof resList>();
+            for (const r of resList) {
+              const key = r.ownerName ?? "";
+              const arr = byOwner.get(key);
+              if (arr) arr.push(r); else byOwner.set(key, [r]);
+            }
+            const groups = Array.from(byOwner.entries()).sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+            return (
+              <div className="meta meta-wide">
+                <div className="k">대여 장비</div>
+                <div className="v">
+                  <button type="button" className="equip-sum" onClick={() => setEquipOpen((o) => !o)} aria-expanded={equipOpen}>
+                    <b>장비 {resList.length}개</b>
+                    {groups.some(([n]) => n) && (
+                      <span className="equip-sum-owners">
+                        {groups.map(([n, arr]) => `${n || "담당 미지정"} ${arr.length}`).join(" · ")}
+                      </span>
+                    )}
+                    <span className="equip-sum-arrow" aria-hidden>{equipOpen ? "▲" : "▼"}</span>
+                  </button>
+                  {equipOpen && (
+                    <div className="equip-detail">
+                      {groups.map(([n, arr]) => (
+                        <div className="equip-detail-group" key={n || "_none"}>
+                          {groups.length > 1 || n ? <div className="equip-detail-owner">{n || "담당 미지정"} <b>{arr.length}</b></div> : null}
+                          <div className="equip-detail-items">
+                            {arr.map((r) => <span className="chip" key={r.id}>{r.name}</span>)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
           <div className="meta"><div className="k">등록자</div><div className="v">{task.createdBy?.name || "—"}</div></div>
         </div>
 
