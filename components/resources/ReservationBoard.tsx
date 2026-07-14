@@ -137,15 +137,15 @@ export default function ReservationBoard({
     if (view === "timeline" && weekRange) fetchWeek(weekRange.from, weekRange.to);
   }, ["reservation"]);
 
-  async function cancel(id: string) {
+  async function removeReservation(id: string) {
     const confirmed = await confirm({
-      title: "예약 취소", message: "이 예약을 취소할까요?",
-      confirmText: "예약 취소", cancelText: "닫기", danger: true,
+      title: "예약 삭제", message: "이 예약을 삭제할까요? 목록에서 사라집니다.",
+      confirmText: "삭제", cancelText: "닫기", danger: true,
     });
     if (!confirmed) return;
     const res = await fetch(`/api/reservations/${id}`, { method: "DELETE" });
     const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "취소 실패"); return; }
+    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
     load();
     if (weekRange) fetchWeek(weekRange.from, weekRange.to);
   }
@@ -176,7 +176,7 @@ export default function ReservationBoard({
       await confirm({ title: "예약 정보", message: `${byName ?? "?"} 님이 사용 후 반납한 예약입니다.`, confirmText: "확인", alert: true });
       return;
     }
-    if (byId === user?.id || user?.role === "admin") await cancel(resId);
+    if (byId === user?.id || user?.role === "admin") await removeReservation(resId);
     else await confirm({ title: "예약 정보", message: `${byName ?? "다른 팀"} 님이 예약한 시간입니다.`, confirmText: "확인", alert: true });
   }
 
@@ -263,7 +263,8 @@ export default function ReservationBoard({
             <div className="rsv2-list">
               {shownList.map(({ r, st }) => {
                 const days = Math.ceil((new Date(r.endAt).getTime() - new Date(r.startAt).getTime()) / 86400_000);
-                const canCancel = st === "upcoming" && (r.reservedBy?.id === user?.id || user?.role === "admin");
+                // 삭제 — 본인이 올린 예약(잘못 등록 정정) 또는 최고관리자는 전체. 모든 상태에서 가능.
+                const canDelete = r.reservedBy?.id === user?.id || user?.role === "admin";
                 const canReturn = (st === "inuse" || st === "overdue") && canReturnUi(r);
                 return (
                   <div className={`rsv2-item${st === "returned" ? " done" : ""}`} key={r.id}>
@@ -281,10 +282,10 @@ export default function ReservationBoard({
                         {st === "returned" && r.returnedAt && <span className="rsv2-item-note">· 반납 {fmt(r.returnedAt)}{r.returnedByName ? ` (${r.returnedByName})` : ""}</span>}
                       </div>
                     </div>
-                    {(canCancel || canReturn) && (
+                    {(canDelete || canReturn) && (
                       <div className="rsv2-item-actions">
-                        {canCancel && <button className="btn btn-danger btn-sm" onClick={() => cancel(r.id)}>취소</button>}
                         {canReturn && <button className="btn btn-primary btn-sm" onClick={() => markReturned(r.id)}>반납</button>}
+                        {canDelete && <button className="btn btn-danger btn-sm" onClick={() => removeReservation(r.id)}>삭제</button>}
                       </div>
                     )}
                   </div>
@@ -316,7 +317,7 @@ export default function ReservationBoard({
             eventClick={(arg) => onTimelineClick(arg.event.extendedProps.resId, arg.event.extendedProps.byId, arg.event.extendedProps.byName, arg.event.extendedProps.returned)}
             noEventsContent="이 주에 예약이 없습니다"
           />
-          <p className="rsv-tip">예약을 클릭하면 상세를 볼 수 있어요. (본인 예약은 취소 가능)</p>
+          <p className="rsv-tip">예약을 클릭하면 상세를 볼 수 있어요. (본인 예약은 삭제 가능)</p>
         </div>
       )}
 
