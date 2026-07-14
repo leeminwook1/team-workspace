@@ -418,6 +418,65 @@ a { color: inherit; text-decoration: none; }
 .rsv-st-returned { background: color-mix(in srgb, var(--st-done) 12%, transparent); color: var(--st-done); }
 .rsv-row-done td { color: var(--ink-faint); }
 
+/* ── 자원 예약 v2 (전면 개편) ── */
+.rsv2 { display: flex; flex-direction: column; gap: 16px; }
+.rsv2-topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.rsv2-book { flex: none; }
+/* 필터 바 — 검색 + 상태 칩 */
+.rsv2-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rsv2-search {
+  display: flex; align-items: center; gap: 7px; flex: 1; min-width: 200px; max-width: 340px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; color: var(--ink-faint);
+}
+.rsv2-search.in-modal { max-width: none; margin-bottom: 8px; }
+.rsv2-search:focus-within { border-color: var(--primary); }
+.rsv2-search input { flex: 1; border: 0; background: none; outline: none; padding: 9px 0; font-size: 14px; color: var(--ink); min-width: 0; }
+.rsv2-search input::placeholder { color: var(--ink-faint); }
+.rsv2-clear { border: 0; background: none; cursor: pointer; color: var(--ink-faint); font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 6px; }
+.rsv2-clear:hover { color: var(--ink); }
+.rsv2-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.rsv2-chips .chip-btn b { font-weight: 800; margin-left: 2px; }
+
+/* 대여 목록 — 카드형 행 (PC·모바일 공통) */
+.rsv2-list { display: flex; flex-direction: column; gap: 10px; }
+.rsv2-item {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--shadow); padding: 14px 16px; transition: border-color 0.12s;
+}
+.rsv2-item:hover { border-color: var(--line-strong); }
+.rsv2-item.done { opacity: 0.62; }
+.rsv2-item-body { flex: 1; min-width: 0; }
+.rsv2-item-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 3px; }
+.rsv2-item-name { font-size: 15px; font-weight: 800; }
+.rsv2-item-period { font-size: 13.5px; font-weight: 600; color: var(--ink-soft); }
+.rsv2-item-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 12.5px; color: var(--ink-faint); }
+.rsv2-item-by { color: var(--ink-soft); font-weight: 600; }
+.rsv2-item-note { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+.rsv2-item-actions { display: flex; gap: 6px; flex: none; }
+.rsv2-empty { padding: 40px 20px; text-align: center; color: var(--ink-faint); font-size: 14px; }
+
+/* 예약 모달 — 큰 폭, 장비 피커 */
+.modal.modal-lg { max-width: 640px; }
+.rsv2-picked { font-weight: 700; color: var(--primary); font-size: 12.5px; }
+.rsv2-picker { border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px; background: var(--surface-2); }
+.rsv2-picker-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.rsv2-picker-group {}
+.rsv2-picker-cat { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: var(--ink-soft); margin: 2px 2px 6px; }
+.rsv2-picker-cat .dot { width: 8px; height: 8px; }
+.rsv2-picker-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.rsv2-daterow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+
+@media (max-width: 640px) {
+  .rsv2-topbar .seg { flex: 1; }
+  .rsv2-book { flex: 1; justify-content: center; }
+  .rsv2-search { max-width: none; flex-basis: 100%; }
+  .rsv2-item { flex-wrap: wrap; }
+  .rsv2-item-actions { width: 100%; }
+  .rsv2-item-actions .btn { flex: 1; }
+  .rsv2-daterow { grid-template-columns: 1fr 1fr; }
+}
+
 /* 브랜드 옆 "문화과" 태그 — 공간 좁은 앱 내부(사이드바·모바일 상단)에선 숨김 */
 .brand-tag {
   font-size: 10.5px; font-weight: 800; letter-spacing: 0.02em;
