@@ -23,6 +23,7 @@ export default async function SettingsPage() {
       roleLabel={ROLE_LABEL[(me.role ?? "member") as Role] ?? "팀원"}
       teamName={me.teamId?.name ?? null}
       initialTelegramChatId={me.telegramChatId ?? ""}
+      initialIcalToken={me.icalToken ?? ""}
       initialNotifyPrefs={{
         assign: me.notifyPrefs?.assign !== false,
         due: me.notifyPrefs?.due !== false,

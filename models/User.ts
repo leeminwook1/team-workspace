@@ -27,6 +27,8 @@ const UserSchema = new Schema(
     },
     // 즐겨찾기 장비 — 자원 타임라인 트리 상단에 고정
     favResources: [{ type: Schema.Types.ObjectId, ref: "Resource" }],
+    // iCal 구독 토큰 — /api/ical/<token> 피드 (빈 문자열 = 미발급, 재발급 시 이전 URL 무효화)
+    icalToken: { type: String, default: "" },
     // 텔레그램 알림 — 봇과 대화하는 챗 ID (빈 문자열 = 미연동)
     telegramChatId: { type: String, default: "" },
     // 텔레그램 알림 수신 설정 — false인 항목은 텔레그램 발송 생략 (앱 내 알림은 항상 생성)

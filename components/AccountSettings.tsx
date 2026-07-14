@@ -14,10 +14,11 @@ const PREF_ITEMS: { key: keyof NotifyPrefs; label: string; desc: string }[] = [
 ];
 
 export default function AccountSettings({
-  initialName, email, roleLabel, teamName, initialTelegramChatId, initialNotifyPrefs,
+  initialName, email, roleLabel, teamName, initialTelegramChatId, initialNotifyPrefs, initialIcalToken,
 }: {
   initialName: string; email: string; roleLabel: string; teamName: string | null; initialTelegramChatId?: string;
   initialNotifyPrefs?: NotifyPrefs;
+  initialIcalToken?: string;
 }) {
   const { update } = useSession();
   const [name, setName] = useState(initialName);
@@ -33,6 +34,38 @@ export default function AccountSettings({
   const [prefs, setPrefs] = useState<NotifyPrefs>(
     { assign: true, due: true, late: true, directive: true, equip: true, ...(initialNotifyPrefs ?? {}) }
   );
+
+  // ── iCal 구독 ──
+  const [icalToken, setIcalToken] = useState(initialIcalToken ?? "");
+  const [icalBusy, setIcalBusy] = useState(false);
+  const [icalMsg, setIcalMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const icalUrl = icalToken && typeof window !== "undefined" ? `${window.location.origin}/api/ical/${icalToken}` : "";
+
+  async function issueIcal(regen: boolean) {
+    setIcalBusy(true); setIcalMsg(null);
+    const res = await fetch("/api/me/ical-token", { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setIcalBusy(false);
+    if (!res.ok) { setIcalMsg({ ok: false, text: data.error ?? "발급 실패" }); return; }
+    setIcalToken(data.token);
+    setIcalMsg({ ok: true, text: regen ? "재발급했어요. 이전 URL은 더 이상 동작하지 않아요." : "구독 URL이 준비됐어요. 아래 안내대로 캘린더 앱에 추가하세요." });
+  }
+  async function revokeIcal() {
+    setIcalBusy(true); setIcalMsg(null);
+    const res = await fetch("/api/me/ical-token", { method: "DELETE" });
+    setIcalBusy(false);
+    if (!res.ok) { setIcalMsg({ ok: false, text: "해제 실패" }); return; }
+    setIcalToken("");
+    setIcalMsg({ ok: true, text: "구독을 해제했어요. 기존 URL은 즉시 무효화됐습니다." });
+  }
+  async function copyIcal() {
+    try {
+      await navigator.clipboard.writeText(icalUrl);
+      setIcalMsg({ ok: true, text: "URL을 복사했어요." });
+    } catch {
+      setIcalMsg({ ok: false, text: "복사에 실패했어요. URL을 직접 선택해 복사해주세요." });
+    }
+  }
 
   async function issueLinkCode() {
     setCodeBusy(true);
@@ -217,6 +250,38 @@ export default function AccountSettings({
             <button className="btn btn-primary btn-sm" disabled={tgBusy}>{tgBusy ? "저장 중…" : "저장"}</button>
           </div>
         </form>
+      </div>
+
+      {/* 캘린더 구독 (iCal) */}
+      <div className="card" style={{ padding: 22, marginTop: 16 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px" }}>캘린더 구독 (iCal)</h2>
+        <p className="page-sub" style={{ margin: "0 0 14px" }}>
+          내 담당 업무·개인 일정·부재를 구글/애플 캘린더 등 쓰던 캘린더 앱에서 그대로 볼 수 있어요.
+        </p>
+        {icalToken ? (
+          <>
+            <div className="ical-url-row">
+              <input className="ical-url" value={icalUrl} readOnly onFocus={(e) => e.target.select()} aria-label="iCal 구독 URL" />
+              <button type="button" className="btn btn-primary btn-sm" onClick={copyIcal}>복사</button>
+            </div>
+            <div className="ical-guide">
+              <p><b>구글 캘린더</b>: 설정 → 캘린더 추가 → <b>URL로 추가</b> → 위 주소 붙여넣기</p>
+              <p><b>아이폰/맥</b>: 설정 → 캘린더 → 계정 추가 → 기타 → <b>구독 캘린더 추가</b> → 위 주소 붙여넣기</p>
+              <p className="muted-note">이 URL을 아는 사람은 내 일정을 볼 수 있어요 — 공유하지 마세요. 갱신 주기는 캘린더 앱이 정해요(보통 몇 시간).</p>
+            </div>
+            <div className="modal-actions" style={{ marginTop: 14, gap: 8 }}>
+              <button type="button" className="btn btn-line btn-sm" disabled={icalBusy} onClick={() => issueIcal(true)}>URL 재발급</button>
+              <button type="button" className="btn btn-danger btn-sm" disabled={icalBusy} onClick={revokeIcal}>구독 해제</button>
+            </div>
+          </>
+        ) : (
+          <div className="modal-actions" style={{ justifyContent: "flex-start" }}>
+            <button type="button" className="btn btn-primary btn-sm" disabled={icalBusy} onClick={() => issueIcal(false)}>
+              {icalBusy ? "발급 중…" : "구독 URL 발급"}
+            </button>
+          </div>
+        )}
+        {icalMsg && <p className={icalMsg.ok ? "ok-msg" : "err-msg"} style={{ marginTop: 10 }}>{icalMsg.text}</p>}
       </div>
 
       {/* 텔레그램 연동 방법 매뉴얼 모달 */}
