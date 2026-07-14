@@ -62,12 +62,27 @@ export default function ReservationBoard({
 
   const [list, setList] = useState<ReservationItem[]>([]);
   const [err, setErr] = useState("");
-  const [view, setView] = useState<"list" | "timeline">("list");
+  const [view, setView] = useState<"list" | "timeline">("timeline"); // 기본은 타임라인
   const [weekEvents, setWeekEvents] = useState<any[]>([]);
   const [weekRange, setWeekRange] = useState<{ from: string; to: string } | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | RsvState>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all"); // 종류(분류) 필터
+  const [rangeFrom, setRangeFrom] = useState(""); // 기간 필터 (YYYY-MM-DD)
+  const [rangeTo, setRangeTo] = useState("");
+
+  // 분류 목록 + 예약 → 분류 매핑
+  const categories = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; color?: string; order: number }>();
+    for (const r of resources) if (r.category && !map.has(r.category.id)) map.set(r.category.id, r.category);
+    return Array.from(map.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
+  }, [resources]);
+  const resCatId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of resources) m.set(r.id, r.category?.id ?? "");
+    return m;
+  }, [resources]);
 
   // 예약 가능한 팀 (팀 소속이면 팀원 포함 누구나 / 전사 편집자는 전체)
   const isOrgEditor = ["admin", "manager", "deputy", "secretary"].includes(user?.role ?? "");
@@ -116,12 +131,19 @@ export default function ReservationBoard({
     }));
   }, []);
 
-  // 대여 목록 — 전체 장비 예약 (어제~60일 뒤)
+  // 대여 목록 — 기간 필터 지정 시 그 범위, 없으면 어제~60일 뒤 (과거 조회는 기간 필터로)
   const load = useCallback(async () => {
-    const from = new Date(); from.setDate(from.getDate() - 1);
-    const to = new Date(); to.setDate(to.getDate() + 60);
+    let fromISO: string, toISO: string;
+    if (rangeFrom && rangeTo) {
+      fromISO = new Date(rangeFrom + "T00:00:00").toISOString();
+      toISO = new Date(rangeTo + "T23:59:59").toISOString();
+    } else {
+      const from = new Date(); from.setDate(from.getDate() - 1);
+      const to = new Date(); to.setDate(to.getDate() + 60);
+      fromISO = from.toISOString(); toISO = to.toISOString();
+    }
     try {
-      const res = await fetch(`/api/reservations?from=${from.toISOString()}&to=${to.toISOString()}`);
+      const res = await fetch(`/api/reservations?from=${fromISO}&to=${toISO}`);
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setList(data.reservations ?? []);
@@ -129,7 +151,7 @@ export default function ReservationBoard({
     } catch {
       setErr("예약 목록을 불러오지 못했어요. 네트워크 확인 후 새로고침해주세요.");
     }
-  }, []);
+  }, [rangeFrom, rangeTo]);
 
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(() => {
@@ -187,6 +209,7 @@ export default function ReservationBoard({
       .map((r) => ({ r, st: rsvState(r) }))
       .filter(({ r, st }) => {
         if (statusFilter !== "all" && st !== statusFilter) return false;
+        if (categoryFilter !== "all" && resCatId.get(r.resource?.id ?? "") !== categoryFilter) return false;
         if (!q) return true;
         return (r.resource?.name ?? "").toLowerCase().includes(q)
           || (r.reservedBy?.name ?? "").toLowerCase().includes(q)
@@ -196,7 +219,7 @@ export default function ReservationBoard({
         STATE_ORDER.indexOf(a.st) - STATE_ORDER.indexOf(b.st)
         || new Date(a.r.startAt).getTime() - new Date(b.r.startAt).getTime()
       );
-  }, [list, query, statusFilter]);
+  }, [list, query, statusFilter, categoryFilter, resCatId]);
 
   const statusCount = (s: RsvState) => list.filter((r) => rsvState(r) === s).length;
 
@@ -239,25 +262,42 @@ export default function ReservationBoard({
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="장비·예약자·메모 검색" aria-label="예약 검색" />
               {query && <button className="rsv2-clear" aria-label="지우기" onClick={() => setQuery("")}>×</button>}
             </div>
-            <div className="rsv2-chips">
-              <button className={`chip chip-btn${statusFilter === "all" ? " sel" : ""}`} onClick={() => setStatusFilter("all")}>
-                전체 <b>{list.length}</b>
-              </button>
-              {STATE_ORDER.map((s) => {
-                const n = statusCount(s);
-                if (n === 0) return null;
-                return (
-                  <button key={s} className={`chip chip-btn${statusFilter === s ? " sel" : ""}`} onClick={() => setStatusFilter(s)}>
-                    {s === "overdue" && "⚠ "}{STATE_LABEL[s]} <b>{n}</b>
-                  </button>
-                );
-              })}
+            {/* 종류(분류) 필터 */}
+            <select className="rsv2-select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="종류 필터">
+              <option value="all">전체 종류</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            {/* 기간 필터 */}
+            <div className="rsv2-range">
+              <span className="rsv2-range-label">기간</span>
+              <input type="date" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)} aria-label="시작일" />
+              <span className="rsv2-range-sep">~</span>
+              <input type="date" value={rangeTo} min={rangeFrom || undefined} onChange={(e) => setRangeTo(e.target.value)} aria-label="종료일" />
+              {(rangeFrom || rangeTo) && <button type="button" className="rsv2-clear" aria-label="기간 초기화" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>×</button>}
             </div>
+          </div>
+
+          {/* 상태 필터 칩 */}
+          <div className="rsv2-chips">
+            <button className={`chip chip-btn${statusFilter === "all" ? " sel" : ""}`} onClick={() => setStatusFilter("all")}>
+              전체 <b>{list.length}</b>
+            </button>
+            {STATE_ORDER.map((s) => {
+              const n = statusCount(s);
+              if (n === 0) return null;
+              return (
+                <button key={s} className={`chip chip-btn${statusFilter === s ? " sel" : ""}`} onClick={() => setStatusFilter(s)}>
+                  {s === "overdue" && "⚠ "}{STATE_LABEL[s]} <b>{n}</b>
+                </button>
+              );
+            })}
           </div>
 
           {shownList.length === 0 ? (
             <div className="card rsv2-empty">
-              {list.length === 0 ? "아직 예약이 없어요. 위 예약하기 버튼으로 첫 예약을 해보세요!" : "조건에 맞는 예약이 없습니다."}
+              {list.length === 0
+                ? (rangeFrom && rangeTo ? "이 기간에 예약이 없어요." : "아직 예약이 없어요. 위 예약하기 버튼으로 첫 예약을 해보세요!")
+                : "조건에 맞는 예약이 없습니다."}
             </div>
           ) : (
             <div className="rsv2-list">

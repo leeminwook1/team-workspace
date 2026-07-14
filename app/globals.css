@@ -436,6 +436,24 @@ a { color: inherit; text-decoration: none; }
 .rsv2-clear:hover { color: var(--ink); }
 .rsv2-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .rsv2-chips .chip-btn b { font-weight: 800; margin-left: 2px; }
+/* 종류 셀렉트 + 기간 필터 */
+.rsv2-select {
+  padding: 9px 12px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); font-size: 13.5px; font-weight: 600; flex: none;
+}
+.rsv2-range {
+  display: flex; align-items: center; gap: 6px; flex: none;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 3px 8px 3px 12px;
+}
+.rsv2-range-label { font-size: 12.5px; font-weight: 700; color: var(--ink-faint); }
+.rsv2-range-sep { color: var(--ink-faint); }
+.rsv2-range input[type="date"] {
+  border: 0; background: none; outline: none; color: var(--ink); font-size: 13px; padding: 5px 2px;
+}
+@media (max-width: 640px) {
+  .rsv2-select, .rsv2-range { flex: 1; }
+  .rsv2-range { min-width: 100%; }
+}
 
 /* 대여 목록 — 카드형 행 (PC·모바일 공통) */
 .rsv2-list { display: flex; flex-direction: column; gap: 10px; }
