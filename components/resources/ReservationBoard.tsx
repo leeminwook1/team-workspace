@@ -325,25 +325,33 @@ export default function ReservationBoard({
           resources={resources}
           teams={reservableTeams}
           onClose={() => setModalOpen(false)}
-          onSaved={() => { setModalOpen(false); load(); if (weekRange) fetchWeek(weekRange.from, weekRange.to); }}
+          onRefresh={() => { load(); if (weekRange) fetchWeek(weekRange.from, weekRange.to); }}
         />
       )}
     </div>
   );
 }
 
-/* ── 예약 모달 — 장비 선택(검색+분류) + 기간 대여 ── */
+/* ── 예약 모달 — 여러 장비 선택(검색+분류) + 기간 대여 ── */
 function ReserveModal({
-  resources, teams, onClose, onSaved,
+  resources, teams, onClose, onRefresh,
 }: {
-  resources: ResourceOpt[]; teams: TeamOpt[]; onClose: () => void; onSaved: () => void;
+  resources: ResourceOpt[]; teams: TeamOpt[]; onClose: () => void; onRefresh: () => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [resId, setResId] = useState("");
+  const [resIds, setResIds] = useState<Set<string>>(new Set());
   const [resQuery, setResQuery] = useState("");
   const [form, setForm] = useState({ teamId: teams[0]?.id ?? "", startDate: today, endDate: addDays(today, 6), startTime: "10:00", endTime: "18:00", note: "" });
   const [err, setErr] = useState("");
+  const [fails, setFails] = useState<{ name: string; reason: string }[]>([]);
   const [busy, setBusy] = useState(false);
+
+  const toggleRes = (id: string) =>
+    setResIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const rentalDays = (() => {
     const s = new Date(form.startDate), e = new Date(form.endDate);
@@ -364,26 +372,38 @@ function ReserveModal({
     return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   }, [resources, resQuery]);
 
-  const selectedRes = resources.find((r) => r.id === resId);
+  const selectedList = resources.filter((r) => resIds.has(r.id));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setErr("");
-    if (!resId) { setErr("장비를 선택하세요."); return; }
+    setErr(""); setFails([]);
+    const ids = Array.from(resIds);
+    if (ids.length === 0) { setErr("장비를 하나 이상 선택하세요."); return; }
     setBusy(true);
-    const res = await fetch("/api/reservations", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        resourceId: resId, teamId: form.teamId,
-        startAt: `${form.startDate}T${form.startTime}:00`,
-        endAt: `${form.endDate}T${form.endTime}:00`,
-        note: form.note,
-      }),
-    });
-    const data = await res.json();
+    const failures: { id: string; name: string; reason: string }[] = [];
+    let okCount = 0;
+    // 선택한 장비마다 같은 기간으로 예약 (충돌은 그 장비만 실패로 표시)
+    for (const id of ids) {
+      const res = await fetch("/api/reservations", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resourceId: id, teamId: form.teamId,
+          startAt: `${form.startDate}T${form.startTime}:00`,
+          endAt: `${form.endDate}T${form.endTime}:00`,
+          note: form.note,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) okCount++;
+      else failures.push({ id, name: resources.find((r) => r.id === id)?.name ?? "장비", reason: data.error ?? "예약 실패" });
+    }
     setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "예약 실패"); return; }
-    onSaved();
+    onRefresh(); // 성공분은 즉시 목록 반영
+    if (failures.length === 0) { onClose(); return; }
+    // 일부 실패 — 실패한 장비만 선택으로 남기고 사유 표시
+    setResIds(new Set(failures.map((f) => f.id)));
+    setFails(failures.map((f) => ({ name: f.name, reason: f.reason })));
+    setErr(okCount > 0 ? `${okCount}건 예약 완료. 아래 ${failures.length}건은 예약하지 못했어요.` : "예약하지 못했어요.");
   }
 
   return (
@@ -393,9 +413,19 @@ function ReserveModal({
         <h2>장비 예약하기</h2>
 
         <form onSubmit={submit}>
-          {/* 장비 선택 */}
+          {/* 장비 선택 (여러 개) */}
           <div className="field">
-            <label>장비 {selectedRes && <span className="rsv2-picked">· {selectedRes.name} 선택됨</span>}</label>
+            <label>장비 {selectedList.length > 0 && <span className="rsv2-picked">· {selectedList.length}개 선택됨</span>}</label>
+            {/* 선택된 장비 요약 칩 (클릭으로 해제) */}
+            {selectedList.length > 0 && (
+              <div className="rsv2-selected">
+                {selectedList.map((r) => (
+                  <button type="button" key={r.id} className="rsv2-sel-chip" onClick={() => toggleRes(r.id)}>
+                    {r.name} <span aria-hidden>×</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="rsv2-picker">
               <div className="rsv2-search in-modal">
                 <Icon name="search" size={15} />
@@ -410,19 +440,16 @@ function ReserveModal({
                     <div className="rsv2-picker-cat"><span className="dot" style={{ background: g.color }} />{g.name} <span className="kb-count">{g.items.length}</span></div>
                     <div className="rsv2-picker-chips">
                       {g.items.map((r) => (
-                        <button type="button" key={r.id} className={`chip chip-btn${resId === r.id ? " sel" : ""}`} onClick={() => setResId(r.id)}>{r.name}</button>
+                        <button type="button" key={r.id} className={`chip chip-btn${resIds.has(r.id) ? " sel" : ""}`} onClick={() => toggleRes(r.id)}>
+                          {resIds.has(r.id) && <span aria-hidden style={{ marginRight: 3 }}>✓</span>}{r.name}
+                        </button>
                       ))}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-            {selectedRes?.ownerTeam && (
-              <p className="rsv-owner" style={{ margin: "8px 2px 0" }}>
-                <span className="dot" style={{ background: selectedRes.ownerTeam.color }} />
-                관리: {selectedRes.ownerTeam.name}{selectedRes.manager ? ` · ${selectedRes.manager.name}` : ""}
-              </p>
-            )}
+            <p className="rsv2-picker-hint">카메라·렌즈·배터리·메모리처럼 <b>여러 개를 한 번에</b> 골라 같은 기간으로 예약할 수 있어요.</p>
           </div>
 
           {/* 팀 */}
@@ -463,8 +490,15 @@ function ReserveModal({
           </div>
 
           {err && <p className="err-msg">{err}</p>}
+          {fails.length > 0 && (
+            <ul className="rsv2-fails">
+              {fails.map((f, i) => <li key={i}><b>{f.name}</b> — {f.reason}</li>)}
+            </ul>
+          )}
           <div className="modal-actions">
-            <button className="btn btn-primary" disabled={busy}>{busy ? "예약 중…" : "예약하기"}</button>
+            <button className="btn btn-primary" disabled={busy || resIds.size === 0}>
+              {busy ? "예약 중…" : resIds.size > 1 ? `${resIds.size}개 예약하기` : "예약하기"}
+            </button>
           </div>
         </form>
       </div>
