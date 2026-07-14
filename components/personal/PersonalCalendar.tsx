@@ -75,7 +75,7 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
   const targetName = viewables.find((v) => v.id === target)?.name;
 
   return (
-    <div className="cal-wrap">
+    <div className="cal-wrap pc-cal">
       <div className="cal-toolbar cal1c-head">
         <h2 className="cal1c-month">{bigLabel}</h2>
         <span className="cal1c-year">{yearLabel}</span>

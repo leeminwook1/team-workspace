@@ -377,6 +377,10 @@ a { color: inherit; text-decoration: none; }
 }
 .rsv-owner b { color: var(--ink-soft); font-weight: 700; }
 .rsv-owner .dot { width: 7px; height: 7px; }
+/* 개인 캘린더(내 캘린더) 월뷰 — 일정 텍스트 가운데 정렬 */
+.pc-cal .fc-dayGridMonth-view .fc-daygrid-event { text-align: center; }
+.pc-cal .fc-dayGridMonth-view .fc-event-title { display: block; text-align: center; }
+
 /* 대여 목록 헤더 (제목 + 범위 세그) */
 .rsv-list-head {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
