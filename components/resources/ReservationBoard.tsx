@@ -70,6 +70,7 @@ export default function ReservationBoard({
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ReservationItem | null>(null); // 수정 중인 예약
   const [tlGroup, setTlGroup] = useState<ReservationItem[] | null>(null); // 타임라인 묶음 상세
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set()); // 리스트 묶음 펼침
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | RsvState>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all"); // 종류(분류) 필터
@@ -227,10 +228,10 @@ export default function ReservationBoard({
     else await confirm({ title: "예약 정보", message: `${byName ?? "다른 팀"} 님이 예약한 시간입니다.`, confirmText: "확인", alert: true });
   }
 
-  // 목록 필터·정렬 — 검색어(장비명·예약자·메모) + 상태
-  const shownList = useMemo(() => {
+  // 목록 필터 — 검색어(장비명·예약자·메모) + 상태, 이후 같은 시간·팀·예약자 묶음으로 그룹핑
+  const shownGroups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return list
+    const filtered = list
       .map((r) => ({ r, st: rsvState(r) }))
       .filter(({ r, st }) => {
         if (statusFilter !== "all" && st !== statusFilter) return false;
@@ -239,10 +240,18 @@ export default function ReservationBoard({
         return (r.resource?.name ?? "").toLowerCase().includes(q)
           || (r.reservedBy?.name ?? "").toLowerCase().includes(q)
           || (r.note ?? "").toLowerCase().includes(q);
-      })
+      });
+    const map = new Map<string, ReservationItem[]>();
+    for (const { r } of filtered) {
+      const key = [r.startAt, r.endAt, r.team?.id ?? "", r.reservedBy?.id ?? "", r.status].join("|");
+      const arr = map.get(key);
+      if (arr) arr.push(r); else map.set(key, [r]);
+    }
+    return Array.from(map.entries())
+      .map(([key, items]) => ({ key, items, st: rsvState(items[0]) }))
       .sort((a, b) =>
         STATE_ORDER.indexOf(a.st) - STATE_ORDER.indexOf(b.st)
-        || new Date(a.r.startAt).getTime() - new Date(b.r.startAt).getTime()
+        || new Date(a.items[0].startAt).getTime() - new Date(b.items[0].startAt).getTime()
       );
   }, [list, query, statusFilter, categoryFilter, resCatId]);
 
@@ -318,7 +327,7 @@ export default function ReservationBoard({
             })}
           </div>
 
-          {shownList.length === 0 ? (
+          {shownGroups.length === 0 ? (
             <div className="card rsv2-empty">
               {list.length === 0
                 ? (rangeFrom && rangeTo ? "이 기간에 예약이 없어요." : "아직 예약이 없어요. 위 예약하기 버튼으로 첫 예약을 해보세요!")
@@ -326,7 +335,10 @@ export default function ReservationBoard({
             </div>
           ) : (
             <div className="rsv2-list">
-              {shownList.map(({ r, st }) => {
+              {shownGroups.map(({ key, items, st }) => {
+                const r = items[0];
+                const single = items.length === 1;
+                const open = openGroups.has(key);
                 const days = Math.ceil((new Date(r.endAt).getTime() - new Date(r.startAt).getTime()) / 86400_000);
                 // 본인이 올린 예약 또는 최고관리자 — 삭제는 모든 상태, 수정은 진행 중(반납 전)만
                 const isOwnerOrAdmin = r.reservedBy?.id === user?.id || user?.role === "admin";
@@ -334,10 +346,23 @@ export default function ReservationBoard({
                 const canEdit = isOwnerOrAdmin && st !== "returned";
                 const canReturn = (st === "inuse" || st === "overdue") && canReturnUi(r);
                 return (
-                  <div className={`rsv2-item${st === "returned" ? " done" : ""}`} key={r.id}>
+                  <div className={`rsv2-item${st === "returned" ? " done" : ""}${single ? "" : " rsv2-item-group"}`} key={key}>
                     <div className="rsv2-item-body">
                       <div className="rsv2-item-top">
-                        <span className="rsv2-item-name">{r.resource?.name ?? "?"}</span>
+                        {single ? (
+                          <span className="rsv2-item-name">{r.resource?.name ?? "?"}</span>
+                        ) : (
+                          <button
+                            type="button" className="rsv2-item-name rsv2-group-toggle" aria-expanded={open}
+                            onClick={() => setOpenGroups((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(key)) next.delete(key); else next.add(key);
+                              return next;
+                            })}
+                          >
+                            장비 {items.length}개 <span className="rsv2-group-arrow" aria-hidden>{open ? "▲" : "▼"}</span>
+                          </button>
+                        )}
                         <span className={`rsv-st rsv-st-${st}`}>{st === "overdue" && "⚠ "}{STATE_LABEL[st]}</span>
                         {days >= 2 && <span className="rsv-days">{days}일</span>}
                       </div>
@@ -348,8 +373,27 @@ export default function ReservationBoard({
                         {r.note && <span className="rsv2-item-note">· {r.note}</span>}
                         {st === "returned" && r.returnedAt && <span className="rsv2-item-note">· 반납 {fmt(r.returnedAt)}{r.returnedByName ? ` (${r.returnedByName})` : ""}</span>}
                       </div>
+                      {!single && !open && (
+                        <div className="rsv2-group-preview">
+                          {items.map((it) => it.resource?.name ?? "?").slice(0, 4).join(", ")}{items.length > 4 ? ` 외 ${items.length - 4}개` : ""}
+                        </div>
+                      )}
+                      {!single && open && (
+                        <div className="rsv2-group-list">
+                          {items.map((it) => (
+                            <div className="tlg-row" key={it.id}>
+                              <span className="tlg-name">{it.resource?.name ?? "?"}</span>
+                              <span className="tlg-actions">
+                                {canReturn && canReturnUi(it) && <button className="btn btn-primary btn-sm" onClick={() => markReturned(it.id)}>반납</button>}
+                                {canEdit && <button className="btn btn-line btn-sm" onClick={() => setEditing(it)}>수정</button>}
+                                {canDelete && <button className="btn btn-danger btn-sm" onClick={() => removeReservation(it.id)}>삭제</button>}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {(canEdit || canDelete || canReturn) && (
+                    {single && (canEdit || canDelete || canReturn) && (
                       <div className="rsv2-item-actions">
                         {canReturn && <button className="btn btn-primary btn-sm" onClick={() => markReturned(r.id)}>반납</button>}
                         {canEdit && <button className="btn btn-line btn-sm" onClick={() => setEditing(r)}>수정</button>}
