@@ -26,7 +26,7 @@ export const taskCreateSchema = z.object({
   repeat: z.enum(["none", "daily", "weekly", "biweekly", "monthly"]).optional().default("none"),
   repeatUntil: z.string().optional(),
   // 대여 장비 — 선택 시 업무 기간에 자원 예약 자동 생성 (반복 일정과는 함께 불가)
-  resourceIds: z.array(z.string().min(1)).max(10).optional().default([]),
+  resourceIds: z.array(z.string().min(1)).max(40, "장비는 최대 40개까지 선택할 수 있어요").optional().default([]),
 });
 
 export const taskUpdateSchema = z.object({
@@ -41,7 +41,7 @@ export const taskUpdateSchema = z.object({
   status: z.enum(["todo", "in_progress", "done", "hold"]).optional(),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
   location: z.string().max(120).optional(),
-  resourceIds: z.array(z.string().min(1)).max(10).optional(), // undefined = 장비 변경 없음
+  resourceIds: z.array(z.string().min(1)).max(40, "장비는 최대 40개까지 선택할 수 있어요").optional(), // undefined = 장비 변경 없음
 });
 
 // 행사 관리 — 행사(컨테이너) + 그 안의 투두(items) 칸반

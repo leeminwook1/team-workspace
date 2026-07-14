@@ -63,8 +63,10 @@ export default function ReservationBoard({
   const [list, setList] = useState<ReservationItem[]>([]);
   const [err, setErr] = useState("");
   const [view, setView] = useState<"list" | "timeline">("timeline"); // 기본은 타임라인
-  const [weekEvents, setWeekEvents] = useState<any[]>([]);
+  const [weekRaw, setWeekRaw] = useState<ReservationItem[]>([]); // 그 주 원본 예약 (필터 전)
   const [weekRange, setWeekRange] = useState<{ from: string; to: string } | null>(null);
+  const [tlCategory, setTlCategory] = useState("all"); // 타임라인 종류 필터
+  const [tlTeam, setTlTeam] = useState("all"); // 타임라인 팀 필터
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ReservationItem | null>(null); // 수정 중인 예약
   const [query, setQuery] = useState("");
@@ -85,6 +87,42 @@ export default function ReservationBoard({
     return m;
   }, [resources]);
 
+  // 타임라인 이벤트 — 종류·팀 필터 적용 후 FullCalendar 형식으로 매핑
+  const weekEvents = useMemo(() => {
+    return weekRaw
+      .filter((r) => {
+        if (tlCategory !== "all" && resCatId.get(r.resource?.id ?? "") !== tlCategory) return false;
+        if (tlTeam !== "all" && r.team?.id !== tlTeam) return false;
+        return true;
+      })
+      .map((r) => {
+        const color = r.team?.color ?? "#8b95a1";
+        const returned = r.status === "returned";
+        const start = new Date(r.startAt);
+        const end = new Date(r.endAt);
+        // 하루를 넘는 기간 대여 → 상단 종일 줄에 가로 막대로
+        const multiDay = end.getTime() - start.getTime() >= 20 * 3600_000 || start.toDateString() !== end.toDateString();
+        const base = {
+          id: r.id,
+          title: `${r.resource?.name ?? "?"}${r.team ? ` · ${r.team.name}` : ""}${returned ? " ✓" : ""}`,
+          backgroundColor: color + (returned ? "12" : "26"),
+          borderColor: returned ? color + "55" : color,
+          textColor: returned ? color + "99" : color,
+          extendedProps: { resId: r.id, byId: r.reservedBy?.id, byName: r.reservedBy?.name ?? "?", returned },
+        };
+        if (multiDay) {
+          const endDay = new Date(end);
+          if (endDay.getHours() !== 0 || endDay.getMinutes() !== 0) endDay.setDate(endDay.getDate() + 1);
+          const ymd = (d: Date) => {
+            const p = (n: number) => String(n).padStart(2, "0");
+            return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+          };
+          return { ...base, start: ymd(start), end: ymd(endDay), allDay: true };
+        }
+        return { ...base, start: r.startAt, end: r.endAt };
+      });
+  }, [weekRaw, tlCategory, tlTeam, resCatId]);
+
   // 예약 가능한 팀 (팀 소속이면 팀원 포함 누구나 / 전사 편집자는 전체)
   const isOrgEditor = ["admin", "manager", "deputy", "secretary"].includes(user?.role ?? "");
   const canReserveOwn = ["leader", "vice_leader", "member"].includes(user?.role ?? "");
@@ -104,32 +142,7 @@ export default function ReservationBoard({
     } catch { setErr("예약을 불러오지 못했어요. 네트워크를 확인해주세요."); return; }
     if (!res.ok) return;
     const data = await res.json();
-    setWeekEvents((data.reservations ?? []).map((r: ReservationItem) => {
-      const color = r.team?.color ?? "#8b95a1";
-      const returned = r.status === "returned";
-      const start = new Date(r.startAt);
-      const end = new Date(r.endAt);
-      // 하루를 넘는 기간 대여 → 상단 종일 줄에 가로 막대로 (시간 그리드에 세로로 뭉개지지 않게)
-      const multiDay = end.getTime() - start.getTime() >= 20 * 3600_000 || start.toDateString() !== end.toDateString();
-      const base = {
-        id: r.id,
-        title: `${r.resource?.name ?? "?"}${r.team ? ` · ${r.team.name}` : ""}${returned ? " ✓" : ""}`,
-        backgroundColor: color + (returned ? "12" : "26"),
-        borderColor: returned ? color + "55" : color,
-        textColor: returned ? color + "99" : color,
-        extendedProps: { resId: r.id, byId: r.reservedBy?.id, byName: r.reservedBy?.name ?? "?", returned },
-      };
-      if (multiDay) {
-        const endDay = new Date(end);
-        if (endDay.getHours() !== 0 || endDay.getMinutes() !== 0) endDay.setDate(endDay.getDate() + 1);
-        const ymd = (d: Date) => {
-          const p = (n: number) => String(n).padStart(2, "0");
-          return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-        };
-        return { ...base, start: ymd(start), end: ymd(endDay), allDay: true };
-      }
-      return { ...base, start: r.startAt, end: r.endAt };
-    }));
+    setWeekRaw(data.reservations ?? []);
   }, []);
 
   // 대여 목록 — 기간 필터 지정 시 그 범위, 없으면 어제~60일 뒤 (과거 조회는 기간 필터로)
@@ -342,6 +355,20 @@ export default function ReservationBoard({
 
       {/* 타임라인 뷰 */}
       {view === "timeline" && (
+        <>
+        <div className="rsv2-filters">
+          <select className="rsv2-select" value={tlCategory} onChange={(e) => setTlCategory(e.target.value)} aria-label="종류 필터">
+            <option value="all">전체 종류</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select className="rsv2-select" value={tlTeam} onChange={(e) => setTlTeam(e.target.value)} aria-label="팀 필터">
+            <option value="all">전체 팀</option>
+            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          {(tlCategory !== "all" || tlTeam !== "all") && (
+            <button type="button" className="rsv-linkbtn" onClick={() => { setTlCategory("all"); setTlTeam("all"); }}>필터 초기화</button>
+          )}
+        </div>
         <div className="card cal-card" style={{ padding: 14 }}>
           <FullCalendar
             plugins={[timeGridPlugin]}
@@ -363,6 +390,7 @@ export default function ReservationBoard({
           />
           <p className="rsv-tip">예약을 클릭하면 상세를 볼 수 있어요. (본인 예약은 삭제 가능)</p>
         </div>
+        </>
       )}
 
       {modalOpen && (
