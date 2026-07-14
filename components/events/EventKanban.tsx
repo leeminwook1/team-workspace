@@ -464,7 +464,7 @@ function EventItemCalendar({ items, eventDate, onOpen }: { items: Item[]; eventD
   const initialDate = eventDate ?? items.find((i) => i.dueDate)?.dueDate ?? undefined;
 
   return (
-    <div className="card cal-card" style={{ padding: 14 }}>
+    <div className="card cal-card pc-cal" style={{ padding: 14 }}>
       <FullCalendar
         plugins={[dayGridPlugin]}
         initialView="dayGridMonth"
@@ -473,6 +473,7 @@ function EventItemCalendar({ items, eventDate, onOpen }: { items: Item[]; eventD
         height="auto"
         headerToolbar={{ left: "title", right: "prev,today,next" }}
         buttonText={{ today: "오늘" }}
+        dayCellContent={(arg) => String(arg.date.getDate())}
         dayMaxEvents={4}
         fixedWeekCount={false}
         moreLinkContent={(arg) => `+${arg.num}개`}
