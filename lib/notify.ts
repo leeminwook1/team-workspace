@@ -7,6 +7,8 @@ import { sendTelegram, telegramEnabled, esc, type TgButton } from "./telegram";
 const PREF_KEY: Record<string, "assign" | "due" | "late" | "directive" | "equip"> = {
   task_assigned: "assign",
   event_assigned: "assign",
+  change: "assign", // 담당 업무 일정 변경·삭제 알림 — 담당 지정 알림과 같은 스위치로 끔
+
   due: "due",
   late: "late", // 지연 업무 리마인더 — 오늘 마감(due)과 분리해 따로 끌 수 있게
   directive: "directive",

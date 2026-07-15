@@ -11,6 +11,14 @@ import { notify } from "@/lib/notify";
 import { Reservation } from "@/models/Reservation";
 import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, cancelTaskReservations, findUnavailableResources, unavailableMessage } from "@/lib/taskReservations";
 
+// 변경 알림 본문용 KST 포맷
+const fmtDateTime = (dt: Date | string) =>
+  new Date(dt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+const fmtTime = (dt: Date | string) =>
+  new Date(dt).toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
+const fmtDay = (dt: Date | string) =>
+  new Date(dt).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "short" });
+
 // GET /api/tasks/:id — 단건 조회 (검색 딥링크용). 조회 범위(역할) 검증.
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const { user, error } = await requireActiveUser();
@@ -77,6 +85,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const teamIds = (task.teamIds ?? []).map((t: any) => String(t));
   const assigneeIds = (task.assignees ?? []).map((a: any) => String(a));
+  // 일정 변경 감지용 원본 시각 (수정 적용 전에 캡처)
+  const oldStart = task.startDate, oldEnd = task.endDate, oldAllDay = task.allDay;
   const d = parsed.data;
   const keys = Object.keys(d);
   const statusOnly = keys.length === 1 && keys[0] === "status";
@@ -161,6 +171,27 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       link: `/calendar?task=${String(task._id)}`,
     });
   }
+  // 일정(시각)이 실제로 바뀌면 기존 담당자에게 변경 알림 — 방금 추가된 담당자(task_assigned로 이미 통지)·수정자 제외
+  const rescheduled =
+    (d.startDate !== undefined && new Date(oldStart).getTime() !== task.startDate.getTime()) ||
+    (d.endDate !== undefined && new Date(oldEnd).getTime() !== task.endDate.getTime()) ||
+    (d.allDay !== undefined && oldAllDay !== task.allDay);
+  if (rescheduled) {
+    const changeTargets = (task.assignees ?? [])
+      .map(String)
+      .filter((a: string) => a !== user.id && !addedAssignees.includes(a));
+    if (changeTargets.length > 0) {
+      const when = task.allDay
+        ? `${fmtDay(task.startDate)} 종일`
+        : `${fmtDateTime(task.startDate)} ~ ${fmtTime(task.endDate)}`;
+      await notify(changeTargets, {
+        type: "change",
+        title: "담당 업무 일정이 변경됐어요",
+        body: `${task.title}\n🕑 ${when}`,
+        link: `/calendar?task=${String(task._id)}`,
+      });
+    }
+  }
   return json({ id: String(task._id) });
 }
 
@@ -182,18 +213,28 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   // 소프트 삭제 — 30일 내 휴지통에서 복구 가능, 이후 크론이 완전 삭제
   const scope = new URL(req.url).searchParams.get("scope");
   if (scope === "series" && task.recurrenceId) {
-    const ids = (await Task.find({ recurrenceId: task.recurrenceId }).select("_id").lean()).map((t: any) => t._id);
+    const series: any[] = await Task.find({ recurrenceId: task.recurrenceId }).select("_id assignees").lean();
+    const ids = series.map((t: any) => t._id);
     const r = await Task.updateMany({ recurrenceId: task.recurrenceId }, { $set: { deletedAt: new Date() } });
     await cancelTaskReservations(ids); // 연동 장비 예약도 취소
     await logActivity({
       actorId: user.id, actorName: user.name, action: "delete",
       targetTitle: `${task.title} (반복 ${r.modifiedCount}건)`,
     });
+    // 반복 전체 회차 담당자 합집합에 삭제 알림 (본인 제외)
+    const delTargets = series.flatMap((t: any) => (t.assignees ?? []).map(String)).filter((a: string) => a !== user.id);
+    if (delTargets.length > 0) {
+      await notify(delTargets, { type: "change", title: "담당 업무(반복 일정)가 삭제됐어요", body: task.title });
+    }
     return json({ deleted: true, count: r.modifiedCount });
   }
 
   await Task.updateOne({ _id: params.id }, { $set: { deletedAt: new Date() } });
   await cancelTaskReservations([task._id]); // 연동 장비 예약도 취소
   await logActivity({ actorId: user.id, actorName: user.name, action: "delete", targetTitle: task.title });
+  const delTargets = (task.assignees ?? []).map(String).filter((a: string) => a !== user.id);
+  if (delTargets.length > 0) {
+    await notify(delTargets, { type: "change", title: "담당 업무가 삭제됐어요", body: task.title });
+  }
   return json({ deleted: true });
 }
