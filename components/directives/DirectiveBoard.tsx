@@ -3,6 +3,7 @@ import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { LoadError } from "@/components/LoadError";
@@ -66,6 +67,11 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
   const [statusFilter, setStatusFilter] = useState<string>("all"); // 상태 필터 칩
   const [teamFilter, setTeamFilter] = useState<string>("all"); // 팀 필터 (발신 그룹)
 
+  // 전역 검색에서 TODO를 고르면 ?q=제목 으로 들어옴 — 제목으로 필터
+  const searchParams = useSearchParams();
+  const [q, setQ] = useState("");
+  useEffect(() => { setQ(searchParams.get("q") ?? ""); }, [searchParams]);
+
   const [loadErr, setLoadErr] = useState(false);
   const load = useCallback(async () => {
     try {
@@ -88,7 +94,8 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
 
   const shown = items.filter((d) =>
     (statusFilter === "all" || d.status === statusFilter) &&
-    (teamFilter === "all" || d.team?.id === teamFilter)
+    (teamFilter === "all" || d.team?.id === teamFilter) &&
+    (!q || (d.title ?? "").toLowerCase().includes(q.toLowerCase()))
   );
   const countOf = (s: string) => items.filter((d) => d.status === s).length;
   const filterTeams = teams.filter((t) => items.some((d) => d.team?.id === t.id));

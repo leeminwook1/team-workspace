@@ -30,12 +30,12 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
   const close = useCallback(() => { setOpen(false); setQ(""); setResults(EMPTY); }, []);
   const [active, setActive] = useState(0); // 키보드(↑↓) 선택 인덱스
 
-  // 결과를 렌더 순서 그대로 평탄화 — ↑↓/Enter 탐색용
+  // 결과를 렌더 순서 그대로 평탄화 — ↑↓/Enter 탐색용. 장비·TODO는 목록에서 바로 찾도록 검색어를 넘김
   const flat: { href: string }[] = [
     ...results.tasks.map((t) => ({ href: `/calendar?task=${t.id}` })),
     ...results.events.map((e) => ({ href: `/events/${e.id}` })),
-    ...(results.resources ?? []).map(() => ({ href: "/resources" })),
-    ...results.directives.map(() => ({ href: "/directives" })),
+    ...(results.resources ?? []).map((r) => ({ href: `/resources?q=${encodeURIComponent(r.name)}` })),
+    ...results.directives.map((d) => ({ href: `/directives?q=${encodeURIComponent(d.title)}` })),
   ];
 
   // Ctrl/⌘+K — 어디서든 검색 열기
@@ -176,7 +176,7 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
                     <div className="gs-group">
                       <div className="gs-group-title">장비</div>
                       {results.resources.map((r, i) => (
-                        <button className={`gs-item${active === results.tasks.length + results.events.length + i ? " kb-active" : ""}`} onMouseEnter={() => setActive(results.tasks.length + results.events.length + i)} key={r.id} onClick={() => go("/resources")}>
+                        <button className={`gs-item${active === results.tasks.length + results.events.length + i ? " kb-active" : ""}`} onMouseEnter={() => setActive(results.tasks.length + results.events.length + i)} key={r.id} onClick={() => go(`/resources?q=${encodeURIComponent(r.name)}`)}>
                           <span className="gs-item-dots">
                             {r.category && <span className="dot" style={{ background: r.category.color }} />}
                           </span>
@@ -190,7 +190,7 @@ export default function GlobalSearch({ compact }: { compact?: boolean }) {
                     <div className="gs-group">
                       <div className="gs-group-title">TODO</div>
                       {results.directives.map((d, i) => (
-                        <button className={`gs-item${active === results.tasks.length + results.events.length + (results.resources?.length ?? 0) + i ? " kb-active" : ""}`} onMouseEnter={() => setActive(results.tasks.length + results.events.length + (results.resources?.length ?? 0) + i)} key={d.id} onClick={() => go("/directives")}>
+                        <button className={`gs-item${active === results.tasks.length + results.events.length + (results.resources?.length ?? 0) + i ? " kb-active" : ""}`} onMouseEnter={() => setActive(results.tasks.length + results.events.length + (results.resources?.length ?? 0) + i)} key={d.id} onClick={() => go(`/directives?q=${encodeURIComponent(d.title)}`)}>
                           <span className="gs-item-dots">
                             {d.team && <span className="dot" style={{ background: d.team.color }} />}
                           </span>

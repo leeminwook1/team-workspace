@@ -20,8 +20,14 @@ type Notice = {
   isNew: boolean;
 };
 
+// 피드백 게시판과 동일한 표기 — 최근은 상대시간, 오래되면 날짜
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "방금";
+  if (m < 60) return `${m}분 전`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}시간 전`;
+  return new Date(iso).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
 }
 
 export default function NoticeBoard({ canCreate }: { canCreate: boolean }) {
@@ -104,18 +110,27 @@ function NoticeCard({ notice: n, canEdit, onEdit, onChanged }: {
 
   async function togglePin() {
     setBusy(true);
-    await fetch(`/api/notices/${n.id}`, {
+    const res = await fetch(`/api/notices/${n.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pinned: !n.pinned }),
     });
     setBusy(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      await confirm({ title: "변경 실패", message: data.error ?? "처리하지 못했어요.", confirmText: "확인", alert: true });
+    }
     onChanged();
   }
   async function remove() {
     const ok = await confirm({ title: "공지 삭제", message: "이 공지를 삭제할까요?", confirmText: "삭제", danger: true });
     if (!ok) return;
     setBusy(true);
-    await fetch(`/api/notices/${n.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/notices/${n.id}`, { method: "DELETE" });
+    setBusy(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      await confirm({ title: "삭제 실패", message: data.error ?? "삭제하지 못했어요.", confirmText: "확인", alert: true });
+    }
     onChanged();
   }
 

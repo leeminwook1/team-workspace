@@ -168,7 +168,12 @@ function FeedbackCard({ fb, canManage, canEdit, myId, onEdit, onChanged }: {
     const ok = await confirm({ title: "피드백 삭제", message: "이 피드백을 삭제할까요?", confirmText: "삭제", danger: true });
     if (!ok) return;
     setBusy(true);
-    await fetch(`/api/feedback/${fb.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/feedback/${fb.id}`, { method: "DELETE" });
+    setBusy(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      await confirm({ title: "삭제 실패", message: data.error ?? "삭제하지 못했어요.", confirmText: "확인", alert: true });
+    }
     onChanged();
   }
   async function addComment(e: React.FormEvent) {

@@ -1171,17 +1171,43 @@ a { color: inherit; text-decoration: none; }
     -webkit-backdrop-filter: saturate(180%) blur(12px);
     border-top: 1px solid var(--line);
     padding-bottom: env(safe-area-inset-bottom);
-    overflow-x: auto; /* 메뉴가 많으면 옆으로 스크롤 */
-    scrollbar-width: none;
   }
-  .bottom-nav::-webkit-scrollbar { display: none; }
-  .bottom-nav a {
-    flex: 1; min-width: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  /* 5칸 균등 (핵심 4개 + 더보기) — 가로 스크롤 없이 한 화면에 */
+  .bottom-nav a, .bottom-nav .bn-more-btn {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
     height: var(--nav-h); color: var(--ink-faint); font-size: 11px; font-weight: 700;
-    transition: color 0.15s;
+    transition: color 0.15s; border: 0; background: transparent; font-family: inherit; cursor: pointer;
   }
-  .bottom-nav a.on { color: var(--primary); }
-  .bottom-nav a:active { background: var(--paper); }
+  .bottom-nav a.on, .bottom-nav .bn-more-btn.on { color: var(--primary); }
+  .bottom-nav a:active, .bottom-nav .bn-more-btn:active { background: var(--paper); }
+  /* 하단탭 숫자 뱃지 — 점 대신 건수 노출 */
+  .nav-badge.bn-badge {
+    position: absolute; top: -5px; right: -9px; margin: 0;
+    min-width: 15px; height: 15px; padding: 0 4px; font-size: 9.5px;
+    box-shadow: 0 0 0 2px var(--surface);
+  }
+  /* 더보기 시트 */
+  .bn-sheet-overlay {
+    position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,0.4);
+    display: flex; align-items: flex-end; animation: bn-fade 0.15s ease;
+  }
+  .bn-sheet {
+    width: 100%; background: var(--surface); border-radius: 20px 20px 0 0;
+    padding: 8px 16px calc(env(safe-area-inset-bottom) + 20px);
+    box-shadow: 0 -8px 30px rgba(0,0,0,0.18); animation: bn-up 0.2s ease;
+  }
+  .bn-sheet-grab { width: 38px; height: 4px; border-radius: 999px; background: var(--line); margin: 6px auto 14px; }
+  .bn-sheet-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 4px; }
+  .bn-sheet-item {
+    display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px;
+    border-radius: 14px; color: var(--ink-soft); font-size: 12px; font-weight: 700; text-align: center;
+    border: 0; background: transparent; font-family: inherit; cursor: pointer; width: 100%;
+  }
+  .bn-sheet-item:active { background: var(--surface-2); }
+  .bn-sheet-item.on { color: var(--primary); background: var(--accent-soft); }
+  .bn-sheet-ico { position: relative; display: inline-flex; }
+  @keyframes bn-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes bn-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
   .main { padding: 18px 16px calc(var(--nav-h) + env(safe-area-inset-bottom) + 20px); }
   .page-title { font-size: 21px; margin-bottom: 16px; }

@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useAutoRefresh } from "@/components/useAutoRefresh";
 import { ModalClose } from "@/components/ModalClose";
@@ -60,6 +61,7 @@ export default function ReservationBoard({
   const confirm = useConfirm();
 
   const [list, setList] = useState<ReservationItem[]>([]);
+  const [listLoaded, setListLoaded] = useState(false); // 첫 로드 전 '예약 없음' 깜빡임 방지
   const [err, setErr] = useState("");
   const [view, setView] = useState<"rtl" | "list">("rtl"); // 기본은 장비별 타임라인
   const [modalOpen, setModalOpen] = useState(false);
@@ -81,6 +83,12 @@ export default function ReservationBoard({
   });
   const [rtlRaw, setRtlRaw] = useState<ReservationItem[]>([]);
   const [rtlQuery, setRtlQuery] = useState(""); // 장비 이름 검색
+  // 전역 검색에서 장비를 고르면 ?q=이름 으로 들어옴 — 타임라인에 그 장비만 필터
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q) setRtlQuery(q);
+  }, [searchParams]);
   // 현재시각 선 — SSR과 클라이언트 시각이 달라 hydration 경고가 나므로 마운트 후에만 표시
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -140,19 +148,23 @@ export default function ReservationBoard({
     Math.min(24, Math.max(0, ((y - rect.top) / rect.height) * 24));
   const fmtH = (h: number) => h >= 24 ? "23:59" : `${String(Math.floor(h)).padStart(2, "0")}:${h % 1 !== 0 ? "30" : "00"}`;
 
-  // 이동·리사이즈 후 저장 — 검증 후 PATCH
+  // 이동·리사이즈 후 저장 — 검증 후 PATCH. 실패는 화면 어디서 조작하든 보이도록 중앙 알림으로.
   const saveAdjust = async (r: ReservationItem, dS: number, dE: number) => {
     const s = new Date(new Date(r.startAt).getTime() + dS * 3600_000);
     const en = new Date(new Date(r.endAt).getTime() + dE * 3600_000);
-    if (en.getTime() - s.getTime() < 30 * 60_000) { setErr("예약은 최소 30분 이상이어야 해요."); return; }
+    if (en.getTime() - s.getTime() < 30 * 60_000) {
+      await confirm({ title: "변경할 수 없어요", message: "예약은 최소 30분 이상이어야 해요.", confirmText: "확인", alert: true });
+      refreshRef.current();
+      return;
+    }
     const res = await fetch(`/api/reservations/${r.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ startAt: s.toISOString(), endAt: en.toISOString() }),
     });
     if (!res.ok) {
       const dd = await res.json().catch(() => ({}));
-      setErr(dd.error ?? "예약 변경에 실패했어요.");
-    } else setErr("");
+      await confirm({ title: "예약 변경 실패", message: dd.error ?? "예약을 옮기지 못했어요. (다른 예약과 겹칠 수 있어요)", confirmText: "확인", alert: true });
+    }
     refreshRef.current();
   };
 
@@ -364,6 +376,8 @@ export default function ReservationBoard({
       setErr("");
     } catch {
       setErr("예약 목록을 불러오지 못했어요. 네트워크 확인 후 새로고침해주세요.");
+    } finally {
+      setListLoaded(true);
     }
   }, [rangeFrom, rangeTo]);
 
@@ -923,7 +937,9 @@ export default function ReservationBoard({
             })}
           </div>
 
-          {shownGroups.length === 0 ? (
+          {!listLoaded && list.length === 0 ? (
+            <div className="card rsv2-empty">불러오는 중…</div>
+          ) : shownGroups.length === 0 ? (
             <div className="card rsv2-empty">
               {list.length === 0
                 ? (rangeFrom && rangeTo ? "이 기간에 예약이 없어요." : "아직 예약이 없어요. 위 예약하기 버튼으로 첫 예약을 해보세요!")
