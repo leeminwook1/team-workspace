@@ -86,6 +86,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   // 할 일 담당자가 새로 지정된 사람 수집 (본인 제외) — 저장 후 알림
   const newlyAssigned = new Map<string, string[]>();
   if (d.items !== undefined) {
+    // 할 일 전체 비우기(N>0 → 0)는 행사 삭제 권한이 있는 사람만 — 편집권한만으로 전체 파괴 방지
+    if ((ev.items ?? []).length > 0 && d.items.length === 0 && !canDeleteEvent(user, String(ev.createdBy))) {
+      return json({ error: "행사 할 일 전체를 비우려면 행사 삭제 권한이 필요합니다." }, 403);
+    }
     const before = new Map((ev.items ?? []).map((it: any) => [String(it._id), it.assigneeId ? String(it.assigneeId) : ""]));
     // 기존 _id는 유지하고, 새 항목만 생성 (id 안정성)
     ev.items = d.items.map((it) => ({

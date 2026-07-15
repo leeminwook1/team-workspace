@@ -74,7 +74,7 @@ export const eventUpdateSchema = z.object({
   eventDate: z.string().nullable().optional(),
   location: z.string().max(120).optional(),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
-  items: z.array(eventItemSchema).optional(),
+  items: z.array(eventItemSchema).max(200, "할 일은 200개까지예요").optional(),
   closed: z.boolean().optional(), // 행사 종료(보관)/재개
 });
 

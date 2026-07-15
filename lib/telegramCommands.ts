@@ -388,7 +388,9 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
 
   const allDay = !time;
   const startDate = allDay ? new Date(ymd(date.start)) : kstDate(date.start, time!.sh, time!.sm);
-  const endDate = allDay ? new Date(ymd(date.end)) : kstDate(date.start, time!.eh, time!.em);
+  // 기간(다중일) + 시간 지정이면 종료일은 date.end 기준 — 예전엔 date.start를 써서
+  // "7/20-7/22 14-16"이 7/20 하루로만 저장되고 답장은 3일로 안내되던 불일치를 수정
+  const endDate = allDay ? new Date(ymd(date.end)) : kstDate(date.end, time!.eh, time!.em);
 
   // 중복 감지 — 같은 기간에 비슷한 제목의 일정이 있으면 새로 만들지 않고 참여를 제안 (!제목 = 강제 등록)
   if (!force) {
@@ -496,7 +498,8 @@ async function createPersonalEvent(user: SessionUser, args: string): Promise<TgR
 
   const allDay = !time;
   const startDate = allDay ? new Date(ymd(date.start)) : kstDate(date.start, time!.sh, time!.sm);
-  const endDate = allDay ? new Date(ymd(date.end)) : kstDate(date.start, time!.eh, time!.em);
+  // 기간(다중일) + 시간 지정이면 종료일은 date.end 기준 (하루로 뭉개지던 버그 수정)
+  const endDate = allDay ? new Date(ymd(date.end)) : kstDate(date.end, time!.eh, time!.em);
 
   const ev = await PersonalEvent.create({ userId: user.id, title, memo: "", location, startDate, endDate, allDay });
   await touchChanged("personal"); // 웹 '내 캘린더' 자동 반영
@@ -707,13 +710,17 @@ async function completeMyTask(user: SessionUser, args: string): Promise<TgReply>
     target = matches[0];
   }
 
-  const doc: any = await Task.findById(target._id);
-  if (!doc) return "❌ 이미 삭제된 업무예요.";
-  if (doc.status === "done") return "이미 완료된 업무예요.";
-  doc.status = "done";
-  await doc.save();
-  await logActivity({ actorId: user.id, actorName: user.name ?? "", action: "status", targetTitle: doc.title, meta: { status: "done", detail: "텔레그램 /완료" } });
-  return `✅ 완료 처리했어요: ${doc.title} 👏`;
+  if (target.status === "done") return "이미 완료된 업무예요.";
+  // 번호는 /내일정 이후 목록이 바뀌면 다른 업무를 가리킬 수 있어(TOCTOU) 바로 처리하지 않는다.
+  // id를 담은 확인 버튼으로 되묻고, done: 콜백이 id 기준 + 권한검사로 완료 처리(웹과 동일).
+  const end = new Date(target.endDate);
+  const dk = target.allDay ? end : new Date(end.getTime() + KST);
+  const dueStr = `${dk.getUTCMonth() + 1}/${dk.getUTCDate()}`;
+  return {
+    text: `아래 업무를 완료 처리할까요?\n<b>${esc(target.title)}</b> (${dueStr}까지)`,
+    html: true,
+    buttons: [[{ text: "✅ 완료 처리", data: `done:${target._id}` }]],
+  };
 }
 
 // ── /검색 — 일정 제목 검색 (조회 범위는 역할에 따름, 최근 30일~미래) ──

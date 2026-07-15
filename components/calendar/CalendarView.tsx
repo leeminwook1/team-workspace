@@ -317,7 +317,8 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           <button
             className="cal1c-add"
             onClick={() => {
-              setCreateDate(new Date().toISOString().slice(0, 10));
+              // KST 기준 오늘 — toISOString()은 UTC라 KST 00~09시엔 어제가 기본값으로 잡히던 버그 수정
+              setCreateDate(new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10));
               setCreateOpen(true);
             }}
           >
