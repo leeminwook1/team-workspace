@@ -80,6 +80,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const parsed = taskUpdateSchema.safeParse(body);
   if (!parsed.success) return json({ error: parsed.error.issues[0].message }, 400);
 
+  // 반복 시리즈 일괄 수정 범위 — this(기본) | following(이후 전체) | all(전체)
+  const seriesScope = new URL(req.url).searchParams.get("scope");
+
   await connectDB();
   const task: any = await Task.findById(params.id);
   if (!task) return json({ error: "업무를 찾을 수 없습니다." }, 404);
@@ -198,6 +201,37 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       });
     }
   }
+  // 반복 시리즈 일괄 수정 — 바꾼 값(제목·담당자·시각 등)을 대상 회차에 함께 적용.
+  // 날짜는 회차별로 유지하고, 시각 변경은 이 회차가 이동한 만큼(delta) 동일하게 밀어준다.
+  // (반복 일정은 생성 시 장비 연동이 금지돼 있어 예약 동기화는 불필요)
+  if ((seriesScope === "following" || seriesScope === "all") && task.recurrenceId) {
+    const sq: any = { recurrenceId: task.recurrenceId, _id: { $ne: task._id }, deletedAt: null };
+    if (seriesScope === "following") sq.startDate = { $gt: oldStart };
+    const siblings: any[] = await Task.find(sq).select("_id startDate status");
+    const timeChanged2 = d.startDate !== undefined || d.endDate !== undefined || d.allDay !== undefined;
+    const startDelta = task.startDate.getTime() - new Date(oldStart).getTime();
+    const newDuration = task.endDate.getTime() - task.startDate.getTime();
+    const meta: any = {};
+    if (d.title !== undefined) meta.title = task.title;
+    if (d.description !== undefined) meta.description = task.description;
+    if (d.categoryId !== undefined) meta.categoryId = task.categoryId;
+    if (d.priority !== undefined) meta.priority = task.priority;
+    if (d.location !== undefined) meta.location = task.location;
+    if (d.allDay !== undefined) meta.allDay = task.allDay;
+    if (d.teamIds !== undefined) meta.teamIds = task.teamIds; // 담당자는 새 팀 기준으로 검증됨 → 팀도 함께 전파
+    if (d.assignees !== undefined) meta.assignees = task.assignees;
+    for (const s of siblings) {
+      const set: any = { ...meta };
+      // 이미 완료된 과거 회차는 시각을 옮기지 않는다(이력 보존). 메타데이터(제목 등)만 반영
+      if (timeChanged2 && s.status !== "done") {
+        const ns = new Date(new Date(s.startDate).getTime() + startDelta);
+        set.startDate = ns;
+        set.endDate = new Date(ns.getTime() + newDuration);
+      }
+      if (Object.keys(set).length > 0) await Task.updateOne({ _id: s._id }, { $set: set });
+    }
+  }
+
   const warning = raced.length > 0 ? `동시 예약으로 일부 장비 연동에 실패했어요: ${raced.join(", ")}` : undefined;
   return json({ id: String(task._id), ...(warning ? { warning } : {}) });
 }

@@ -856,6 +856,8 @@ function TaskFormModal({
   const [assignees, setAssignees] = useState<Set<string>>(new Set(task ? task.assignees.map((a) => a.id) : []));
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  // 반복 일정 수정 범위 — 이 회차만 / 이후 전체 / 전체
+  const [seriesScope, setSeriesScope] = useState<"this" | "following" | "all">("this");
 
   // 선택된 팀들의 담당 후보(멤버) union 로드
   const loadMembers = useCallback(async (ids: string[]) => {
@@ -898,7 +900,8 @@ function TaskFormModal({
           endDate: new Date(`${startDate}T${endTime}`).toISOString(),
           allDay: false,
         };
-    const res = await fetch(isEdit ? `/api/tasks/${task!.id}` : "/api/tasks", {
+    const editUrl = `/api/tasks/${task!.id}${isEdit && task!.recurrenceId && seriesScope !== "this" ? `?scope=${seriesScope}` : ""}`;
+    const res = await fetch(isEdit ? editUrl : "/api/tasks", {
       method: isEdit ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1024,6 +1027,22 @@ function TaskFormModal({
                 </div>
               </div>
             </>
+          )}
+
+          {isEdit && task?.recurrenceId && (
+            <div className="field">
+              <label>반복 일정 — 수정 범위</label>
+              <div className="seg" role="tablist" aria-label="수정 범위">
+                <button type="button" className={seriesScope === "this" ? "on" : ""} onClick={() => setSeriesScope("this")}>이 회차만</button>
+                <button type="button" className={seriesScope === "following" ? "on" : ""} onClick={() => setSeriesScope("following")}>이후 전체</button>
+                <button type="button" className={seriesScope === "all" ? "on" : ""} onClick={() => setSeriesScope("all")}>전체</button>
+              </div>
+              {seriesScope !== "this" && (
+                <p className="muted-note" style={{ marginTop: 6 }}>
+                  제목·담당자·시각 등 바꾼 값이 {seriesScope === "following" ? "이 회차와 이후 회차" : "모든 회차"}에 함께 적용돼요. (각 회차의 날짜는 유지, 시각만 같은 폭으로 이동)
+                </p>
+              )}
+            </div>
           )}
 
           {!isEdit && (

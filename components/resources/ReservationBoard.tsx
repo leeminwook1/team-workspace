@@ -96,6 +96,7 @@ export default function ReservationBoard({
   // 왼쪽 패널 선택 — 전체 / 분류(하루 타임라인) / 장비 하나(주간 뷰)
   const [rtlSel, setRtlSel] = useState<{ type: "all" } | { type: "cat"; id: string } | { type: "res"; id: string }>({ type: "all" });
   const [rtlFreeOnly, setRtlFreeOnly] = useState(false); // 그 날 예약 없는(빈) 장비만
+  const [rtlTeam, setRtlTeam] = useState("all"); // 팀 필터 — 그 팀 예약 바만 표시
 
   // 즐겨찾기 장비 — 트리 상단 고정, 계정에 저장
   const [favs, setFavs] = useState<Set<string>>(() => new Set(initialFavs ?? []));
@@ -721,6 +722,10 @@ export default function ReservationBoard({
                 >
                   빈 장비만
                 </button>
+                <select className="rsv2-select" value={rtlTeam} onChange={(e) => setRtlTeam(e.target.value)} aria-label="팀 필터" title="예약 팀으로 거르기">
+                  <option value="all">전체 팀</option>
+                  {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
                 <div className="avb-nav">
                   <button className="avb-nav-btn" aria-label="이전 날" onClick={() => setRtlDate(addDays(rtlDate, -1))}>‹</button>
                   <button className="avb-nav-btn" onClick={() => setRtlDate(todayYmd)}>오늘</button>
@@ -764,7 +769,9 @@ export default function ReservationBoard({
                           )}
                           {!closed && g.items.map((res) => {
                             const bad = res.status && res.status !== "available";
-                            const items = rtlByResource.get(res.id) ?? [];
+                            const allDayItems = rtlByResource.get(res.id) ?? [];
+                            // 팀 필터 — 선택 팀의 예약 바만 표시
+                            const items = rtlTeam === "all" ? allDayItems : allDayItems.filter((r) => r.team?.id === rtlTeam);
                             // '빈 장비만' — 이 날 예약(booked)이 있는 장비·수리중 장비는 숨김
                             if (rtlFreeOnly && (bad || items.some((r) => r.status === "booked"))) return null;
                             const clickable = canReserve && !bad;
