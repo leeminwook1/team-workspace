@@ -5,6 +5,7 @@ import { Event } from "@/models/Event";
 import { User } from "@/models/User";
 import { Team } from "@/models/Team";
 import { Reservation } from "@/models/Reservation";
+import { Comment } from "@/models/Comment";
 import "@/models/Resource";
 import { json } from "@/lib/api";
 import { notify } from "@/lib/notify";
@@ -220,30 +221,27 @@ export async function GET(req: Request) {
       new Date(d).toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
     const dowOf = (d: Date) => ["일", "월", "화", "수", "목", "금", "토"][new Date(new Date(d).getTime() + 9 * 3600_000).getUTCDay()];
     for (const team of teams) {
-      const dayTasks: any[] = await Task.find({
-        teamIds: team._id, startDate: { $lt: end }, endDate: { $gt: start },
-      }).sort({ allDay: -1, startDate: 1 }).limit(12).select("title allDay startDate status").lean();
-      const dayResv: any[] = await Reservation.find({
-        teamId: team._id, status: "booked", startAt: { $lt: end }, endAt: { $gt: start },
-      }).populate("resourceId", "name").populate("reservedBy", "name").sort({ startAt: 1 }).limit(12).lean();
+      // 팀별 읽기 쿼리는 서로 독립 — 병렬로 묶어 라운드트립 단축 (전송만 순차: 텔레그램 rate limit 보호)
+      const [dayTasks, dayResv, weekTasks, dayAbs]: any[][] = await Promise.all([
+        Task.find({ teamIds: team._id, startDate: { $lt: end }, endDate: { $gt: start } })
+          .sort({ allDay: -1, startDate: 1 }).limit(12).select("title allDay startDate status").lean(),
+        Reservation.find({ teamId: team._id, status: "booked", startAt: { $lt: end }, endAt: { $gt: start } })
+          .populate("resourceId", "name").populate("reservedBy", "name").sort({ startAt: 1 }).limit(12).lean(),
+        isMonday
+          ? Task.find({ teamIds: team._id, startDate: { $lt: weekEnd }, endDate: { $gt: end } })
+              .sort({ startDate: 1 }).limit(20).select("title allDay startDate").lean()
+          : Promise.resolve([] as any[]),
+        Absence.find({ teamId: team._id, startDate: { $lt: end }, endDate: { $gte: start } })
+          .populate("userId", "name").limit(12).lean(),
+      ]);
 
-      // 월요일엔 이번 주(월~일) 요약을 함께 — 오늘 이후 요일별 일정
+      // 월요일 주간 섹션 — 오늘 이후 요일별 일정
       let weekSection = "";
-      if (isMonday) {
-        const weekTasks: any[] = await Task.find({
-          teamIds: team._id, startDate: { $lt: weekEnd }, endDate: { $gt: end }, // 오늘(위에 이미 표시) 이후
-        }).sort({ startDate: 1 }).limit(20).select("title allDay startDate").lean();
-        if (weekTasks.length > 0) {
-          const lines = weekTasks.map((t) =>
-            `· ${dowOf(t.startDate)} ${t.allDay ? "" : fmtT(t.startDate) + " "}${esc(t.title)}`);
-          weekSection = `\n🗓 이번 주 일정 ${weekTasks.length}건\n${lines.join("\n")}`;
-        }
+      if (isMonday && weekTasks.length > 0) {
+        const lines = weekTasks.map((t) =>
+          `· ${dowOf(t.startDate)} ${t.allDay ? "" : fmtT(t.startDate) + " "}${esc(t.title)}`);
+        weekSection = `\n🗓 이번 주 일정 ${weekTasks.length}건\n${lines.join("\n")}`;
       }
-
-      // 오늘 부재 — 팀원 연차·출장 명단
-      const dayAbs: any[] = await Absence.find({
-        teamId: team._id, startDate: { $lt: end }, endDate: { $gte: start },
-      }).populate("userId", "name").limit(12).lean();
 
       if (dayTasks.length === 0 && dayResv.length === 0 && dayAbs.length === 0 && !weekSection) continue; // 빈 브리핑은 보내지 않음
 
@@ -265,9 +263,23 @@ export async function GET(req: Request) {
     }
   }
 
-  // 7) 소프트 삭제된 행사·업무 완전 삭제 (30일 경과분)
-  const purge = await Event.deleteMany({ deletedAt: { $lt: new Date(Date.now() - 30 * 86_400_000) } });
-  const purgeTasks = await Task.deleteMany({ deletedAt: { $ne: null, $lt: new Date(Date.now() - 30 * 86_400_000) } });
+  // 7) 소프트 삭제된 행사·업무 완전 삭제 (30일 경과분) + 고아 댓글·오래된 취소 예약 정리
+  const softCut = new Date(Date.now() - 30 * 86_400_000);
+  const purge = await Event.deleteMany({ deletedAt: { $lt: softCut } });
+  // 업무 완전삭제 전에 id를 모아 댓글까지 함께 정리 (고아 댓글 방지)
+  const toPurge: any[] = await Task.find({ deletedAt: { $ne: null, $lt: softCut } }).select("_id").lean();
+  const purgeIds = toPurge.map((t) => t._id);
+  const purgeTasks = purgeIds.length > 0
+    ? await Task.deleteMany({ _id: { $in: purgeIds } })
+    : { deletedCount: 0 };
+  let purgedComments = 0;
+  if (purgeIds.length > 0) {
+    purgedComments = (await Comment.deleteMany({ taskId: { $in: purgeIds } })).deletedCount ?? 0;
+  }
+  // 취소된 예약 90일 경과분 정리 (반납 완료는 이력·통계용으로 보존)
+  const purgedResv = (await Reservation.deleteMany({
+    status: "cancelled", updatedAt: { $lt: new Date(Date.now() - 90 * 86_400_000) },
+  })).deletedCount ?? 0;
 
   // 8) 반복 일정 롤링 연장 — 한 번에 60개 상한으로 잘렸던 시리즈를 이어서 생성
   let recurExtended = 0;
@@ -311,6 +323,7 @@ export async function GET(req: Request) {
     lateTasks: lateTasks.length, lateUserNotified, lateLeadNotified,
     overdueReservations: overdueResv.length, overdueResvNotified,
     tomorrowPickups: tomorrowResv.length, pickupNotified, teamBriefings: briefed,
-    purgedEvents: purge.deletedCount, purgedTasks: purgeTasks.deletedCount, recurExtended,
+    purgedEvents: purge.deletedCount, purgedTasks: purgeTasks.deletedCount,
+    purgedComments, purgedResv, recurExtended,
   });
 }

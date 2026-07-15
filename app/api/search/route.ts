@@ -16,7 +16,8 @@ export async function GET(req: Request) {
   if (error) return error;
 
   const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
-  if (q.length < 1) return json({ tasks: [], events: [], directives: [], resources: [] });
+  // 최소 2자 — 1자 질의로 컬렉션 광범위 스캔·열거하는 것 차단
+  if (q.length < 2) return json({ tasks: [], events: [], directives: [], resources: [] });
   const rx = new RegExp(escapeRegex(q), "i");
 
   await connectDB();

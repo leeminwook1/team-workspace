@@ -26,5 +26,6 @@ const FeedbackSchema = new Schema(
 );
 
 FeedbackSchema.index({ status: 1, createdAt: -1 });
+FeedbackSchema.index({ createdAt: -1 }); // 목록 기본 정렬(최신순)
 
 export const Feedback = models.Feedback || model("Feedback", FeedbackSchema);

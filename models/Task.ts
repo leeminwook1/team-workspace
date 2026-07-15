@@ -34,7 +34,10 @@ const TaskSchema = new Schema(
 // 설계 4.7 인덱스
 TaskSchema.index({ teamIds: 1, startDate: 1 });
 TaskSchema.index({ assignees: 1, startDate: 1 });
+TaskSchema.index({ assignees: 1, endDate: 1 }); // 내 담당(홈·iCal·/완료) — endDate 정렬
 TaskSchema.index({ status: 1, endDate: 1 }); // 크론(마감·지연)·팀 현황 집계용
+TaskSchema.index({ startDate: 1, endDate: 1 }); // 중복감지(팀무관 기간겹침)·기간 목록 스캔
+TaskSchema.index({ recurrenceId: 1, startDate: 1 }); // 반복 롤링 연장 조회
 TaskSchema.index({ deletedAt: 1 }, { sparse: true }); // 휴지통·퍼지용
 
 // 소프트 삭제 기본 필터 — deletedAt 있는 문서는 모든 조회에서 제외
