@@ -66,6 +66,12 @@ const eventItemSchema = z.object({
   dueDate: z.string().nullable().optional(),
   note: z.string().max(500).optional().default(""),
 });
+const eventProgramSchema = z.object({
+  id: z.string().optional(), // 기존 항목이면 _id 유지
+  time: z.string().max(40).optional().default(""),
+  title: z.string().min(1, "순서 내용을 입력하세요").max(200),
+  note: z.string().max(200).optional().default(""),
+});
 export const eventUpdateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),
@@ -75,6 +81,7 @@ export const eventUpdateSchema = z.object({
   location: z.string().max(120).optional(),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
   items: z.array(eventItemSchema).max(200, "할 일은 200개까지예요").optional(),
+  program: z.array(eventProgramSchema).max(100, "식순은 100줄까지예요").optional(),
   closed: z.boolean().optional(), // 행사 종료(보관)/재개
 });
 

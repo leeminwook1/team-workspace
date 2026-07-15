@@ -14,6 +14,16 @@ const EventItemSchema = new Schema(
   { _id: true }
 );
 
+// 식순·타임테이블 한 줄 — 시간(자유 텍스트)·순서명·담당/비고. 입력 순서가 곧 진행 순서.
+const EventProgramSchema = new Schema(
+  {
+    time: { type: String, default: "", trim: true, maxlength: 40 }, // "14:00" 또는 "14:00–14:10" 등 자유 입력
+    title: { type: String, required: true, trim: true, maxlength: 200 },
+    note: { type: String, default: "", trim: true, maxlength: 200 }, // 담당·비고
+  },
+  { _id: true }
+);
+
 const EventSchema = new Schema(
   {
     title: { type: String, required: true, trim: true, maxlength: 200 },
@@ -24,6 +34,7 @@ const EventSchema = new Schema(
     location: { type: String, default: "" },
     priority: { type: String, enum: ["low", "normal", "high", "urgent"], default: "normal" },
     items: { type: [EventItemSchema], default: [] }, // 행사 안의 투두(칸반 카드)
+    program: { type: [EventProgramSchema], default: [] }, // 식순·타임테이블
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
     closedAt: { type: Date, default: null }, // 행사 종료(보관) 시각 — null이면 진행 중
     deletedAt: { type: Date, default: null }, // 소프트 삭제 — 30일 내 복구 가능, 이후 크론이 완전 삭제

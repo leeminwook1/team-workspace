@@ -17,9 +17,11 @@ import { EventFormModal } from "@/components/events/EventList";
 type Team = { id: string; name: string; color: string };
 type Person = { id: string; name: string } | null;
 type Item = { id: string; title: string; status: "todo" | "doing" | "hold" | "done"; team: Team | null; assignee: Person; dueDate: string | null; note: string };
+type ProgramRow = { id: string; time: string; title: string; note: string };
 type EventFull = {
   id: string; title: string; description: string; teams: Team[]; manager: Person;
   eventDate: string | null; location: string; priority: string; createdBy: string | null; items: Item[];
+  program: ProgramRow[];
   closedAt: string | null;
 };
 
@@ -64,6 +66,7 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
   const [itemModal, setItemModal] = useState<{ status: Item["status"]; item?: Item } | null>(null);
   const [editEvent, setEditEvent] = useState(false);
+  const [programOpen, setProgramOpen] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
@@ -82,7 +85,7 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
   }, [eventId]);
   useEffect(() => { load(); }, [load]);
   // 자동 반영 — 단, 모달·드래그 중에는 건너뛴다 (작업 방해 방지)
-  useAutoRefresh(() => { if (!itemModal && !editEvent && !dragId) load(); }, ["event"]);
+  useAutoRefresh(() => { if (!itemModal && !editEvent && !dragId && !programOpen) load(); }, ["event"]);
 
   // 담당자 후보 = 전체 활성 사용자 (팀 무관 지정 가능)
   useEffect(() => {
@@ -111,6 +114,15 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
     await fetch(`/api/events/${eventId}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items: toPayload(items) }),
+    });
+    load();
+  }, [eventId, load]);
+
+  const persistProgram = useCallback(async (program: ProgramRow[]) => {
+    setEv((prev) => (prev ? { ...prev, program } : prev));
+    await fetch(`/api/events/${eventId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ program: program.map((p) => ({ id: p.id, time: p.time, title: p.title, note: p.note })) }),
     });
     load();
   }, [eventId, load]);
@@ -250,6 +262,35 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
         </div>
       )}
 
+      {/* 식순·타임테이블 */}
+      {(canManage || ev.program.length > 0) && (
+        <div className="card ev-program">
+          <div className="ev-program-head">
+            <h2><Icon name="clock" size={17} /> 식순</h2>
+            {canManage && (
+              <button className="btn btn-line btn-sm" onClick={() => setProgramOpen(true)}>
+                {ev.program.length > 0 ? "식순 편집" : "식순 만들기"}
+              </button>
+            )}
+          </div>
+          {ev.program.length === 0 ? (
+            <p className="muted-note" style={{ padding: "6px 2px" }}>
+              {canManage ? "행사 진행 순서(식순)를 등록하면 여기에 시간표로 표시돼요." : "등록된 식순이 없어요."}
+            </p>
+          ) : (
+            <ol className="ev-prog-list">
+              {ev.program.map((p) => (
+                <li className="ev-prog-row" key={p.id}>
+                  <span className="ev-prog-time">{p.time || "—"}</span>
+                  <span className="ev-prog-title">{p.title}</span>
+                  {p.note && <span className="ev-prog-note">{p.note}</span>}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+
       {/* 필터 + 뷰 전환 */}
       <div className="ev-controls">
         <div className="filter-row" style={{ margin: 0 }}>
@@ -330,6 +371,70 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
       {editEvent && (
         <EventFormModal teams={allTeams} ev={ev} onClose={() => setEditEvent(false)} onSaved={() => { setEditEvent(false); load(); }} />
       )}
+      {programOpen && (
+        <ProgramModal
+          initial={ev.program}
+          onClose={() => setProgramOpen(false)}
+          onSave={(rows) => { setProgramOpen(false); persistProgram(rows); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ProgramModal({ initial, onClose, onSave }: { initial: ProgramRow[]; onClose: () => void; onSave: (rows: ProgramRow[]) => void }) {
+  const [rows, setRows] = useState<ProgramRow[]>(initial.length ? initial : [{ id: uid(), time: "", title: "", note: "" }]);
+  const [err, setErr] = useState("");
+  const upd = (id: string, patch: Partial<ProgramRow>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const add = () => setRows((rs) => [...rs, { id: uid(), time: "", title: "", note: "" }]);
+  const del = (id: string) => setRows((rs) => rs.filter((r) => r.id !== id));
+  const moveRow = (i: number, dir: -1 | 1) => setRows((rs) => {
+    const j = i + dir;
+    if (j < 0 || j >= rs.length) return rs;
+    const n = [...rs];
+    [n[i], n[j]] = [n[j], n[i]];
+    return n;
+  });
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    // 완전히 빈 줄은 버리고, 시간·비고만 있고 순서명이 없는 줄은 막는다
+    const nonEmpty = rows.filter((r) => r.time.trim() || r.title.trim() || r.note.trim());
+    if (nonEmpty.some((r) => !r.title.trim())) { setErr("시간·비고가 있는 줄은 순서 내용도 입력해주세요."); return; }
+    onSave(nonEmpty.map((r) => ({ id: r.id, time: r.time.trim(), title: r.title.trim(), note: r.note.trim() })));
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
+        <h2>식순 편집</h2>
+        <p className="page-sub" style={{ marginTop: -4 }}>시간은 자유롭게 적어요 (예: 14:00 또는 14:00–14:10). 위/아래로 순서를 조정하세요.</p>
+        <form onSubmit={submit}>
+          <div className="prog-edit">
+            {rows.map((r, i) => (
+              <div className="prog-edit-row" key={r.id}>
+                <div className="prog-edit-move">
+                  <button type="button" className="kb-move-btn" disabled={i === 0} onClick={() => moveRow(i, -1)} aria-label="위로"><Icon name="chevronL" size={15} /></button>
+                  <button type="button" className="kb-move-btn" disabled={i === rows.length - 1} onClick={() => moveRow(i, 1)} aria-label="아래로"><Icon name="chevronR" size={15} /></button>
+                </div>
+                <input className="prog-edit-time" value={r.time} onChange={(e) => upd(r.id, { time: e.target.value })} placeholder="14:00" maxLength={40} />
+                <input className="prog-edit-title" value={r.title} onChange={(e) => upd(r.id, { title: e.target.value })} placeholder="순서 (예: 개회 선언)" maxLength={200} />
+                <input className="prog-edit-note" value={r.note} onChange={(e) => upd(r.id, { note: e.target.value })} placeholder="담당·비고" maxLength={200} />
+                <button type="button" className="prog-edit-del" onClick={() => del(r.id)} aria-label="이 줄 삭제">×</button>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="btn btn-line btn-sm" onClick={add} style={{ marginTop: 8 }}>
+            <Icon name="plus" size={14} strokeWidth={2.4} /> 순서 추가
+          </button>
+          {err && <p className="err-msg">{err}</p>}
+          <div className="modal-actions">
+            <button className="btn btn-primary">저장</button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

@@ -24,6 +24,8 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     dueDate: null, // 마감 비움
     note: it.note ?? "",
   }));
+  // 식순은 템플릿 가치가 커서 그대로 복사 (시간·순서·비고 유지)
+  const program = (src.program ?? []).map((p: any) => ({ time: p.time ?? "", title: p.title, note: p.note ?? "" }));
 
   const created = await Event.create({
     title,
@@ -34,6 +36,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     location: src.location ?? "",
     priority: src.priority ?? "normal",
     items,
+    program,
     createdBy: user.id, // 복제한 사람이 소유자
   });
 

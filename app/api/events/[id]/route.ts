@@ -30,6 +30,12 @@ function serializeFull(e: any) {
       dueDate: it.dueDate ?? null,
       note: it.note ?? "",
     })),
+    program: (e.program ?? []).map((p: any) => ({
+      id: String(p._id),
+      time: p.time ?? "",
+      title: p.title,
+      note: p.note ?? "",
+    })),
     createdAt: e.createdAt,
     closedAt: e.closedAt ?? null,
   };
@@ -112,6 +118,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     }
   }
 
+  // 식순·타임테이블 — items와 동일하게 _id 유지하며 통째로 갱신
+  if (d.program !== undefined) {
+    ev.program = d.program.map((p) => ({
+      ...(p.id && mongoose.isValidObjectId(p.id) ? { _id: p.id } : {}),
+      time: p.time ?? "",
+      title: p.title,
+      note: p.note ?? "",
+    }));
+  }
+
   await ev.save();
 
   // 알림 — 행사 담당자 변경 + 할 일 담당자 신규 지정
@@ -129,9 +145,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     });
   }
 
-  // 행사 필드 수정만 로그 (투두 이동/편집만 있는 경우는 로그 스팸 방지)
+  // 행사 필드 수정만 로그 (투두·식순 편집만 있는 경우는 로그 스팸 방지)
   const keys = Object.keys(d);
-  const itemsOnly = keys.length === 1 && keys[0] === "items";
+  const itemsOnly = keys.length >= 1 && keys.every((k) => k === "items" || k === "program");
   if (!itemsOnly) {
     await logActivity({ actorId: user.id, actorName: user.name, action: "update", targetType: "event", targetTitle: ev.title });
   } else {
