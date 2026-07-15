@@ -189,6 +189,7 @@ function DirectiveCard({
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [stLabel, stColor] = STATUS[dir.status];
   const prio = PRIO[dir.priority] ?? PRIO.normal;
   const due = fmtDue(dir.dueDate);
@@ -301,6 +302,9 @@ function DirectiveCard({
             </>
           )}
           {canDelete && (
+            <button className="btn btn-line btn-xs" disabled={busy} onClick={() => setEditOpen(true)}>수정</button>
+          )}
+          {canDelete && (
             <button className="btn btn-danger btn-xs dir-del" disabled={busy} onClick={remove}>삭제</button>
           )}
         </div>
@@ -308,6 +312,9 @@ function DirectiveCard({
 
       {assignOpen && dir.team && (
         <AssignModal dir={dir} teamId={dir.team.id} onClose={() => setAssignOpen(false)} onSaved={() => { setAssignOpen(false); onChanged(); }} />
+      )}
+      {editOpen && (
+        <EditModal dir={dir} onClose={() => setEditOpen(false)} onSaved={() => { setEditOpen(false); onChanged(); }} />
       )}
     </div>
   );
@@ -446,6 +453,69 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">
             <button className="btn btn-primary" disabled={busy}>{busy ? "내리는 중…" : "TODO 내리기"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EditModal({ dir, onClose, onSaved }: { dir: Directive; onClose: () => void; onSaved: () => void }) {
+  const [title, setTitle] = useState(dir.title);
+  const [body, setBody] = useState(dir.body ?? "");
+  // dueDate는 UTC 자정으로 저장돼 slice(0,10)이 원래 yyyy-mm-dd로 왕복 — KST 어긋남 없음
+  const [dueDate, setDueDate] = useState(dir.dueDate ? new Date(dir.dueDate).toISOString().slice(0, 10) : "");
+  const [priority, setPriority] = useState(dir.priority || "normal");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    if (!title.trim()) { setErr("제목을 입력하세요."); return; }
+    setBusy(true);
+    const res = await fetch(`/api/directives/${dir.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: title.trim(), body, dueDate: dueDate || null, priority }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) { setErr(data.error ?? "수정 실패"); return; }
+    onSaved();
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
+        <h2>TODO 수정</h2>
+        <form onSubmit={submit}>
+          <div className="field">
+            <label>제목</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} required />
+          </div>
+          <div className="field">
+            <label>TODO 내용 (선택)</label>
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="세부 내용" />
+          </div>
+          <div className="form-grid-2">
+            <div className="field">
+              <label>마감일 (선택)</label>
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>우선순위</label>
+              <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+                <option value="low">낮음</option>
+                <option value="normal">보통</option>
+                <option value="high">높음</option>
+                <option value="urgent">긴급</option>
+              </select>
+            </div>
+          </div>
+          {err && <p className="err-msg">{err}</p>}
+          <div className="modal-actions">
+            <button className="btn btn-primary" disabled={busy}>{busy ? "저장 중…" : "수정 저장"}</button>
           </div>
         </form>
       </div>

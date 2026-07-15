@@ -5,6 +5,7 @@ import { canManageDirective, canEditDirective } from "@/lib/permissions";
 import { directiveUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { touchChanged } from "@/lib/changes";
+import { filterValidAssignees } from "@/lib/assignees";
 
 const MANAGE_KEYS = ["status", "assignments"]; // 팀장 권한
 const EDIT_KEYS = ["title", "body", "dueDate", "priority"]; // 발신자 권한
@@ -46,13 +47,17 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     dir.status = d.status;
   }
   if (d.assignments !== undefined) {
+    // 분배 대상은 이 팀의 활성 소속자만 — 임의·타 팀 userId 주입 차단 (변환 시 알림도 이들에게만)
+    const validIds = new Set(await filterValidAssignees(d.assignments.map((a) => a.userId), [teamId]));
     // 재분배 갱신: 기존 taskId(일정 연결)는 동일 사용자 항목이면 유지
     const prevByUser = new Map<string, any>();
     (dir.assignments ?? []).forEach((a: any) => prevByUser.set(String(a.userId), a));
-    dir.assignments = d.assignments.map((a) => {
-      const prev = prevByUser.get(String(a.userId));
-      return { userId: a.userId, note: a.note ?? "", done: !!a.done, taskId: prev?.taskId ?? null };
-    });
+    dir.assignments = d.assignments
+      .filter((a) => validIds.has(String(a.userId)))
+      .map((a) => {
+        const prev = prevByUser.get(String(a.userId));
+        return { userId: a.userId, note: a.note ?? "", done: !!a.done, taskId: prev?.taskId ?? null };
+      });
   }
 
   await dir.save();

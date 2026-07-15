@@ -44,6 +44,7 @@ export default function TeamBoard({
   // ── 부재·휴가 ──
   const [absences, setAbsences] = useState<AbsenceItem[]>([]);
   const [absOpen, setAbsOpen] = useState(false);
+  const [editAbs, setEditAbs] = useState<AbsenceItem | null>(null);
   const fetchAbs = useCallback(async (from: string, to: string) => {
     try {
       const res = await fetch(`/api/absences?team=${teamId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
@@ -242,6 +243,9 @@ export default function TeamBoard({
                 </span>
                 {a.note && <span className="abs-note">· {a.note}</span>}
                 {canDeleteAbs(a) && (
+                  <button className="rc-cat-btn abs-del" onClick={() => setEditAbs(a)}>수정</button>
+                )}
+                {canDeleteAbs(a) && (
                   <button className="rc-cat-btn danger abs-del" onClick={() => removeAbs(a)}>삭제</button>
                 )}
               </div>
@@ -263,25 +267,44 @@ export default function TeamBoard({
           }}
         />
       )}
+
+      {editAbs && (
+        <AbsenceModal
+          teamId={teamId}
+          selfOnly={!canAbsForOthers}
+          meId={me?.id ?? ""}
+          meName={me?.name ?? ""}
+          edit={editAbs}
+          onClose={() => setEditAbs(null)}
+          onSaved={() => {
+            setEditAbs(null);
+            if (lastRange.current) fetchAbs(lastRange.current.from, lastRange.current.to);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/* ── 부재 등록 모달 ── */
+/* ── 부재 등록·수정 모달 ── */
 function AbsenceModal({
-  teamId, selfOnly, meId, meName, onClose, onSaved,
+  teamId, selfOnly, meId, meName, edit, onClose, onSaved,
 }: {
-  teamId: string; selfOnly: boolean; meId: string; meName: string; onClose: () => void; onSaved: () => void;
+  teamId: string; selfOnly: boolean; meId: string; meName: string; edit?: AbsenceItem | null; onClose: () => void; onSaved: () => void;
 }) {
   const today = (() => { const d = new Date(); const p = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; })();
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
-  const [form, setForm] = useState({ userId: selfOnly ? meId : "", type: "vacation" as AbsenceType, startDate: today, endDate: today, note: "" });
+  const [form, setForm] = useState(
+    edit
+      ? { userId: edit.user?.id ?? "", type: edit.type, startDate: edit.startDate.slice(0, 10), endDate: edit.endDate.slice(0, 10), note: edit.note ?? "" }
+      : { userId: selfOnly ? meId : "", type: "vacation" as AbsenceType, startDate: today, endDate: today, note: "" }
+  );
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const half = HALF_DAY_TYPES.includes(form.type);
 
   useEffect(() => {
-    if (selfOnly) return;
+    if (selfOnly || edit) return; // 수정은 대상 고정 — 팀원 목록 불필요
     fetch(`/api/users?team=${teamId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
@@ -290,7 +313,7 @@ function AbsenceModal({
         setForm((f) => (f.userId ? f : { ...f, userId: list[0]?.id ?? "" }));
       })
       .catch(() => {});
-  }, [teamId, selfOnly]);
+  }, [teamId, selfOnly, edit]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -298,13 +321,14 @@ function AbsenceModal({
     if (!form.userId) { setErr("대상을 선택하세요."); return; }
     if (!half && form.endDate < form.startDate) { setErr("종료일이 시작일보다 빠를 수 없어요."); return; }
     setBusy(true);
-    const res = await fetch("/api/absences", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, endDate: half ? form.startDate : form.endDate }),
+    const payload = { type: form.type, startDate: form.startDate, endDate: half ? form.startDate : form.endDate, note: form.note };
+    const res = await fetch(edit ? `/api/absences/${edit.id}` : "/api/absences", {
+      method: edit ? "PATCH" : "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(edit ? payload : { ...payload, userId: form.userId }),
     });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "등록 실패"); return; }
+    if (!res.ok) { setErr(data.error ?? (edit ? "수정 실패" : "등록 실패")); return; }
     onSaved();
   }
 
@@ -312,11 +336,13 @@ function AbsenceModal({
     <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <ModalClose onClose={onClose} />
-        <h2>부재 등록</h2>
+        <h2>{edit ? "부재 수정" : "부재 등록"}</h2>
         <form onSubmit={submit}>
           <div className="field">
             <label>대상</label>
-            {selfOnly ? (
+            {edit ? (
+              <input value={edit.user?.name ?? meName} disabled />
+            ) : selfOnly ? (
               <input value={meName} disabled />
             ) : (
               <select value={form.userId} onChange={(e) => setForm({ ...form, userId: e.target.value })}>
@@ -351,7 +377,7 @@ function AbsenceModal({
           </div>
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">
-            <button className="btn btn-primary" disabled={busy}>{busy ? "등록 중…" : "등록"}</button>
+            <button className="btn btn-primary" disabled={busy}>{busy ? "저장 중…" : edit ? "수정 저장" : "등록"}</button>
           </div>
         </form>
       </div>

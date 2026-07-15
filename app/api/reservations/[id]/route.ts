@@ -45,7 +45,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   r.startAt = startAt;
   r.endAt = endAt;
   r.teamId = teamId;
-  if (typeof body.note === "string") r.note = body.note;
+  if (typeof body.note === "string") r.note = body.note.slice(0, 300); // 생성과 동일하게 300자 상한
   await r.save();
 
   const res: any = await Resource.findById(r.resourceId).select("name").lean();

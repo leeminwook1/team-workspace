@@ -1,5 +1,7 @@
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongodb";
 import { User } from "@/models/User";
+import { Team } from "@/models/Team";
 import { requireActiveUser, json } from "@/lib/api";
 import { canApproveUsers } from "@/lib/permissions";
 import { approveSchema } from "@/lib/validations";
@@ -29,6 +31,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const target: any = await User.findById(params.id);
   if (!target) return json({ error: "사용자를 찾을 수 없습니다." }, 404);
   if (target.status !== "pending") return json({ error: "승인 대기 상태가 아닙니다." }, 400);
+
+  // 팀 소속 역할이면 실제 존재하는 팀인지 검증 — 없는 팀에 배정돼 팀 스코프 쿼리에서 사라지는 것 방지
+  if (!isOrgRole) {
+    if (!teamId || !mongoose.isValidObjectId(teamId) || !(await Team.countDocuments({ _id: teamId }))) {
+      return json({ error: "선택한 팀을 찾을 수 없습니다." }, 400);
+    }
+  }
 
   target.role = role;
   target.teamId = isOrgRole ? null : teamId;

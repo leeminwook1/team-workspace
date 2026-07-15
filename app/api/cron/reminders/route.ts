@@ -75,7 +75,7 @@ export async function GET(req: Request) {
   for (const d of dirs) {
     const ids = leadsByTeam.get(String(d.teamId)) ?? [];
     if (ids.length === 0) continue;
-    await notify(ids, { type: "due", title: "오늘 마감인 TODO가 있어요", body: d.title, link: "/directives" });
+    await notify(ids, { type: "due", title: "오늘 마감인 TODO가 있어요", body: d.title, link: `/directives?q=${encodeURIComponent(d.title)}` });
     dirNotified += ids.length;
   }
 

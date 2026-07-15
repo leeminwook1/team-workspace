@@ -222,7 +222,8 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   if (scope === "series" && task.recurrenceId) {
     const series: any[] = await Task.find({ recurrenceId: task.recurrenceId }).select("_id assignees").lean();
     const ids = series.map((t: any) => t._id);
-    const r = await Task.updateMany({ recurrenceId: task.recurrenceId }, { $set: { deletedAt: new Date() } });
+    // 이미 삭제된 회차는 제외 — updateMany는 소프트삭제 훅을 안 타므로 명시. deletedAt 덮어써 퍼지 시계가 밀리는 것 방지
+    const r = await Task.updateMany({ recurrenceId: task.recurrenceId, deletedAt: null }, { $set: { deletedAt: new Date() } });
     await cancelTaskReservations(ids); // 연동 장비 예약도 취소
     await logActivity({
       actorId: user.id, actorName: user.name, action: "delete",
