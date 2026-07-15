@@ -4,11 +4,12 @@ import { Task } from "@/models/Task";
 import "@/models/Team";
 import "@/models/User";
 import "@/models/Category";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, limitWrites } from "@/lib/api";
 import { canCreateTaskInAll, visibleTeamIds } from "@/lib/permissions";
 import { taskCreateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
+import { filterValidAssignees } from "@/lib/assignees";
 import { Reservation } from "@/models/Reservation";
 import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, findUnavailableResources, unavailableMessage } from "@/lib/taskReservations";
 import { addInterval, RECUR_BATCH_CAP } from "@/lib/recurrence";
@@ -107,6 +108,9 @@ export async function POST(req: Request) {
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
+  const limited = await limitWrites(`taskcreate:${user.id}`, 20, 60_000);
+  if (limited) return limited;
+
   const body = await req.json().catch(() => null);
   const parsed = taskCreateSchema.safeParse(body);
   if (!parsed.success) return json({ error: parsed.error.issues[0].message }, 400);
@@ -120,15 +124,18 @@ export async function POST(req: Request) {
   }
 
   await connectDB();
+  // 담당자는 관여 팀의 활성 소속자만 — 임의 userId 주입·알림 스팸 차단 (join과 동일 정책)
+  const validAssignees = await filterValidAssignees(d.assignees ?? [], d.teamIds);
   const { repeat, repeatUntil, resourceIds, resourceOwners, ...fields } = d;
   // 장비별 담당자 — 이 일정의 담당자(또는 등록자)만 허용, 그 외 값은 무시(등록자로 대체)
-  const ownerAllowed = new Set([...(d.assignees ?? []), user.id]);
+  const ownerAllowed = new Set([...validAssignees, user.id]);
   const owners: Record<string, string> = {};
   for (const [rid, uid] of Object.entries(resourceOwners ?? {})) {
     if ((resourceIds ?? []).includes(rid) && ownerAllowed.has(uid)) owners[rid] = uid;
   }
   const base = {
     ...fields,
+    assignees: validAssignees,
     categoryId: d.categoryId || null,
     createdBy: user.id,
   };
@@ -150,7 +157,7 @@ export async function POST(req: Request) {
 
   // 담당자로 지정된 사람에게 알림 (등록자 본인 제외)
   const notifyAssignees = (taskId: string) =>
-    notify((d.assignees ?? []).filter((a) => a !== user.id), {
+    notify(validAssignees.filter((a) => a !== user.id), {
       type: "task_assigned",
       title: "새 업무에 담당자로 지정됐어요",
       body: d.title,
@@ -160,10 +167,13 @@ export async function POST(req: Request) {
   // 단건
   if (!repeat || repeat === "none") {
     const task = await Task.create({ ...base, startDate: start, endDate: end });
-    if (equip.length > 0) await syncTaskReservations(task, equip, window, user.id, owners);
+    let raced: string[] = [];
+    if (equip.length > 0) ({ raced } = await syncTaskReservations(task, equip, window, user.id, owners));
     await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetTitle: task.title });
     await notifyAssignees(String(task._id));
-    return json({ id: String(task._id) }, 201);
+    // 동시 예약으로 일부 장비 연동이 밀렸으면 성공(201)이되 경고를 함께 반환
+    const warning = raced.length > 0 ? `동시 예약으로 일부 장비 연동에 실패했어요: ${raced.join(", ")}` : undefined;
+    return json({ id: String(task._id), ...(warning ? { warning } : {}) }, 201);
   }
 
   // 반복 — repeatUntil까지 오커런스 생성 (기본 3개월, 최대 60개)

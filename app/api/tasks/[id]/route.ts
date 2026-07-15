@@ -8,6 +8,7 @@ import { canEditTaskDoc, canDeleteTaskDoc, canChangeStatusAny, canCreateTaskInAl
 import { taskUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
+import { filterValidAssignees } from "@/lib/assignees";
 import { Reservation } from "@/models/Reservation";
 import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, cancelTaskReservations, findUnavailableResources, unavailableMessage } from "@/lib/taskReservations";
 
@@ -108,10 +109,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (d.description !== undefined) task.description = d.description;
   if (d.teamIds !== undefined) task.teamIds = d.teamIds;
   if (d.categoryId !== undefined) task.categoryId = d.categoryId || null;
-  // 새로 추가된 담당자에게 알림 (본인 제외)
-  const addedAssignees =
-    d.assignees !== undefined ? d.assignees.filter((a) => !assigneeIds.includes(a) && a !== user.id) : [];
-  if (d.assignees !== undefined) task.assignees = d.assignees;
+  // 담당자 지정 시 관여 팀(수정 후 팀 기준)의 활성 소속자만 허용 — 임의 userId 주입 차단
+  let addedAssignees: string[] = [];
+  if (d.assignees !== undefined) {
+    const effectiveTeams = d.teamIds !== undefined ? d.teamIds.map(String) : teamIds;
+    const validAssignees = await filterValidAssignees(d.assignees, effectiveTeams);
+    addedAssignees = validAssignees.filter((a) => !assigneeIds.includes(a) && a !== user.id);
+    task.assignees = validAssignees;
+  }
   if (d.startDate !== undefined) task.startDate = new Date(d.startDate);
   if (d.endDate !== undefined) task.endDate = new Date(d.endDate);
   if (d.allDay !== undefined) task.allDay = d.allDay;
@@ -147,6 +152,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   await task.save();
+  let raced: string[] = [];
   if (equipTarget !== null) {
     // 장비별 담당자 — 이 일정의 담당자(또는 등록자·수정자)만 허용
     const ownerAllowed = new Set([...(task.assignees ?? []).map(String), String(task.createdBy ?? ""), user.id]);
@@ -154,7 +160,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     for (const [rid, uid] of Object.entries(d.resourceOwners ?? {})) {
       if (equipTarget.includes(rid) && ownerAllowed.has(uid)) owners[rid] = uid;
     }
-    await syncTaskReservations(task, equipTarget, window, user.id, owners);
+    ({ raced } = await syncTaskReservations(task, equipTarget, window, user.id, owners));
   }
   await logActivity({
     actorId: user.id,
@@ -192,7 +198,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       });
     }
   }
-  return json({ id: String(task._id) });
+  const warning = raced.length > 0 ? `동시 예약으로 일부 장비 연동에 실패했어요: ${raced.join(", ")}` : undefined;
+  return json({ id: String(task._id), ...(warning ? { warning } : {}) });
 }
 
 // DELETE /api/tasks/:id — 삭제는 팀장·Admin만 (설계 확정)

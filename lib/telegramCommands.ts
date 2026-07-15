@@ -155,8 +155,11 @@ async function matchResources(names: string[]): Promise<{ picked: { id: string; 
 }
 
 // 담당자 이름 매칭 (부분 일치, 대소문자 무시) — /일정 담당: 용
-async function matchUsers(names: string[]): Promise<{ picked: { id: string; name: string }[] } | { error: string }> {
-  const all: any[] = await User.find({ status: "active" }).select("name").lean();
+// teamId를 주면 그 팀의 활성 소속자만 후보로 삼는다 — 담당자로 타 팀원 주입 방지(웹 API와 동일 정책)
+async function matchUsers(names: string[], teamId?: string): Promise<{ picked: { id: string; name: string }[] } | { error: string }> {
+  const filter: any = { status: "active" };
+  if (teamId) filter.teamId = teamId;
+  const all: any[] = await User.find(filter).select("name").lean();
   const picked: { id: string; name: string }[] = [];
   for (const q of names) {
     const hits = all.filter((u) => u.name.toLowerCase().includes(q.toLowerCase()));
@@ -377,7 +380,8 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
   // 담당자 — 이름으로 매칭 (여러 명 쉼표 구분)
   let assignees: { id: string; name: string }[] = [];
   if (assigneeNames.length > 0) {
-    const m = await matchUsers(assigneeNames);
+    // 담당자는 이 일정의 팀 소속자만 (타 팀원·임의 주입 차단)
+    const m = await matchUsers(assigneeNames, teamId);
     if ("error" in m) return m.error;
     assignees = m.picked;
   }

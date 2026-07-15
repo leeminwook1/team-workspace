@@ -3,7 +3,7 @@ import { Reservation } from "@/models/Reservation";
 import "@/models/Resource";
 import "@/models/User";
 import "@/models/Team";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, limitWrites } from "@/lib/api";
 import { canReserve } from "@/lib/permissions";
 import { reservationSchema } from "@/lib/validations";
 import { postCreateGuard } from "@/lib/taskReservations";
@@ -61,6 +61,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const { user, error } = await requireActiveUser();
   if (error) return error;
+
+  const limited = await limitWrites(`reserve:${user.id}`, 30, 60_000);
+  if (limited) return limited;
 
   const body = await req.json().catch(() => null);
   const parsed = reservationSchema.safeParse(body);

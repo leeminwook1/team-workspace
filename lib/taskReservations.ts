@@ -99,7 +99,7 @@ export async function syncTaskReservations(
   window: { startAt: Date; endAt: Date },
   actorId: string,
   owners?: Record<string, string>
-) {
+): Promise<{ raced: string[] }> {
   const existing: any[] = await Reservation.find({ relatedTaskId: task._id, status: "booked" }).lean();
   const wanted = new Set(resourceIds);
   const have = new Map(existing.map((r) => [String(r.resourceId), r]));
@@ -109,20 +109,30 @@ export async function syncTaskReservations(
     await Reservation.updateMany({ _id: { $in: toCancel.map((r) => r._id) } }, { $set: { status: "cancelled" } });
   }
 
+  const raced: string[] = []; // 생성 직후 이중예약 방어에서 밀려난(내 예약이 취소된) 장비 이름
   for (const rid of resourceIds) {
     const owner = owners?.[rid] ?? null;
     const cur = have.get(rid);
     if (cur) {
       // 시간창·담당자가 달라졌으면 갱신
       const set: any = {};
-      if (new Date(cur.startAt).getTime() !== window.startAt.getTime() || new Date(cur.endAt).getTime() !== window.endAt.getTime()) {
+      const timeMoved = new Date(cur.startAt).getTime() !== window.startAt.getTime() || new Date(cur.endAt).getTime() !== window.endAt.getTime();
+      if (timeMoved) {
         set.startAt = window.startAt;
         set.endAt = window.endAt;
       }
       if (owner && String(cur.reservedBy) !== owner) set.reservedBy = owner;
       if (Object.keys(set).length > 0) await Reservation.updateOne({ _id: cur._id }, { $set: set });
+      // 시간이 옮겨졌다면 갱신 직후 재검사 — 동시 재조정 레이스로 겹치면 물린다
+      if (timeMoved) {
+        const other = await postCreateGuard({ _id: cur._id, resourceId: cur.resourceId, startAt: window.startAt, endAt: window.endAt });
+        if (other) {
+          const rn: any = await Resource.findById(rid).select("name").lean();
+          raced.push(rn?.name ?? "장비");
+        }
+      }
     } else {
-      await Reservation.create({
+      const created = await Reservation.create({
         resourceId: rid,
         teamId: task.teamIds[0],
         reservedBy: owner ?? actorId,
@@ -131,8 +141,16 @@ export async function syncTaskReservations(
         endAt: window.endAt,
         note: "일정 연동 예약",
       });
+      // 직접 예약 경로(POST /reservations)와 동일한 생성 직후 재검사 —
+      // 동시 요청 두 개가 사전 충돌검사를 모두 통과해 이중예약되는 레이스를 막는다.
+      const other = await postCreateGuard(created);
+      if (other) {
+        const rn: any = await Resource.findById(rid).select("name").lean();
+        raced.push(rn?.name ?? "장비");
+      }
     }
   }
+  return { raced };
 }
 
 /** 업무(들) 삭제 시 연동 예약 일괄 취소 */
