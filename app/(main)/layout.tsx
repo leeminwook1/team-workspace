@@ -5,6 +5,7 @@ import Link from "next/link";
 import { connectDB } from "@/lib/mongodb";
 import { Directive } from "@/models/Directive";
 import { Notice } from "@/models/Notice";
+import { User } from "@/models/User";
 import { canApproveUsers, canCreateDirective, canManageTeams, canUseDirectives, canViewAllTeams, ROLE_LABEL, type SessionUser } from "@/lib/permissions";
 import LogoutButton from "@/components/LogoutButton";
 import NavLinks, { BottomNav, type NavItem } from "@/components/NavLinks";
@@ -31,11 +32,13 @@ async function pendingDirectiveCount(user: SessionUser): Promise<number> {
   }
 }
 
-// 안 읽은 공지 개수 — 사이드바 뱃지용. 실패해도 화면을 막지 않는다.
+// 안 읽은 공지 개수 — 사이드바 뱃지용. 마지막 열람 이후 올라온 공지만. 실패해도 화면을 막지 않는다.
 async function unreadNoticeCount(userId: string): Promise<number> {
   try {
     await connectDB();
-    return await Notice.countDocuments({ readBy: { $ne: userId } });
+    const me: any = await User.findById(userId).select("lastNoticeReadAt").lean();
+    const since = me?.lastNoticeReadAt ?? new Date(0);
+    return await Notice.countDocuments({ createdAt: { $gt: since } });
   } catch {
     return 0;
   }

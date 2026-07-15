@@ -1,7 +1,7 @@
 import { connectDB } from "@/lib/mongodb";
 import { Feedback } from "@/models/Feedback";
 import { User } from "@/models/User";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, limitWrites } from "@/lib/api";
 import { feedbackCreateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { touchChanged } from "@/lib/changes";
@@ -51,6 +51,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const { user, error } = await requireActiveUser();
   if (error) return error;
+
+  const limited = await limitWrites(`feedback:${user.id}`, 10, 10 * 60_000);
+  if (limited) return limited;
 
   const body = await req.json().catch(() => null);
   const parsed = feedbackCreateSchema.safeParse(body);

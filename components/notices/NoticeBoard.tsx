@@ -18,7 +18,6 @@ type Notice = {
   createdAt: string;
   updatedAt: string;
   isNew: boolean;
-  readCount: number;
 };
 
 function fmtDate(iso: string) {
@@ -48,6 +47,11 @@ export default function NoticeBoard({ canCreate }: { canCreate: boolean }) {
   }, []);
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(load, ["notice"]);
+
+  // 이 화면을 열면 열람 시각 기록 — 이후 올라온 공지만 '안 읽음'으로 남음 (한 번만)
+  useEffect(() => {
+    fetch("/api/notices/read", { method: "POST" }).catch(() => {});
+  }, []);
 
   const canEdit = (n: Notice) => user?.role === "admin" || n.createdBy?.id === user?.id;
 

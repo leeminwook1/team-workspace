@@ -833,8 +833,8 @@ export async function handleTelegramCallback(p: {
         await answerCallback(p.callbackId, "이미 이 일정에 참여 중인 팀이에요."); return;
       }
       const team: any = await Team.findById(joinTeamId).select("name").lean();
-      task.teamIds.push(joinTeamId);
-      await task.save();
+      // 원자 추가 — 동시 참여 lost update 방지 (웹 join과 동일)
+      await Task.updateOne({ _id: task._id, deletedAt: null }, { $addToSet: { teamIds: joinTeamId } });
       await logActivity({ actorId: user.id, actorName: user.name ?? "", action: "update", targetTitle: `${task.title} (팀 참여 — 텔레그램)` });
       // 일정 등록자에게 알림 (본인 제외) — 웹 참여와 동일
       if (task.createdBy && String(task.createdBy) !== user.id) {

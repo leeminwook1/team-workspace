@@ -276,19 +276,26 @@ export async function GET(req: Request) {
     recurrenceId: { $ne: null }, repeatFreq: { $ne: null }, repeatUntil: { $gt: new Date() }, deletedAt: null,
   });
   for (const rid of seriesIds) {
-    const last: any = await Task.findOne({ recurrenceId: rid }).sort({ startDate: -1 }).lean();
-    if (!last?.repeatFreq || !last.repeatUntil) continue;
-    const untilEnd = new Date(last.repeatUntil);
-    const duration = new Date(last.endDate).getTime() - new Date(last.startDate).getTime();
+    // 삭제분 포함 전체 회차 조회 (deletedAt 조건을 넣어 pre-hook의 자동 deletedAt:null 필터를 우회)
+    const all: any[] = await Task.find({ recurrenceId: rid, deletedAt: { $exists: true } })
+      .sort({ startDate: -1 }).lean();
+    if (all.length === 0) continue;
+    const template = all.find((t) => !t.deletedAt); // 필드 복사·규칙은 살아있는 회차 기준
+    if (!template?.repeatFreq || !template.repeatUntil) continue;
+    const anchor = all[0]; // 삭제 포함 가장 늦은 회차 — 이 뒤부터 생성해야 삭제한 뒷 회차를 되살리지 않음
+    const existing = new Set(all.map((t) => new Date(t.startDate).getTime())); // 이미 존재(삭제 포함)한 시작일
+    const untilEnd = new Date(template.repeatUntil);
+    const duration = new Date(template.endDate).getTime() - new Date(template.startDate).getTime();
     const docs: any[] = [];
     for (let i = 1; docs.length < RECUR_BATCH_CAP; i++) {
-      const s = addInterval(new Date(last.startDate), last.repeatFreq, i);
+      const s = addInterval(new Date(anchor.startDate), template.repeatFreq, i);
       if (s >= untilEnd || s > horizon) break;
+      if (existing.has(s.getTime())) continue; // 이미 있던(삭제 포함) 회차는 재생성 안 함
       docs.push({
-        title: last.title, description: last.description, teamIds: last.teamIds, categoryId: last.categoryId,
-        assignees: last.assignees, createdBy: last.createdBy, allDay: last.allDay, priority: last.priority,
-        tags: last.tags, location: last.location,
-        recurrenceId: rid, repeatFreq: last.repeatFreq, repeatUntil: last.repeatUntil,
+        title: template.title, description: template.description, teamIds: template.teamIds, categoryId: template.categoryId,
+        assignees: template.assignees, createdBy: template.createdBy, allDay: template.allDay, priority: template.priority,
+        tags: template.tags, location: template.location,
+        recurrenceId: rid, repeatFreq: template.repeatFreq, repeatUntil: template.repeatUntil,
         startDate: s, endDate: new Date(s.getTime() + duration),
       });
     }

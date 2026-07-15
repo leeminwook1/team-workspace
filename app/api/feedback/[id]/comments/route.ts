@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/mongodb";
 import { Feedback } from "@/models/Feedback";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, limitWrites } from "@/lib/api";
 import { canManageFeedback } from "@/lib/permissions";
 import { feedbackCommentSchema } from "@/lib/validations";
 import { touchChanged } from "@/lib/changes";
@@ -10,6 +10,9 @@ import { notify } from "@/lib/notify";
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const { user, error } = await requireActiveUser();
   if (error) return error;
+
+  const limited = await limitWrites(`fbcomment:${user.id}`, 20, 10 * 60_000);
+  if (limited) return limited;
 
   const body = await req.json().catch(() => null);
   const parsed = feedbackCommentSchema.safeParse(body);

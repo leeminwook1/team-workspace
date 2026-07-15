@@ -2,9 +2,10 @@ import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
 import { Comment } from "@/models/Comment";
 import "@/models/User";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, limitWrites } from "@/lib/api";
 import { canViewAllTeams, type SessionUser } from "@/lib/permissions";
 import { notify } from "@/lib/notify";
+import { touchChanged } from "@/lib/changes";
 
 // 업무 열람 권한: 전사 역할이거나, 업무의 팀에 소속(1인 1팀)
 function canViewTask(user: SessionUser, teamIds: string[]) {
@@ -43,6 +44,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
+  const limited = await limitWrites(`comment:${user.id}`, 30, 10 * 60_000);
+  if (limited) return limited;
+
   const body = await req.json().catch(() => null);
   const content = (body?.content ?? "").toString().trim();
   if (!content) return json({ error: "내용을 입력하세요." }, 400);
@@ -55,6 +59,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (!canViewTask(user, teamIds)) return json({ error: "댓글 권한이 없습니다." }, 403);
 
   const c = await Comment.create({ taskId: params.id, authorId: user.id, content });
+  await touchChanged("task"); // 다른 사람 상세창에 댓글 자동 반영
 
   // 담당자 + 등록자에게 알림 (작성자 본인 제외)
   const targets = [...(task.assignees ?? []).map(String), task.createdBy ? String(task.createdBy) : ""]
