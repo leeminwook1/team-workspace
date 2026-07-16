@@ -1,5 +1,15 @@
 import { Schema, models, model } from "mongoose";
 
+// 식순·타임테이블 한 줄 (촬영 등 일부 업무) — 행사 식순과 동일 구조
+const TaskProgramSchema = new Schema(
+  {
+    time: { type: String, default: "", maxlength: 40 },
+    title: { type: String, required: true, maxlength: 200 },
+    note: { type: String, default: "", maxlength: 200 },
+  },
+  { _id: true }
+);
+
 // 설계 4.3 — 업무 = 달력 이벤트
 const TaskSchema = new Schema(
   {
@@ -25,6 +35,9 @@ const TaskSchema = new Schema(
 
     tags: [{ type: String }],
     location: { type: String, default: "" },
+
+    // 식순·타임테이블 — 촬영 등 진행 순서가 있는 업무에서만 사용 (없으면 표시 안 함)
+    program: { type: [TaskProgramSchema], default: [] },
 
     deletedAt: { type: Date, default: null }, // 소프트 삭제 — 30일 내 복구 가능, 이후 크론이 완전 삭제
   },

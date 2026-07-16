@@ -1,4 +1,5 @@
 import { connectDB } from "@/lib/mongodb";
+import mongoose from "mongoose";
 import { Task } from "@/models/Task";
 import "@/models/Team";
 import "@/models/User";
@@ -7,6 +8,7 @@ import { requireActiveUser, json } from "@/lib/api";
 import { canEditTaskDoc, canDeleteTaskDoc, canChangeStatusAny, canCreateTaskInAll, visibleTeamIds } from "@/lib/permissions";
 import { taskUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
+import { touchChanged } from "@/lib/changes";
 import { notify } from "@/lib/notify";
 import { filterValidAssignees } from "@/lib/assignees";
 import { Reservation } from "@/models/Reservation";
@@ -65,6 +67,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       priority: t.priority,
       location: t.location,
       recurrenceId: t.recurrenceId ? String(t.recurrenceId) : null,
+      program: (t.program ?? []).map((p: any) => ({ id: String(p._id), time: p.time ?? "", title: p.title, note: p.note ?? "" })),
       // 반복 시리즈 전체 회차 수 — 전체 삭제 확인 문구용
       seriesCount: t.recurrenceId ? await Task.countDocuments({ recurrenceId: t.recurrenceId }) : 0,
     },
@@ -94,6 +97,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const d = parsed.data;
   const keys = Object.keys(d);
   const statusOnly = keys.length === 1 && keys[0] === "status";
+  // 식순만 수정 — 리스케줄 알림·예약 재동기화·시리즈 전파와 무관 (활동 로그 스팸도 방지)
+  const programOnly = keys.length === 1 && keys[0] === "program";
 
   if (canEditTaskDoc(user, teamIds, task.createdBy ? String(task.createdBy) : null)) {
     // 전체 필드 수정 가능 (역할 권한 또는 본인이 만든 일정)
@@ -126,6 +131,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (d.status !== undefined) task.status = d.status;
   if (d.priority !== undefined) task.priority = d.priority;
   if (d.location !== undefined) task.location = d.location;
+  // 식순 — 행사 items와 동일하게 _id 유지하며 통째로 갱신. 시리즈 meta에는 넣지 않아 회차별로 독립.
+  if (d.program !== undefined) {
+    task.program = d.program.map((p) => ({
+      ...(p.id && mongoose.isValidObjectId(p.id) ? { _id: p.id } : {}),
+      time: p.time ?? "", title: p.title, note: p.note ?? "",
+    }));
+  }
 
   if (task.endDate < task.startDate) {
     return json({ error: "종료일이 시작일보다 빠를 수 없습니다." }, 400);
@@ -165,13 +177,18 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     }
     ({ raced } = await syncTaskReservations(task, equipTarget, window, user.id, owners));
   }
-  await logActivity({
-    actorId: user.id,
-    actorName: user.name,
-    action: statusOnly ? "status" : "update",
-    targetTitle: task.title,
-    meta: statusOnly ? { status: task.status } : undefined,
-  });
+  if (programOnly) {
+    // 식순 편집은 활동 로그로 남기지 않되, 다른 화면 자동 반영은 시킨다
+    await touchChanged("task");
+  } else {
+    await logActivity({
+      actorId: user.id,
+      actorName: user.name,
+      action: statusOnly ? "status" : "update",
+      targetTitle: task.title,
+      meta: statusOnly ? { status: task.status } : undefined,
+    });
+  }
   if (addedAssignees.length > 0) {
     await notify(addedAssignees, {
       type: "task_assigned",

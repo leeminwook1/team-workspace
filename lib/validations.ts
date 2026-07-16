@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+// 식순·타임테이블 한 줄 — 행사·촬영 업무가 공유
+export const programRowSchema = z.object({
+  id: z.string().optional(), // 기존 항목이면 _id 유지
+  time: z.string().max(40).optional().default(""),
+  title: z.string().min(1, "순서 내용을 입력하세요").max(200),
+  note: z.string().max(200).optional().default(""),
+});
+
 // 설계 2장 — 폼/검증: Zod 스키마를 프론트·백엔드에서 공유
 
 export const registerSchema = z.object({
@@ -45,6 +53,8 @@ export const taskUpdateSchema = z.object({
   location: z.string().max(120).optional(),
   resourceIds: z.array(z.string().min(1)).max(40, "장비는 최대 40개까지 선택할 수 있어요").optional(), // undefined = 장비 변경 없음
   resourceOwners: z.record(z.string(), z.string()).optional(), // 장비별 담당자 (resourceId → userId)
+  // 식순·타임테이블 — 촬영 등 진행 순서가 있는 업무. undefined = 변경 없음
+  program: z.array(programRowSchema).max(100, "식순은 100줄까지예요").optional(),
 });
 
 // 행사 관리 — 행사(컨테이너) + 그 안의 투두(items) 칸반
@@ -66,12 +76,6 @@ const eventItemSchema = z.object({
   dueDate: z.string().nullable().optional(),
   note: z.string().max(500).optional().default(""),
 });
-const eventProgramSchema = z.object({
-  id: z.string().optional(), // 기존 항목이면 _id 유지
-  time: z.string().max(40).optional().default(""),
-  title: z.string().min(1, "순서 내용을 입력하세요").max(200),
-  note: z.string().max(200).optional().default(""),
-});
 export const eventUpdateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),
@@ -81,7 +85,7 @@ export const eventUpdateSchema = z.object({
   location: z.string().max(120).optional(),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
   items: z.array(eventItemSchema).max(200, "할 일은 200개까지예요").optional(),
-  program: z.array(eventProgramSchema).max(100, "식순은 100줄까지예요").optional(),
+  program: z.array(programRowSchema).max(100, "식순은 100줄까지예요").optional(),
   closed: z.boolean().optional(), // 행사 종료(보관)/재개
 });
 

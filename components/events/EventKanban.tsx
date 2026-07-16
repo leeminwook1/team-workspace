@@ -13,11 +13,11 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { LoadError } from "@/components/LoadError";
 import { useAutoRefresh } from "@/components/useAutoRefresh";
 import { EventFormModal } from "@/components/events/EventList";
+import { ProgramModal, uid, type ProgramRow } from "@/components/ProgramModal";
 
 type Team = { id: string; name: string; color: string };
 type Person = { id: string; name: string } | null;
 type Item = { id: string; title: string; status: "todo" | "doing" | "hold" | "done"; team: Team | null; assignee: Person; dueDate: string | null; note: string };
-type ProgramRow = { id: string; time: string; title: string; note: string };
 type EventFull = {
   id: string; title: string; description: string; teams: Team[]; manager: Person;
   eventDate: string | null; location: string; priority: string; createdBy: string | null; items: Item[];
@@ -40,7 +40,6 @@ function ddayOf(iso: string | null) {
   if (diff > 0) return { label: `D-${diff}`, tone: diff <= 3 ? ("urgent" as const) : ("soon" as const) };
   return { label: `D+${-diff}`, tone: "past" as const };
 }
-const uid = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `tmp-${Math.random().toString(36).slice(2)}`);
 const toPayload = (items: Item[]) =>
   items.map((it) => ({ id: it.id, title: it.title, status: it.status, teamId: it.team?.id ?? null, assigneeId: it.assignee?.id ?? null, dueDate: it.dueDate, note: it.note }));
 function dueInfo(iso: string | null, done: boolean) {
@@ -378,64 +377,6 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
           onSave={(rows) => { setProgramOpen(false); persistProgram(rows); }}
         />
       )}
-    </div>
-  );
-}
-
-function ProgramModal({ initial, onClose, onSave }: { initial: ProgramRow[]; onClose: () => void; onSave: (rows: ProgramRow[]) => void }) {
-  const [rows, setRows] = useState<ProgramRow[]>(initial.length ? initial : [{ id: uid(), time: "", title: "", note: "" }]);
-  const [err, setErr] = useState("");
-  const upd = (id: string, patch: Partial<ProgramRow>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  const add = () => setRows((rs) => [...rs, { id: uid(), time: "", title: "", note: "" }]);
-  const del = (id: string) => setRows((rs) => rs.filter((r) => r.id !== id));
-  const moveRow = (i: number, dir: -1 | 1) => setRows((rs) => {
-    const j = i + dir;
-    if (j < 0 || j >= rs.length) return rs;
-    const n = [...rs];
-    [n[i], n[j]] = [n[j], n[i]];
-    return n;
-  });
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setErr("");
-    // 완전히 빈 줄은 버리고, 시간·비고만 있고 순서명이 없는 줄은 막는다
-    const nonEmpty = rows.filter((r) => r.time.trim() || r.title.trim() || r.note.trim());
-    if (nonEmpty.some((r) => !r.title.trim())) { setErr("시간·비고가 있는 줄은 순서 내용도 입력해주세요."); return; }
-    onSave(nonEmpty.map((r) => ({ id: r.id, time: r.time.trim(), title: r.title.trim(), note: r.note.trim() })));
-  }
-
-  return (
-    <div className="modal-overlay">
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <ModalClose onClose={onClose} />
-        <h2>식순 편집</h2>
-        <p className="page-sub" style={{ marginTop: -4 }}>시간은 자유롭게 적어요 (예: 14:00 또는 14:00–14:10). 위/아래로 순서를 조정하세요.</p>
-        <form onSubmit={submit}>
-          <div className="prog-edit">
-            {rows.map((r, i) => (
-              <div className="prog-edit-row" key={r.id}>
-                <div className="prog-edit-move">
-                  <button type="button" className="kb-move-btn" disabled={i === 0} onClick={() => moveRow(i, -1)} aria-label="위로"><Icon name="chevronL" size={15} /></button>
-                  <span className="prog-edit-num">{i + 1}</span>
-                  <button type="button" className="kb-move-btn" disabled={i === rows.length - 1} onClick={() => moveRow(i, 1)} aria-label="아래로"><Icon name="chevronR" size={15} /></button>
-                </div>
-                <input className="prog-edit-time" value={r.time} onChange={(e) => upd(r.id, { time: e.target.value })} placeholder="14:00" maxLength={40} />
-                <input className="prog-edit-title" value={r.title} onChange={(e) => upd(r.id, { title: e.target.value })} placeholder="순서 내용 (예: 개회 선언)" maxLength={200} />
-                <input className="prog-edit-note" value={r.note} onChange={(e) => upd(r.id, { note: e.target.value })} placeholder="담당·비고 (선택)" maxLength={200} />
-                <button type="button" className="prog-edit-del" onClick={() => del(r.id)} aria-label="이 줄 삭제">×</button>
-              </div>
-            ))}
-          </div>
-          <button type="button" className="btn btn-line btn-sm" onClick={add} style={{ marginTop: 8 }}>
-            <Icon name="plus" size={14} strokeWidth={2.4} /> 순서 추가
-          </button>
-          {err && <p className="err-msg">{err}</p>}
-          <div className="modal-actions">
-            <button className="btn btn-primary">저장</button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }

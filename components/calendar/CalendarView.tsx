@@ -13,6 +13,7 @@ import koLocale from "@fullcalendar/core/locales/ko";
 import { Icon } from "@/components/icons";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useAutoRefresh } from "@/components/useAutoRefresh";
+import { ProgramModal, type ProgramRow } from "@/components/ProgramModal";
 
 type TeamInfo = { id: string; name: string; slug: string; color: string };
 type TeamRef = { id: string; name: string; color: string };
@@ -33,6 +34,7 @@ type TaskItem = {
   location: string;
   recurrenceId?: string | null;
   resources?: { id: string; name: string; ownerId?: string; ownerName?: string }[]; // 연동된 대여 장비 (+장비별 담당자)
+  program?: ProgramRow[]; // 식순·타임테이블 (촬영 등)
 };
 
 type ResourceOpt = { id: string; name: string; category: { id: string; name: string; color?: string; order?: number } | null; status?: "available" | "maintenance" | "broken" };
@@ -1292,6 +1294,29 @@ function TaskDetailModal({
   const [commentText, setCommentText] = useState("");
   const [commentBusy, setCommentBusy] = useState(false);
   const [equipOpen, setEquipOpen] = useState(false); // 대여 장비 목록 펼침
+  const [program, setProgram] = useState<ProgramRow[]>(task.program ?? []); // 식순 (촬영 등)
+  const [progEdit, setProgEdit] = useState(false); // 식순 편집 모달
+  const [progFull, setProgFull] = useState(false); // 식순 전체보기(큐시트)
+
+  // 식순 저장 — 낙관적 반영 후 PATCH. 식순만 바꾸므로 다른 로직(알림·예약·시리즈)은 타지 않는다.
+  const persistProgram = useCallback(async (rows: ProgramRow[]) => {
+    setProgram(rows);
+    await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ program: rows.map((p) => ({ id: p.id, time: p.time, title: p.title, note: p.note })) }),
+    });
+  }, [task.id]);
+
+  // 식순은 목록 payload에 없으므로 상세를 열 때 전체 업무를 한 번 불러와 하이드레이트
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/tasks/${task.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d?.task?.program) setProgram(d.task.program); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [task.id]);
 
   const loadComments = useCallback(async () => {
     const res = await fetch(`/api/tasks/${task.id}/comments`);
@@ -1388,6 +1413,7 @@ function TaskDetailModal({
   const prio = PRIORITY_META[task.priority] ?? PRIORITY_META.normal;
 
   return (
+    <>
     <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <ModalClose onClose={onClose} />
@@ -1494,6 +1520,43 @@ function TaskDetailModal({
           </>
         )}
 
+        {/* 식순·타임테이블 (촬영 등) — 등록된 게 있으면 요약 표시, 없으면 편집자에게 조용한 추가 버튼만 */}
+        {program.length > 0 ? (
+          <div className="task-prog">
+            <div className="task-prog-head">
+              <div className="detail-section-label" style={{ margin: 0 }}>
+                <Icon name="clock" size={13} /> 식순 {program.length}
+              </div>
+              <div className="task-prog-actions">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setProgFull(true)}>전체보기</button>
+                {canEdit && (
+                  <button type="button" className="btn btn-line btn-sm" onClick={() => setProgEdit(true)}>편집</button>
+                )}
+              </div>
+            </div>
+            <ol className="ev-prog-list task-prog-preview">
+              {program.slice(0, 3).map((p) => (
+                <li className="ev-prog-row" key={p.id}>
+                  <span className="ev-prog-time">{p.time || "—"}</span>
+                  <span className="ev-prog-title">{p.title}</span>
+                  {p.note && <span className="ev-prog-note">{p.note}</span>}
+                </li>
+              ))}
+              {program.length > 3 && (
+                <li className="task-prog-more">
+                  <button type="button" onClick={() => setProgFull(true)}>+ {program.length - 3}개 더 보기</button>
+                </li>
+              )}
+            </ol>
+          </div>
+        ) : (
+          canEdit && (
+            <button type="button" className="task-prog-add" onClick={() => setProgEdit(true)}>
+              <Icon name="plus" size={14} strokeWidth={2.4} /> 식순 추가 <em>(촬영 등 진행 순서)</em>
+            </button>
+          )
+        )}
+
         {/* 상태 변경 */}
         {canStatus && (
           <div className="detail-status">
@@ -1552,5 +1615,48 @@ function TaskDetailModal({
         </div>
       </div>
     </div>
+
+    {/* 식순 편집 */}
+    {progEdit && (
+      <ProgramModal
+        initial={program}
+        title={program.length > 0 ? "식순 편집" : "식순 만들기"}
+        onClose={() => setProgEdit(false)}
+        onSave={(rows) => { setProgEdit(false); persistProgram(rows); }}
+      />
+    )}
+
+    {/* 식순 전체보기 — 현장 확인용 큐시트 */}
+    {progFull && (
+      <div className="modal-overlay" onClick={() => setProgFull(false)}>
+        <div className="cuesheet" onClick={(e) => e.stopPropagation()}>
+          <div className="cuesheet-head">
+            <div className="cuesheet-title">
+              <span className="cuesheet-eyebrow">{task.category?.name ?? "촬영"} · 큐시트</span>
+              <h2>{task.title}</h2>
+            </div>
+            <button className="cuesheet-x" onClick={() => setProgFull(false)} aria-label="닫기">×</button>
+          </div>
+          <ol className="cuesheet-list">
+            {program.map((p, i) => (
+              <li className="cuesheet-row" key={p.id}>
+                <span className="cuesheet-num">{i + 1}</span>
+                <span className="cuesheet-time">{p.time || "—"}</span>
+                <span className="cuesheet-body">
+                  <span className="cuesheet-name">{p.title}</span>
+                  {p.note && <span className="cuesheet-note">{p.note}</span>}
+                </span>
+              </li>
+            ))}
+          </ol>
+          {canEdit && (
+            <div className="cuesheet-foot">
+              <button className="btn btn-line btn-sm" onClick={() => { setProgFull(false); setProgEdit(true); }}>식순 편집</button>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+    </>
   );
 }
