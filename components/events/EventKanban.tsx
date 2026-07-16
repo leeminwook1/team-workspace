@@ -274,7 +274,7 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
             )}
           </div>
           {ev.program.length === 0 ? (
-            <p className="muted-note" style={{ padding: "6px 2px" }}>
+            <p className="muted-note" style={{ padding: "4px 0 0" }}>
               {canManage ? "행사 진행 순서(식순)를 등록하면 여기에 시간표로 표시돼요." : "등록된 식순이 없어요."}
             </p>
           ) : (
