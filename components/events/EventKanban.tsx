@@ -417,11 +417,12 @@ function ProgramModal({ initial, onClose, onSave }: { initial: ProgramRow[]; onC
               <div className="prog-edit-row" key={r.id}>
                 <div className="prog-edit-move">
                   <button type="button" className="kb-move-btn" disabled={i === 0} onClick={() => moveRow(i, -1)} aria-label="위로"><Icon name="chevronL" size={15} /></button>
+                  <span className="prog-edit-num">{i + 1}</span>
                   <button type="button" className="kb-move-btn" disabled={i === rows.length - 1} onClick={() => moveRow(i, 1)} aria-label="아래로"><Icon name="chevronR" size={15} /></button>
                 </div>
                 <input className="prog-edit-time" value={r.time} onChange={(e) => upd(r.id, { time: e.target.value })} placeholder="14:00" maxLength={40} />
-                <input className="prog-edit-title" value={r.title} onChange={(e) => upd(r.id, { title: e.target.value })} placeholder="순서 (예: 개회 선언)" maxLength={200} />
-                <input className="prog-edit-note" value={r.note} onChange={(e) => upd(r.id, { note: e.target.value })} placeholder="담당·비고" maxLength={200} />
+                <input className="prog-edit-title" value={r.title} onChange={(e) => upd(r.id, { title: e.target.value })} placeholder="순서 내용 (예: 개회 선언)" maxLength={200} />
+                <input className="prog-edit-note" value={r.note} onChange={(e) => upd(r.id, { note: e.target.value })} placeholder="담당·비고 (선택)" maxLength={200} />
                 <button type="button" className="prog-edit-del" onClick={() => del(r.id)} aria-label="이 줄 삭제">×</button>
               </div>
             ))}
