@@ -1295,6 +1295,8 @@ function TaskDetailModal({
   const [commentBusy, setCommentBusy] = useState(false);
   const [equipOpen, setEquipOpen] = useState(false); // 대여 장비 목록 펼침
   const [program, setProgram] = useState<ProgramRow[]>(task.program ?? []); // 식순 (촬영 등)
+  // 목록 클릭 진입은 program이 없는 payload라 하이드레이트 전엔 식순 영역 판단 보류(잘못된 '추가' 표시·덮어쓰기 방지)
+  const [progHydrated, setProgHydrated] = useState(task.program !== undefined);
   const [progEdit, setProgEdit] = useState(false); // 식순 편집 모달
   const [progFull, setProgFull] = useState(false); // 식순 전체보기(큐시트)
 
@@ -1313,7 +1315,11 @@ function TaskDetailModal({
     let alive = true;
     fetch(`/api/tasks/${task.id}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive && d?.task?.program) setProgram(d.task.program); })
+      .then((d) => {
+        if (!alive) return;
+        if (d?.task?.program) setProgram(d.task.program);
+        if (d?.task) setProgHydrated(true); // 서버 응답 확인 후에만 식순 영역 판단
+      })
       .catch(() => {});
     return () => { alive = false; };
   }, [task.id]);
@@ -1520,8 +1526,9 @@ function TaskDetailModal({
           </>
         )}
 
-        {/* 식순·타임테이블 (촬영 등) — 등록된 게 있으면 요약 표시, 없으면 편집자에게 조용한 추가 버튼만 */}
-        {program.length > 0 ? (
+        {/* 식순·타임테이블 (촬영 등) — 등록된 게 있으면 요약 표시, 없으면 편집자에게 조용한 추가 버튼만.
+            하이드레이트 전엔 판단 보류 (목록 클릭 진입 시 잘못된 '추가' 표시·빈 값 덮어쓰기 방지) */}
+        {progHydrated && (program.length > 0 ? (
           <div className="task-prog">
             <div className="task-prog-head">
               <div className="detail-section-label" style={{ margin: 0 }}>
@@ -1555,7 +1562,7 @@ function TaskDetailModal({
               <Icon name="plus" size={14} strokeWidth={2.4} /> 식순 추가 <em>(촬영 등 진행 순서)</em>
             </button>
           )
-        )}
+        ))}
 
         {/* 상태 변경 */}
         {canStatus && (
