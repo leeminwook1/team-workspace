@@ -20,3 +20,6 @@
 
 .vercel
 .env*
+
+# Windows/Cygwin 크래시 덤프
+*.stackdump
