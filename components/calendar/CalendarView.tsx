@@ -902,11 +902,15 @@ function TaskFormModal({
           endDate: new Date(`${startDate}T${endTime}`).toISOString(),
           allDay: false,
         };
-    const editUrl = `/api/tasks/${task!.id}${isEdit && task!.recurrenceId && seriesScope !== "this" ? `?scope=${seriesScope}` : ""}`;
+    // 등록(create)일 땐 task가 없으므로 task.id에 접근하지 않는다.
+    // (무조건 평가하면 새 업무 등록 시 undefined.id → 크래시 + "저장 중…" 무한로딩)
+    const url = isEdit
+      ? `/api/tasks/${task!.id}${task!.recurrenceId && seriesScope !== "this" ? `?scope=${seriesScope}` : ""}`
+      : "/api/tasks";
     // 네트워크 오류·비정상(비-JSON) 응답에도 항상 로딩을 풀고 오류를 표시한다.
     // (try/catch가 없으면 500 응답의 res.json()이 throw돼 "저장 중…"에서 무한 정지)
     try {
-      const res = await fetch(isEdit ? editUrl : "/api/tasks", {
+      const res = await fetch(url, {
         method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
