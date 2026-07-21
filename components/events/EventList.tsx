@@ -33,7 +33,7 @@ function ddayOf(iso: string | null) {
   const d = new Date(iso); d.setHours(0, 0, 0, 0);
   const diff = Math.round((d.getTime() - t.getTime()) / 86400000);
   if (diff === 0) return { label: "D-DAY", tone: "urgent" as const };
-  if (diff > 0) return { label: `D-${diff}`, tone: diff <= 3 ? ("urgent" as const) : ("soon" as const) };
+  if (diff > 0) return { label: `D-${diff}`, tone: (diff <= 3 ? "urgent" : diff <= 14 ? "soon" : "far") as "urgent" | "soon" | "far" };
   return { label: `D+${-diff}`, tone: "past" as const };
 }
 function fmtDate(iso: string | null) {

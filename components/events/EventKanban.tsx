@@ -37,7 +37,7 @@ function ddayOf(iso: string | null) {
   const d = new Date(iso); d.setHours(0, 0, 0, 0);
   const diff = Math.round((d.getTime() - t.getTime()) / 86400000);
   if (diff === 0) return { label: "D-DAY", tone: "urgent" as const };
-  if (diff > 0) return { label: `D-${diff}`, tone: diff <= 3 ? ("urgent" as const) : ("soon" as const) };
+  if (diff > 0) return { label: `D-${diff}`, tone: (diff <= 3 ? "urgent" : diff <= 14 ? "soon" : "far") as "urgent" | "soon" | "far" };
   return { label: `D+${-diff}`, tone: "past" as const };
 }
 const toPayload = (items: Item[]) =>
@@ -321,6 +321,7 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
             <div
               key={c.key}
               className={`kb-col${dragOver === c.key ? " drop-over" : ""}`}
+              style={{ "--col": c.color } as any}
               onDragOver={canManage ? (e) => { e.preventDefault(); if (dragOver !== c.key) setDragOver(c.key); } : undefined}
               onDragLeave={canManage ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver((cur) => (cur === c.key ? null : cur)); } : undefined}
               onDrop={canManage ? () => handleDrop(c.key) : undefined}
