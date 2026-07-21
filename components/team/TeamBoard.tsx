@@ -12,7 +12,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { ModalClose } from "@/components/ModalClose";
 import { ABSENCE_LABEL, HALF_DAY_TYPES, type AbsenceType } from "@/lib/absenceTypes";
 
-type OverlayEvent = { id: string; userId: string; title: string; startDate: string; endDate: string; allDay: boolean };
+type OverlayEvent = { id: string; userId: string; title: string; startDate: string; endDate: string; allDay: boolean; location?: string; memo?: string };
 type OverlayMember = { id: string; name: string; role: string };
 type AbsenceItem = {
   id: string; user: { id: string; name: string } | null; team: { id: string; name: string; color: string } | null;
@@ -21,6 +21,21 @@ type AbsenceItem = {
 
 // 멤버별 오버레이 색 팔레트 (Toss 톤)
 const PALETTE = ["#3182f6", "#f04452", "#12b3a6", "#8b5cf6", "#e8951b", "#f0466e", "#22c55e", "#0ea5e9", "#f97316", "#64748b"];
+
+// 로컬 시각 HH:mm
+function hhmm(iso: string) {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+// 상세 모달 기간 표기 — 하루종일/시간지정, 같은 날/여러 날 구분
+function periodLabel(e: { startDate: string; endDate: string; allDay: boolean }) {
+  const s = new Date(e.startDate), en = new Date(e.endDate);
+  const dateStr = (d: Date) => d.toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
+  const sameDay = s.toDateString() === en.toDateString();
+  if (e.allDay) return sameDay ? dateStr(s) : `${dateStr(s)} ~ ${dateStr(en)}`;
+  if (sameDay) return `${dateStr(s)} · ${hhmm(e.startDate)} ~ ${hhmm(e.endDate)}`;
+  return `${dateStr(s)} ${hhmm(e.startDate)} ~ ${dateStr(en)} ${hhmm(e.endDate)}`;
+}
 
 export default function TeamBoard({
   teamName, teamColor, teamId, teams,
@@ -40,6 +55,8 @@ export default function TeamBoard({
   const [hiddenNames, setHiddenNames] = useState<string[]>([]);
   const [offMembers, setOffMembers] = useState<Set<string>>(new Set()); // 레전드에서 끈 멤버
   const [curStart, setCurStart] = useState<Date | null>(null);
+  const [viewEv, setViewEv] = useState<{ ownerName: string; ev: OverlayEvent } | null>(null); // 개인일정 읽기전용 상세
+  const [viewAbs, setViewAbs] = useState<AbsenceItem | null>(null); // 부재 읽기전용 상세
 
   // ── 부재·휴가 ──
   const [absences, setAbsences] = useState<AbsenceItem[]>([]);
@@ -111,8 +128,10 @@ export default function TeamBoard({
           d.setDate(d.getDate() + 1);
           end = d.toISOString();
         }
+        // 시간 지정 일정은 시각(HH:mm)을 함께 표시 — "이정민 · 14:00 직장"
+        const label = e.allDay ? e.title : `${hhmm(e.startDate)} ${e.title}`;
         return {
-          id: e.id, title: `${owner} · ${e.title}`, start: e.startDate, end, allDay: e.allDay,
+          id: e.id, title: `${owner} · ${label}`, start: e.startDate, end, allDay: e.allDay,
           backgroundColor: color + "22", borderColor: color, textColor: color,
         };
       }),
@@ -212,7 +231,17 @@ export default function TeamBoard({
           eventDisplay="block"
           displayEventTime={false}
           events={fcEvents}
-          eventDidMount={(info) => { info.el.title = info.event.title; }}
+          eventDidMount={(info) => { info.el.title = info.event.title; info.el.style.cursor = "pointer"; }}
+          eventClick={(arg) => {
+            const id = arg.event.id;
+            if (id.startsWith("abs-")) {
+              const a = absences.find((x) => `abs-${x.id}` === id);
+              if (a) setViewAbs(a);
+            } else {
+              const ev = events.find((x) => x.id === id);
+              if (ev) setViewEv({ ownerName: members.find((m) => m.id === ev.userId)?.name ?? "", ev });
+            }
+          }}
           datesSet={(arg) => {
             setCurStart(arg.view.currentStart);
             lastRange.current = { from: arg.startStr, to: arg.endStr };
@@ -281,6 +310,49 @@ export default function TeamBoard({
             if (lastRange.current) fetchAbs(lastRange.current.from, lastRange.current.to);
           }}
         />
+      )}
+
+      {/* 개인일정 읽기전용 상세 — 겹쳐보기에서 팀원 일정을 클릭했을 때 */}
+      {viewEv && (
+        <div className="modal-overlay" onClick={() => setViewEv(null)}>
+          <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+            <ModalClose onClose={() => setViewEv(null)} />
+            <h2 className="detail-title" style={{ marginTop: 4 }}>{viewEv.ev.title}</h2>
+            <div className="meta-grid">
+              {viewEv.ownerName && <div className="meta"><div className="k">담당</div><div className="v">{viewEv.ownerName}</div></div>}
+              <div className="meta"><div className="k">기간</div><div className="v">{periodLabel(viewEv.ev)}</div></div>
+              {viewEv.ev.location && <div className="meta"><div className="k">장소</div><div className="v">{viewEv.ev.location}</div></div>}
+            </div>
+            {viewEv.ev.memo && (
+              <>
+                <div className="detail-section-label">메모</div>
+                <div className="detail-desc">{viewEv.ev.memo}</div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 부재·휴가 읽기전용 상세 */}
+      {viewAbs && (
+        <div className="modal-overlay" onClick={() => setViewAbs(null)}>
+          <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+            <ModalClose onClose={() => setViewAbs(null)} />
+            <h2 className="detail-title" style={{ marginTop: 4 }}>🏖 {viewAbs.typeLabel}</h2>
+            <div className="meta-grid">
+              <div className="meta"><div className="k">대상</div><div className="v">{viewAbs.user?.name ?? "?"}</div></div>
+              <div className="meta"><div className="k">기간</div><div className="v">
+                {fmtD(viewAbs.startDate)}{viewAbs.startDate.slice(0, 10) !== viewAbs.endDate.slice(0, 10) ? ` ~ ${fmtD(viewAbs.endDate)}` : ""}
+              </div></div>
+            </div>
+            {viewAbs.note && (
+              <>
+                <div className="detail-section-label">메모</div>
+                <div className="detail-desc">{viewAbs.note}</div>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

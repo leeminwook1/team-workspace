@@ -18,6 +18,12 @@ type Viewable = { id: string; name: string; teamName: string };
 
 const PERSONAL_COLOR = "#7d5ef7"; // 개인 일정 색 (보라)
 
+// 로컬 시각 HH:mm — 달력 셀·상세에서 시간 표기용
+function hhmm(iso: string) {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 export default function PersonalCalendar({ meName, viewables }: { meName: string; viewables: Viewable[] }) {
   const calRef = useRef<FullCalendar>(null);
   const [events, setEvents] = useState<PEvent[]>([]);
@@ -64,8 +70,9 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
       d.setDate(d.getDate() + 1);
       end = d.toISOString();
     }
+    // 시간 지정 일정은 제목 앞에 시각(HH:mm)을 붙여 달력에서 바로 보이게 한다
     return {
-      id: e.id, title: e.title, start: e.startDate, end, allDay: e.allDay,
+      id: e.id, title: e.allDay ? e.title : `${hhmm(e.startDate)} ${e.title}`, start: e.startDate, end, allDay: e.allDay,
       backgroundColor: PERSONAL_COLOR + "26", borderColor: PERSONAL_COLOR, textColor: PERSONAL_COLOR,
     };
   });

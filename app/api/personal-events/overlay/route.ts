@@ -50,6 +50,9 @@ export async function GET(req: Request) {
       startDate: e.startDate,
       endDate: e.endDate,
       allDay: e.allDay,
+      // 상세보기용 — 열람 권한(canViewPersonalCalendar)을 이미 통과한 멤버의 일정만 담긴다
+      location: e.location ?? "",
+      memo: e.memo ?? "",
     })),
   });
 }
