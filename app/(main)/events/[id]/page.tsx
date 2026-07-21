@@ -5,7 +5,7 @@ import { Event } from "@/models/Event";
 import { Team } from "@/models/Team";
 import { authOptions } from "@/lib/auth";
 import { canManageEvents, type SessionUser } from "@/lib/permissions";
-import EventKanban from "@/components/events/EventKanban";
+import { LazyEventKanban as EventKanban } from "@/components/LazyLoad";
 
 export const dynamic = "force-dynamic";
 

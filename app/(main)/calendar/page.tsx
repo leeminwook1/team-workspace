@@ -4,7 +4,7 @@ import { Team } from "@/models/Team";
 import { Category } from "@/models/Category";
 import { authOptions } from "@/lib/auth";
 import { canViewAllTeams, type SessionUser } from "@/lib/permissions";
-import CalendarView from "@/components/calendar/CalendarView";
+import { LazyCalendarView as CalendarView } from "@/components/LazyLoad";
 
 export const dynamic = "force-dynamic";
 

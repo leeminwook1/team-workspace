@@ -64,6 +64,12 @@ export default function ReservationBoard({
   const [listLoaded, setListLoaded] = useState(false); // 첫 로드 전 '예약 없음' 깜빡임 방지
   const [err, setErr] = useState("");
   const [view, setView] = useState<"rtl" | "list">("rtl"); // 기본은 장비별 타임라인
+  // 모바일 — 타임라인은 가로 스크롤·드래그라 조작이 어려움 → '대여 내역'을 기본으로.
+  // (첫 마운트에서만 판별해 전환. 이후엔 사용자가 자유롭게 토글)
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 640px)").matches) setView("list");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [modalOpen, setModalOpen] = useState(false);
   // 예약 모달 초기값 — 타임라인에서 클릭·드래그한 장비·날짜·시간대로 바로 열기
   const [modalInit, setModalInit] = useState<{ resourceIds?: string[]; startDate?: string; startTime?: string; endTime?: string } | null>(null);

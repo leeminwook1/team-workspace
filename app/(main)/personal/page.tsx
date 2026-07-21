@@ -5,7 +5,7 @@ import { connectDB } from "@/lib/mongodb";
 import { User } from "@/models/User";
 import "@/models/Team";
 import type { SessionUser } from "@/lib/permissions";
-import PersonalCalendar from "@/components/personal/PersonalCalendar";
+import { LazyPersonalCalendar as PersonalCalendar } from "@/components/LazyLoad";
 
 export const dynamic = "force-dynamic";
 

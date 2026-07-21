@@ -12,6 +12,7 @@ import NavLinks, { BottomNav, type NavItem } from "@/components/NavLinks";
 import ThemeToggle from "@/components/ThemeToggle";
 import GlobalSearch from "@/components/GlobalSearch";
 import NotificationBell from "@/components/NotificationBell";
+import ErrorReporter from "@/components/ErrorReporter";
 import { Icon } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -127,6 +128,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       </header>
 
       <main className="main">{children}</main>
+      <ErrorReporter />
 
       {/* ── 모바일 하단 탭바 ── */}
       <BottomNav items={navItems} />

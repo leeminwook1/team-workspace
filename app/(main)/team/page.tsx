@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/mongodb";
 import { Team } from "@/models/Team";
 import { canViewAllTeams, type SessionUser } from "@/lib/permissions";
-import TeamBoard from "@/components/team/TeamBoard";
+import { LazyTeamBoard as TeamBoard } from "@/components/LazyLoad";
 import AutoRefresh from "@/components/AutoRefresh";
 
 export const dynamic = "force-dynamic";
