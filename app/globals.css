@@ -1052,6 +1052,29 @@ a { color: inherit; text-decoration: none; }
   .um-toolbar select { flex: 1; }
 }
 
+/* ── 페이지 로딩 스켈레톤 — 내비게이션 즉시 피드백 ── */
+.pg-skel { padding: 4px 0; }
+.pg-skel-bar, .pg-skel-card, .pg-skel-block {
+  position: relative; overflow: hidden;
+  background: var(--surface-2); border-radius: var(--r-sm);
+}
+.pg-skel-bar::after, .pg-skel-card::after, .pg-skel-block::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 4%, transparent), transparent);
+  animation: pg-shimmer 1.4s infinite;
+}
+@keyframes pg-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.pg-skel-bar { height: 26px; margin-bottom: 10px; }
+.pg-skel-bar.thin { height: 14px; margin-bottom: 20px; }
+.pg-skel-bar.w40 { width: 40%; max-width: 220px; }
+.pg-skel-bar.w64 { width: 64%; max-width: 380px; }
+.pg-skel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 14px; margin-bottom: 16px; }
+.pg-skel-card { height: 120px; border-radius: var(--r-lg); }
+.pg-skel-block { height: 260px; border-radius: var(--r-md); }
+@media (prefers-reduced-motion: reduce) {
+  .pg-skel-bar::after, .pg-skel-card::after, .pg-skel-block::after { animation: none; }
+}
+
 /* ── 팀 현황 (팀원 개인일정 겹쳐보기) ── */
 .tb-cal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .tb-cal-head h2 { display: flex; align-items: center; gap: 7px; font-size: 16px; font-weight: 800; margin: 0; }

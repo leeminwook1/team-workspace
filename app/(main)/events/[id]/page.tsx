@@ -10,15 +10,19 @@ import { LazyEventKanban as EventKanban } from "@/components/LazyLoad";
 export const dynamic = "force-dynamic";
 
 export default async function EventDetailPage({ params }: { params: { id: string } }) {
+  // 잘못된 id로 접근 시 CastError 500 페이지 대신 목록으로
+  if (!/^[0-9a-fA-F]{24}$/.test(params.id)) redirect("/events");
+
   const session = await getServerSession(authOptions);
   const user = session!.user as SessionUser;
 
   await connectDB();
-  const ev: any = await Event.findById(params.id).lean();
+  // 행사 존재 확인 + 팀 목록 — 독립 쿼리라 병렬로 (수정 모달에서 팀 추가용 전체 활성 팀 전달)
+  const [ev, allTeams] = await Promise.all([
+    Event.findById(params.id).lean() as Promise<any>,
+    Team.find({ isActive: true }).sort({ createdAt: 1 }).lean(),
+  ]);
   if (!ev) redirect("/events");
-
-  // 수정 모달에서 팀 추가가 가능하도록 전체 활성 팀 전달
-  const allTeams = await Team.find({ isActive: true }).sort({ createdAt: 1 }).lean();
 
   return (
     <EventKanban
