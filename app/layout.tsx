@@ -11,6 +11,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body>
+        {/* Pretendard 동적 서브셋 — 쓰인 글리프 조각만 다운로드(unicode-range),
+            font-display:swap 내장이라 로딩 중에도 시스템 폰트로 먼저 그려짐.
+            (font-family 스택의 "Pretendard Variable"이 이 CSS로 채워진다) */}
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+          crossOrigin="anonymous"
+        />
         {/* 테마 플래시 방지: 저장된 테마를 페인트 전에 적용 */}
         <script
           dangerouslySetInnerHTML={{
