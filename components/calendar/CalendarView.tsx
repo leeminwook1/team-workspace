@@ -903,24 +903,31 @@ function TaskFormModal({
           allDay: false,
         };
     const editUrl = `/api/tasks/${task!.id}${isEdit && task!.recurrenceId && seriesScope !== "this" ? `?scope=${seriesScope}` : ""}`;
-    const res = await fetch(isEdit ? editUrl : "/api/tasks", {
-      method: isEdit ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title, teamIds, categoryId: categoryId || null, assignees: Array.from(assignees),
-        priority, location, description, ...when,
-        resourceIds: repeat !== "none" ? [] : resourceIds,
-        // 장비별 담당자 — 선택된 장비 + 현재 담당자로 지정된 사람만 전송
-        resourceOwners: repeat !== "none" ? undefined : Object.fromEntries(
-          Object.entries(resourceOwners).filter(([rid, uid]) => resourceIds.includes(rid) && assignees.has(uid))
-        ),
-        ...(isEdit ? {} : { repeat, repeatUntil: repeat !== "none" && repeatUntil ? repeatUntil : undefined }),
-      }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) { setErr(data.error ?? (isEdit ? "수정에 실패했습니다." : "등록에 실패했습니다.")); return; }
-    onSaved();
+    // 네트워크 오류·비정상(비-JSON) 응답에도 항상 로딩을 풀고 오류를 표시한다.
+    // (try/catch가 없으면 500 응답의 res.json()이 throw돼 "저장 중…"에서 무한 정지)
+    try {
+      const res = await fetch(isEdit ? editUrl : "/api/tasks", {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title, teamIds, categoryId: categoryId || null, assignees: Array.from(assignees),
+          priority, location, description, ...when,
+          resourceIds: repeat !== "none" ? [] : resourceIds,
+          // 장비별 담당자 — 선택된 장비 + 현재 담당자로 지정된 사람만 전송
+          resourceOwners: repeat !== "none" ? undefined : Object.fromEntries(
+            Object.entries(resourceOwners).filter(([rid, uid]) => resourceIds.includes(rid) && assignees.has(uid))
+          ),
+          ...(isEdit ? {} : { repeat, repeatUntil: repeat !== "none" && repeatUntil ? repeatUntil : undefined }),
+        }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? (isEdit ? "수정에 실패했습니다." : "등록에 실패했습니다.")); return; }
+      onSaved();
+    } catch {
+      setErr("네트워크 오류로 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

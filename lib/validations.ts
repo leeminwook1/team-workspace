@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+// MongoDB ObjectId 형식(24자리 hex) 문자열. 형식이 어긋난 값이 Mongoose 쿼리·생성에
+// 그대로 들어가면 CastError로 500(비-JSON)이 나 클라이언트가 무한로딩에 빠진다.
+// 여기서 미리 걸러 깔끔한 400 메시지로 응답한다.
+export const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, "잘못된 ID 형식입니다");
+
 // 식순·타임테이블 한 줄 — 행사·촬영 업무가 공유
 export const programRowSchema = z.object({
   id: z.string().optional(), // 기존 항목이면 _id 유지
@@ -22,9 +27,9 @@ export const registerSchema = z.object({
 export const taskCreateSchema = z.object({
   title: z.string().min(1, "제목을 입력하세요").max(120),
   description: z.string().max(2000).optional().default(""),
-  teamIds: z.array(z.string().min(1)).min(1, "팀을 하나 이상 선택하세요"),
-  categoryId: z.string().nullable().optional(),
-  assignees: z.array(z.string()).optional().default([]),
+  teamIds: z.array(objectId).min(1, "팀을 하나 이상 선택하세요"),
+  categoryId: objectId.nullable().optional(),
+  assignees: z.array(objectId).optional().default([]),
   startDate: z.string().min(1), // ISO date 또는 datetime
   endDate: z.string().min(1),
   allDay: z.boolean().optional().default(true),
@@ -34,25 +39,25 @@ export const taskCreateSchema = z.object({
   repeat: z.enum(["none", "daily", "weekly", "biweekly", "monthly"]).optional().default("none"),
   repeatUntil: z.string().optional(),
   // 대여 장비 — 선택 시 업무 기간에 자원 예약 자동 생성 (반복 일정과는 함께 불가)
-  resourceIds: z.array(z.string().min(1)).max(40, "장비는 최대 40개까지 선택할 수 있어요").optional().default([]),
+  resourceIds: z.array(objectId).max(40, "장비는 최대 40개까지 선택할 수 있어요").optional().default([]),
   // 장비별 담당자 — resourceId → userId. 그 사람 이름으로 예약이 잡혀 반납 책임이 감 (미지정 = 등록자)
-  resourceOwners: z.record(z.string(), z.string()).optional(),
+  resourceOwners: z.record(objectId, objectId).optional(),
 });
 
 export const taskUpdateSchema = z.object({
   title: z.string().min(1).max(120).optional(),
   description: z.string().max(2000).optional(),
-  teamIds: z.array(z.string().min(1)).min(1).optional(),
-  categoryId: z.string().nullable().optional(),
-  assignees: z.array(z.string()).optional(),
+  teamIds: z.array(objectId).min(1).optional(),
+  categoryId: objectId.nullable().optional(),
+  assignees: z.array(objectId).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   allDay: z.boolean().optional(),
   status: z.enum(["todo", "in_progress", "done", "hold"]).optional(),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
   location: z.string().max(120).optional(),
-  resourceIds: z.array(z.string().min(1)).max(40, "장비는 최대 40개까지 선택할 수 있어요").optional(), // undefined = 장비 변경 없음
-  resourceOwners: z.record(z.string(), z.string()).optional(), // 장비별 담당자 (resourceId → userId)
+  resourceIds: z.array(objectId).max(40, "장비는 최대 40개까지 선택할 수 있어요").optional(), // undefined = 장비 변경 없음
+  resourceOwners: z.record(objectId, objectId).optional(), // 장비별 담당자 (resourceId → userId)
   // 식순·타임테이블 — 촬영 등 진행 순서가 있는 업무. undefined = 변경 없음
   program: z.array(programRowSchema).max(100, "식순은 100줄까지예요").optional(),
 });
@@ -61,8 +66,8 @@ export const taskUpdateSchema = z.object({
 export const eventCreateSchema = z.object({
   title: z.string().min(1, "행사명을 입력하세요").max(200),
   description: z.string().max(2000).optional().default(""),
-  teamIds: z.array(z.string().min(1)).min(1, "참여 팀을 하나 이상 선택하세요"),
-  managerId: z.string().nullable().optional(),
+  teamIds: z.array(objectId).min(1, "참여 팀을 하나 이상 선택하세요"),
+  managerId: objectId.nullable().optional(),
   eventDate: z.string().nullable().optional(),
   location: z.string().max(120).optional().default(""),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
@@ -71,16 +76,16 @@ const eventItemSchema = z.object({
   id: z.string().optional(), // 기존 항목이면 _id 유지
   title: z.string().min(1).max(200),
   status: z.enum(["todo", "doing", "hold", "done"]).optional().default("todo"),
-  teamId: z.string().nullable().optional(),
-  assigneeId: z.string().nullable().optional(),
+  teamId: objectId.nullable().optional(),
+  assigneeId: objectId.nullable().optional(),
   dueDate: z.string().nullable().optional(),
   note: z.string().max(500).optional().default(""),
 });
 export const eventUpdateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),
-  teamIds: z.array(z.string().min(1)).min(1).optional(),
-  managerId: z.string().nullable().optional(),
+  teamIds: z.array(objectId).min(1).optional(),
+  managerId: objectId.nullable().optional(),
   eventDate: z.string().nullable().optional(),
   location: z.string().max(120).optional(),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),

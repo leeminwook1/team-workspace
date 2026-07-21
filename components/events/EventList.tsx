@@ -184,15 +184,21 @@ export function EventFormModal({
     setErr("");
     if (teamIds.length === 0) { setErr("참여 팀을 하나 이상 선택하세요."); return; }
     setBusy(true);
-    const res = await fetch(isEdit ? `/api/events/${ev.id}` : "/api/events", {
-      method: isEdit ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, teamIds, managerId: managerId || null, eventDate: eventDate || null, location, priority, description }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
-    onSaved();
+    // 네트워크 오류·비정상(비-JSON) 응답에도 항상 로딩을 풀고 오류를 표시한다.
+    try {
+      const res = await fetch(isEdit ? `/api/events/${ev.id}` : "/api/events", {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, teamIds, managerId: managerId || null, eventDate: eventDate || null, location, priority, description }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
+      onSaved();
+    } catch {
+      setErr("네트워크 오류로 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
