@@ -809,21 +809,24 @@ a { color: inherit; text-decoration: none; }
 .abs-period { color: var(--ink-soft); font-weight: 600; flex: none; }
 .abs-note { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .abs-del { margin-left: auto; flex: none; }
+/* 경고 콜아웃 공통 베이스 — 부재(.abs-warn)·개인일정(.busy-warn)·유사일정(.dup-warn) 통일 */
+.abs-warn, .busy-warn, .dup-warn {
+  margin: 8px 0 0; border-radius: 10px; padding: 9px 12px;
+}
 .abs-warn {
-  margin: 8px 0 0; font-size: 12px; font-weight: 700; color: var(--warn-ink);
-  background: color-mix(in srgb, #f59e0b 10%, transparent); border-radius: 8px; padding: 7px 10px;
+  font-size: 12px; font-weight: 700; color: var(--warn-ink);
+  background: color-mix(in srgb, #f59e0b 10%, transparent);
 }
 .chip-btn.away { border-style: dashed; }
 /* 개인일정이 겹치는 후보 — 보라 밑줄 표시 (담당자 배정 시 가능/불가능 안내) */
 .chip-btn.busy { box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--busy-ink) 60%, transparent); }
 .busy-warn {
-  margin: 8px 0 0; font-size: 12px; font-weight: 700; color: var(--busy-ink);
-  background: color-mix(in srgb, #7d5ef7 10%, transparent); border-radius: 8px; padding: 7px 10px;
+  font-size: 12px; font-weight: 700; color: var(--busy-ink);
+  background: color-mix(in srgb, #7d5ef7 10%, transparent);
 }
 
 /* 등록 모달 중복(유사 일정) 경고 — 등록 대신 기존 일정 참여 제안 */
 .dup-warn {
-  margin: 8px 0 0; padding: 10px 12px; border-radius: 10px;
   background: color-mix(in srgb, #f59e0b 10%, transparent);
 }
 .dup-warn-head { margin: 0 0 6px; font-size: 12.5px; font-weight: 800; color: var(--warn-ink); }

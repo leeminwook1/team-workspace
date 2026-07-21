@@ -1,10 +1,24 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "CHQ — 문화과 업무일정",
   description: "문화과 모든 팀의 업무 일정을 하나의 달력에서 관리합니다.",
+  // PWA — 홈 화면에 추가하면 앱처럼(주소창 없이) 실행
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" }, // SVG 파비콘 미지원 브라우저 폴백
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: { capable: true, title: "CHQ", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#3182f6",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

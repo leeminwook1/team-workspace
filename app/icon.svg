@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- CHQ 앱 아이콘 — 사이드바 로고와 동일한 브랜드 블루 라운드 사각 + C -->
+  <rect width="512" height="512" rx="115" fill="#3182f6"/>
+  <text x="256" y="256" dy="0.36em" text-anchor="middle"
+        font-family="Pretendard, -apple-system, 'Segoe UI', Arial, sans-serif"
+        font-size="300" font-weight="800" fill="#ffffff">C</text>
+</svg>

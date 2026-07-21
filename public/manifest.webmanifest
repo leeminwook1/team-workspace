@@ -1,0 +1,16 @@
+{
+  "name": "CHQ — 문화과 업무일정",
+  "short_name": "CHQ",
+  "description": "문화과 모든 팀의 업무 일정을 하나의 달력에서 관리합니다.",
+  "start_url": "/home",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f4f6",
+  "theme_color": "#3182f6",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

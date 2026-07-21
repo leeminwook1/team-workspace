@@ -530,10 +530,10 @@ export default function HomeWidgets({ initialLayout, canDirectives, data }: {
           >
             {editing && (
               <div className="wg-ctrl">
-                <button title="앞으로" disabled={i === 0} onClick={() => move(i, -1)}><Icon name="chevronL" size={13} /></button>
-                <button title="뒤로" disabled={i === layout.length - 1} onClick={() => move(i, 1)}><Icon name="chevronR" size={13} /></button>
+                <button title="앞으로" aria-label="위젯 앞으로 이동" disabled={i === 0} onClick={() => move(i, -1)}><Icon name="chevronL" size={13} /></button>
+                <button title="뒤로" aria-label="위젯 뒤로 이동" disabled={i === layout.length - 1} onClick={() => move(i, 1)}><Icon name="chevronR" size={13} /></button>
                 <button className="wg-ctrl-size" title="크기 전환" onClick={() => resize(i)}>{w.size === 2 ? "반폭" : "전폭"}</button>
-                <button className="wg-ctrl-x" title="제거" onClick={() => remove(i)}>✕</button>
+                <button className="wg-ctrl-x" title="제거" aria-label="위젯 제거" onClick={() => remove(i)}>✕</button>
               </div>
             )}
             <div className="wg-body">{renderWidget(w.id)}</div>
