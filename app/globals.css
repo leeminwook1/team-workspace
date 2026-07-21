@@ -803,6 +803,12 @@ a { color: inherit; text-decoration: none; }
   background: color-mix(in srgb, #f59e0b 10%, transparent); border-radius: 8px; padding: 7px 10px;
 }
 .chip-btn.away { border-style: dashed; }
+/* 개인일정이 겹치는 후보 — 보라 톤으로 표시 (담당자 배정 시 가능/불가능 안내) */
+.chip-btn.busy { box-shadow: inset 0 -2px 0 color-mix(in srgb, #7d5ef7 55%, transparent); }
+.busy-warn {
+  margin: 8px 0 0; font-size: 12px; font-weight: 700; color: #6d28d9;
+  background: color-mix(in srgb, #7d5ef7 10%, transparent); border-radius: 8px; padding: 7px 10px;
+}
 
 /* 등록 모달 중복(유사 일정) 경고 — 등록 대신 기존 일정 참여 제안 */
 .dup-warn {

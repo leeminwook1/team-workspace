@@ -876,6 +876,34 @@ function TaskFormModal({
 
   useEffect(() => { loadMembers(teamIds); }, [teamIds, loadMembers]);
 
+  // 이 시간대에 개인일정이 겹치는 후보 — 담당자 배정 시 "가능/불가능" 표시
+  // (열람 권한 있는 대상만 서버가 응답 — 팀장은 자기 팀원 전원 커버)
+  const [busyMap, setBusyMap] = useState<Map<string, string>>(new Map()); // userId → "알바 09:00–13:00 외 1건"
+  useEffect(() => {
+    if (!startDate || !endDate || members.length === 0) { setBusyMap(new Map()); return; }
+    const from = allDay ? new Date(`${startDate}T00:00:00`) : new Date(`${startDate}T${startTime || "00:00"}:00`);
+    const to = allDay ? new Date(`${endDate}T23:59:59`) : new Date(`${startDate}T${endTime || "23:59"}:00`);
+    if (isNaN(from.getTime()) || isNaN(to.getTime()) || to <= from) { setBusyMap(new Map()); return; }
+    let alive = true;
+    const ids = members.map((m) => m.id).join(",");
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/personal-events/busy?from=${from.toISOString()}&to=${to.toISOString()}&users=${ids}`);
+        if (!res.ok || !alive) return;
+        const data = await res.json();
+        const map = new Map<string, string>();
+        for (const [uid, evs] of Object.entries<any>(data.busy ?? {})) {
+          if (!Array.isArray(evs) || evs.length === 0) continue;
+          const e = evs[0];
+          const when = e.allDay ? "하루종일" : `${toTime(e.startDate)}–${toTime(e.endDate)}`;
+          map.set(uid, `${e.title} ${when}${evs.length > 1 ? ` 외 ${evs.length - 1}건` : ""}`);
+        }
+        if (alive) setBusyMap(map);
+      } catch {}
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [startDate, endDate, startTime, endTime, allDay, members]);
+
   function toggleTeam(id: string) {
     setTeamIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
@@ -1104,16 +1132,20 @@ function TaskFormModal({
             <div className="field">
               <label>담당자</label>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {members.map((m) => (
-                  <button
-                    type="button" key={m.id}
-                    className={`chip chip-btn${assignees.has(m.id) ? " sel" : ""}${absMap.has(m.id) ? " away" : ""}`}
-                    title={absMap.has(m.id) ? `부재: ${absMap.get(m.id)}` : undefined}
-                    onClick={() => toggleAssignee(m.id)}
-                  >
-                    {m.name}{absMap.has(m.id) && <span aria-hidden> 🏖</span>}
-                  </button>
-                ))}
+                {members.map((m) => {
+                  const away = absMap.has(m.id), busy = busyMap.has(m.id);
+                  const tip = [away ? `부재: ${absMap.get(m.id)}` : null, busy ? `개인일정: ${busyMap.get(m.id)}` : null].filter(Boolean).join(" · ");
+                  return (
+                    <button
+                      type="button" key={m.id}
+                      className={`chip chip-btn${assignees.has(m.id) ? " sel" : ""}${away ? " away" : ""}${busy ? " busy" : ""}`}
+                      title={tip || undefined}
+                      onClick={() => toggleAssignee(m.id)}
+                    >
+                      {m.name}{away && <span aria-hidden> 🏖</span>}{busy && <span aria-hidden> 🗓</span>}
+                    </button>
+                  );
+                })}
               </div>
               {(() => {
                 const away = members.filter((m) => assignees.has(m.id) && absMap.has(m.id));
@@ -1121,6 +1153,15 @@ function TaskFormModal({
                 return (
                   <p className="abs-warn">
                     ⚠ 이 기간에 부재인 담당자가 있어요 — {away.map((m) => `${m.name}(${absMap.get(m.id)})`).join(", ")}
+                  </p>
+                );
+              })()}
+              {(() => {
+                const busy = members.filter((m) => assignees.has(m.id) && busyMap.has(m.id));
+                if (busy.length === 0) return null;
+                return (
+                  <p className="busy-warn">
+                    🗓 이 시간에 개인일정이 있는 담당자가 있어요 — {busy.map((m) => `${m.name}(${busyMap.get(m.id)})`).join(", ")}
                   </p>
                 );
               })()}
