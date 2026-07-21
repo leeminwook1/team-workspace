@@ -65,10 +65,14 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
       confirmText: "삭제", danger: true,
     });
     if (!ok) return;
-    const res = await fetch(`/api/admin/users/${u.id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
-    load();
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
+      load();
+    } catch {
+      setErr("네트워크 오류로 삭제하지 못했어요.");
+    }
   }
 
   // 검색 → 팀 필터 → 정렬
@@ -193,12 +197,17 @@ function EditModal({
     });
     if (!ok) return;
     setBusy(true); setErr("");
-    const res = await fetch(`/api/admin/users/${user.id}/reset-password`, { method: "POST" });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "발급 실패"); return; }
-    setTempPw(data.tempPassword);
-    setCopied(false);
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/reset-password`, { method: "POST" });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "발급 실패"); return; }
+      setTempPw(data.tempPassword);
+      setCopied(false);
+    } catch {
+      setErr("네트워크 오류로 발급하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function copyTempPw() {
@@ -210,13 +219,18 @@ function EditModal({
     setBusy(true); setErr("");
     const body: any = { role, teamId: isTeamRole(role) ? teamId : null };
     if (!isSelf) body.status = active ? "active" : "disabled";
-    const res = await fetch(`/api/admin/users/${user.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
-    onSaved();
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
+      onSaved();
+    } catch {
+      setErr("네트워크 오류로 저장하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

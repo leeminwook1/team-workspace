@@ -399,14 +399,19 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
     setErr("");
     if (!teamId) { setErr("대상 팀을 선택하세요."); return; }
     setBusy(true);
-    const res = await fetch("/api/directives", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, body, teamId, dueDate: dueDate || null, priority }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "등록 실패"); return; }
-    onSaved();
+    try {
+      const res = await fetch("/api/directives", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, body, teamId, dueDate: dueDate || null, priority }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "등록 실패"); return; }
+      onSaved();
+    } catch {
+      setErr("네트워크 오류로 등록하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

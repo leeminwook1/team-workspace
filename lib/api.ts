@@ -22,6 +22,12 @@ export function json(data: unknown, status = 200) {
   return NextResponse.json({ success: status < 400, ...(data as object) }, { status });
 }
 
+// [id] 라우트 공통 가드 — ObjectId 형식이 아니면 400 응답을 반환(그대로 return), 정상이면 null.
+// 검증 없이 Mongoose에 넘기면 CastError로 500(비-JSON)이 나 클라이언트 처리도 지저분해진다.
+export function badId(id: string): NextResponse | null {
+  return /^[0-9a-fA-F]{24}$/.test(id) ? null : json({ error: "잘못된 요청입니다." }, 400);
+}
+
 // 쓰기 rate limit — 초과 시 429 응답을 반환(그대로 return), 통과면 null.
 // 알림·대량 생성 유발 엔드포인트(피드백·공지·댓글·참여·검색)의 스팸 방어용.
 export async function limitWrites(key: string, limit: number, windowMs: number): Promise<NextResponse | null> {

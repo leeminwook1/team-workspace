@@ -80,17 +80,22 @@ function MiniCalWidget({ initialTasks }: { initialTasks: WTask[] }) {
   const tasks = cache[curKey];
 
   // 다른 달로 이동하면 그 달 업무를 지연 로드
+  const [monthErr, setMonthErr] = useState(false); // 로드 실패 안내 (무음 실패 방지)
   function moveMonth(delta: number) {
     const next = new Date(month.getFullYear(), month.getMonth() + delta, 1);
     setMonth(next);
+    setMonthErr(false);
     const key = `${next.getFullYear()}-${pad(next.getMonth() + 1)}`;
     if (!cache[key]) {
       const from = next.toISOString();
       const to = new Date(next.getFullYear(), next.getMonth() + 1, 1).toISOString();
       fetch(`/api/tasks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (d?.tasks) setCache((c) => ({ ...c, [key]: d.tasks })); })
-        .catch(() => {});
+        .then((d) => {
+          if (d?.tasks) setCache((c) => ({ ...c, [key]: d.tasks }));
+          else setMonthErr(true);
+        })
+        .catch(() => setMonthErr(true));
     }
   }
 
@@ -134,6 +139,11 @@ function MiniCalWidget({ initialTasks }: { initialTasks: WTask[] }) {
         <div style={{ flex: 1 }} />
         <Link href="/calendar" className="mc-link">달력 →</Link>
       </div>
+      {monthErr && (
+        <p className="muted-note" style={{ margin: "0 0 6px", fontSize: 12 }}>
+          이 달 일정을 불러오지 못했어요. 달을 다시 이동하면 재시도합니다.
+        </p>
+      )}
       <div className="mc-grid mc-week">
         {WEEKDAYS.map((w, i) => (
           <span key={w} className={`mc-wd${i === 0 ? " sun" : i === 6 ? " sat" : ""}`}>{w}</span>

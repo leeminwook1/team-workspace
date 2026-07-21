@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/mongodb";
 import { Notice } from "@/models/Notice";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canEditNotice } from "@/lib/permissions";
 import { noticeUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
@@ -8,6 +8,7 @@ import { touchChanged } from "@/lib/changes";
 
 // PATCH /api/notices/:id — 제목·본문·고정 수정 (작성자 또는 admin)
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
@@ -33,6 +34,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 // DELETE /api/notices/:id — 작성자 또는 admin
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

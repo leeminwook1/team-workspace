@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/mongodb";
 import { Reservation } from "@/models/Reservation";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { logActivity, reservationLabel } from "@/lib/activity";
 import { canReserve } from "@/lib/permissions";
 import { Resource } from "@/models/Resource";
@@ -8,6 +8,7 @@ import "@/models/User";
 
 // PATCH /api/reservations/:id — 예약 수정 (본인 또는 Admin) — 기간·팀·메모. 장비는 그대로.
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
@@ -59,6 +60,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 // DELETE /api/reservations/:id — 예약 취소 (본인 또는 Admin)
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

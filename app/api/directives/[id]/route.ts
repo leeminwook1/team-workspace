@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/mongodb";
 import { Directive } from "@/models/Directive";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canManageDirective, canEditDirective } from "@/lib/permissions";
 import { directiveUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
@@ -12,6 +12,7 @@ const EDIT_KEYS = ["title", "body", "dueDate", "priority"]; // 발신자 권한
 
 // PATCH /api/directives/:id — 상태·팀원 재분배(팀장) / 본문 수정(발신자·admin)
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
@@ -67,6 +68,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 // DELETE /api/directives/:id — 발신자 본인 또는 admin
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

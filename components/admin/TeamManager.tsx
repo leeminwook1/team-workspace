@@ -19,14 +19,19 @@ export default function TeamManager({ initialTeams }: { initialTeams: TeamRow[] 
   async function create(e: React.FormEvent) {
     e.preventDefault();
     setErr(""); setLoading(true);
-    const res = await fetch("/api/teams", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) { setErr(data.error ?? "팀 생성 실패"); return; }
-    setForm({ name: "", slug: "", color: PRESET_COLORS[0], description: "" });
-    router.refresh();
+    try {
+      const res = await fetch("/api/teams", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "팀 생성 실패"); return; }
+      setForm({ name: "", slug: "", color: PRESET_COLORS[0], description: "" });
+      router.refresh();
+    } catch {
+      setErr("네트워크 오류로 생성하지 못했어요.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function remove(t: TeamRow) {
@@ -36,10 +41,14 @@ export default function TeamManager({ initialTeams }: { initialTeams: TeamRow[] 
       confirmText: "삭제", danger: true,
     });
     if (!ok) return;
-    const res = await fetch(`/api/teams/${t.id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
-    router.refresh();
+    try {
+      const res = await fetch(`/api/teams/${t.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
+      router.refresh();
+    } catch {
+      setErr("네트워크 오류로 삭제하지 못했어요.");
+    }
   }
 
   return (
@@ -103,14 +112,19 @@ function EditModal({ team, onClose, onSaved }: { team: TeamRow; onClose: () => v
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr("");
-    const res = await fetch(`/api/teams/${team.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, slug: team.slug, color, isActive: active, telegramChatId: tgChatId.trim() }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
-    onSaved();
+    try {
+      const res = await fetch(`/api/teams/${team.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, slug: team.slug, color, isActive: active, telegramChatId: tgChatId.trim() }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
+      onSaved();
+    } catch {
+      setErr("네트워크 오류로 저장하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

@@ -4,7 +4,7 @@ import { Task } from "@/models/Task";
 import "@/models/Team";
 import "@/models/User";
 import "@/models/Category";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canEditTaskDoc, canDeleteTaskDoc, canChangeStatusAny, canCreateTaskInAll, visibleTeamIds } from "@/lib/permissions";
 import { taskUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
@@ -24,6 +24,7 @@ const fmtDay = (dt: Date | string) =>
 
 // GET /api/tasks/:id — 단건 조회 (검색 딥링크용). 조회 범위(역할) 검증.
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
@@ -76,6 +77,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 // PATCH /api/tasks/:id — 수정(팀장·부팀장·과장·부과장) / 팀원은 본인 담당 업무의 status만
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
@@ -256,6 +258,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 // DELETE /api/tasks/:id — 삭제는 팀장·Admin만 (설계 확정)
 // ?scope=series : 이 업무가 속한 반복 전체 삭제
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

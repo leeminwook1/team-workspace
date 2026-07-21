@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongodb";
 import { Feedback } from "@/models/Feedback";
-import { requireActiveUser, json, limitWrites } from "@/lib/api";
+import { requireActiveUser, json, limitWrites, badId } from "@/lib/api";
 import { canManageFeedback } from "@/lib/permissions";
 import { feedbackCommentSchema } from "@/lib/validations";
 import { touchChanged } from "@/lib/changes";
@@ -9,6 +9,7 @@ import { notify } from "@/lib/notify";
 
 // POST /api/feedback/:id/comments — 댓글 달기 (모든 활성 사용자)
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
@@ -47,6 +48,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
 // DELETE /api/feedback/:id/comments — 댓글 삭제 (댓글 작성자 또는 admin). body: { commentId }
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

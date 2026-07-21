@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongodb";
 import { User } from "@/models/User";
 import { Team } from "@/models/Team";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canApproveUsers } from "@/lib/permissions";
 import { approveSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
@@ -11,6 +11,7 @@ import { ROLE_LABEL } from "@/lib/permissions";
 
 // POST /api/admin/users/:id/approve — 승인 + 팀·역할 배정 (설계 5.3)
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canApproveUsers(user)) return json({ error: "승인 권한이 없습니다." }, 403);

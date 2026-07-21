@@ -57,15 +57,20 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
     setBusy(u.id);
     setErr("");
     const body = { role: s.role, teamId: isTeamRole(s.role) ? s.teamId : null };
-    const res = await fetch(`/api/admin/users/${u.id}/approve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    setBusy("");
-    if (!res.ok) { setErr(data.error ?? "승인 실패"); return; }
-    load();
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "승인 실패"); return; }
+      load();
+    } catch {
+      setErr("네트워크 오류로 승인하지 못했어요.");
+    } finally {
+      setBusy("");
+    }
   }
 
   async function reject(u: PendingUser) {
@@ -77,11 +82,16 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
     });
     if (!ok) return;
     setBusy(u.id);
-    const res = await fetch(`/api/admin/users/${u.id}`, { method: "DELETE" });
-    const data = await res.json();
-    setBusy("");
-    if (!res.ok) { setErr(data.error ?? "거절 실패"); return; }
-    load();
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "거절 실패"); return; }
+      load();
+    } catch {
+      setErr("네트워크 오류로 거절하지 못했어요.");
+    } finally {
+      setBusy("");
+    }
   }
 
   if (!loaded) return <p style={{ color: "var(--ink-faint)" }}>불러오는 중…</p>;

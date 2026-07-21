@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { connectDB } from "@/lib/mongodb";
 import { User } from "@/models/User";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canManageTeams } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
 
@@ -18,6 +18,7 @@ function generateTempPassword(len = 10) {
 // POST /api/admin/users/:id/reset-password — 임시 비밀번호 발급 (최고관리자)
 // 비밀번호를 잊은 사용자를 위해 관리자가 임시 비밀번호를 만들어 전달 → 본인이 로그인 후 '내 계정'에서 변경.
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canManageTeams(user)) return json({ error: "임시 비밀번호 발급은 최고관리자만 가능합니다." }, 403);

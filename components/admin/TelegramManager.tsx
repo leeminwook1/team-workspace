@@ -31,11 +31,16 @@ export default function TelegramManager() {
   // 봇 명령 메뉴 등록 — 텔레그램 / 입력 시 자동완성 메뉴 표시
   async function registerMenu() {
     setBusy(true); setErr(""); setMenuMsg("");
-    const res = await fetch("/api/admin/telegram", { method: "POST" });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "등록 실패"); return; }
-    setMenuMsg(`✓ 명령 메뉴 ${data.registered}개 등록 완료 — 텔레그램에서 / 를 입력하면 메뉴가 떠요.`);
+    try {
+      const res = await fetch("/api/admin/telegram", { method: "POST" });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "등록 실패"); return; }
+      setMenuMsg(`✓ 명령 메뉴 ${data.registered}개 등록 완료 — 텔레그램에서 / 를 입력하면 메뉴가 떠요.`);
+    } catch {
+      setErr("네트워크 오류로 등록하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const load = useCallback(async () => {
@@ -54,14 +59,19 @@ export default function TelegramManager() {
     });
     if (!ok) return;
     setBusy(true); setErr("");
-    const res = await fetch("/api/admin/telegram", {
-      method: "DELETE", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: u.id }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "해제 실패"); return; }
-    load();
+    try {
+      const res = await fetch("/api/admin/telegram", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: u.id }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "해제 실패"); return; }
+      load();
+    } catch {
+      setErr("네트워크 오류로 해제하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!loaded) return <p style={{ color: "var(--ink-faint)" }}>불러오는 중…</p>;

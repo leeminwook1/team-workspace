@@ -2,7 +2,7 @@ import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
 import { Comment } from "@/models/Comment";
 import "@/models/User";
-import { requireActiveUser, json, limitWrites } from "@/lib/api";
+import { requireActiveUser, json, limitWrites, badId } from "@/lib/api";
 import { canViewAllTeams, type SessionUser } from "@/lib/permissions";
 import { notify } from "@/lib/notify";
 import { touchChanged } from "@/lib/changes";
@@ -15,6 +15,7 @@ function canViewTask(user: SessionUser, teamIds: string[]) {
 
 // GET /api/tasks/:id/comments — 댓글 목록
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
@@ -41,6 +42,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 // POST /api/tasks/:id/comments — 댓글 작성 (열람 가능자 누구나)
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

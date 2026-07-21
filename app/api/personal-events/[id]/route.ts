@@ -1,12 +1,13 @@
 import { connectDB } from "@/lib/mongodb";
 import { PersonalEvent } from "@/models/PersonalEvent";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { personalEventSchema } from "@/lib/validations";
 import { touchChanged } from "@/lib/changes";
 
 // 개인 일정 수정·삭제 — 소유자 본인만 (팀장·admin도 열람만 가능, 수정 불가)
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
@@ -34,6 +35,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

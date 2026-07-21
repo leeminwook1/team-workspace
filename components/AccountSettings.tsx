@@ -70,27 +70,37 @@ export default function AccountSettings({
   async function issueLinkCode() {
     setCodeBusy(true);
     setTgMsg(null);
-    const res = await fetch("/api/me/telegram-code", { method: "POST" });
-    const data = await res.json();
-    setCodeBusy(false);
-    if (!res.ok) { setTgMsg({ ok: false, text: data.error ?? "코드 발급 실패" }); return; }
-    setLinkCode(data.code);
+    try {
+      const res = await fetch("/api/me/telegram-code", { method: "POST" });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setTgMsg({ ok: false, text: data.error ?? "코드 발급 실패" }); return; }
+      setLinkCode(data.code);
+    } catch {
+      setTgMsg({ ok: false, text: "네트워크 오류로 코드를 발급하지 못했어요." });
+    } finally {
+      setCodeBusy(false);
+    }
   }
 
   async function saveTelegram(e: React.FormEvent) {
     e.preventDefault();
     setTgMsg(null);
     setTgBusy(true);
-    const res = await fetch("/api/me", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ telegramChatId: tgId.trim(), notifyPrefs: prefs }),
-    });
-    const data = await res.json();
-    setTgBusy(false);
-    if (!res.ok) { setTgMsg({ ok: false, text: data.error ?? "저장 실패" }); return; }
-    if (!tgId.trim()) setTgMsg({ ok: true, text: "텔레그램 연동이 해제되었습니다." });
-    else if (data.telegramTest) setTgMsg({ ok: true, text: "연동 완료! 텔레그램으로 테스트 메시지를 보냈어요." });
-    else setTgMsg({ ok: true, text: "저장되었습니다. (테스트 메시지 전송 실패 — 챗 ID 또는 서버 봇 설정을 확인하세요)" });
+    try {
+      const res = await fetch("/api/me", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telegramChatId: tgId.trim(), notifyPrefs: prefs }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setTgMsg({ ok: false, text: data.error ?? "저장 실패" }); return; }
+      if (!tgId.trim()) setTgMsg({ ok: true, text: "텔레그램 연동이 해제되었습니다." });
+      else if (data.telegramTest) setTgMsg({ ok: true, text: "연동 완료! 텔레그램으로 테스트 메시지를 보냈어요." });
+      else setTgMsg({ ok: true, text: "저장되었습니다. (테스트 메시지 전송 실패 — 챗 ID 또는 서버 봇 설정을 확인하세요)" });
+    } catch {
+      setTgMsg({ ok: false, text: "네트워크 오류로 저장하지 못했어요." });
+    } finally {
+      setTgBusy(false);
+    }
   }
 
   const [curPw, setCurPw] = useState("");
@@ -104,12 +114,17 @@ export default function AccountSettings({
     setNameMsg(null);
     if (name.trim().length < 2) { setNameMsg({ ok: false, text: "이름은 2자 이상" }); return; }
     setNameBusy(true);
-    const res = await fetch("/api/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() }) });
-    const data = await res.json();
-    setNameBusy(false);
-    if (!res.ok) { setNameMsg({ ok: false, text: data.error ?? "저장 실패" }); return; }
-    await update(); // 세션의 이름 즉시 갱신
-    setNameMsg({ ok: true, text: "이름이 변경되었습니다." });
+    try {
+      const res = await fetch("/api/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() }) });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setNameMsg({ ok: false, text: data.error ?? "저장 실패" }); return; }
+      await update(); // 세션의 이름 즉시 갱신
+      setNameMsg({ ok: true, text: "이름이 변경되었습니다." });
+    } catch {
+      setNameMsg({ ok: false, text: "네트워크 오류로 저장하지 못했어요." });
+    } finally {
+      setNameBusy(false);
+    }
   }
 
   async function savePw(e: React.FormEvent) {
@@ -118,12 +133,17 @@ export default function AccountSettings({
     if (newPw.length < 8) { setPwMsg({ ok: false, text: "새 비밀번호는 8자 이상" }); return; }
     if (newPw !== newPw2) { setPwMsg({ ok: false, text: "새 비밀번호가 서로 다릅니다." }); return; }
     setPwBusy(true);
-    const res = await fetch("/api/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currentPassword: curPw, newPassword: newPw }) });
-    const data = await res.json();
-    setPwBusy(false);
-    if (!res.ok) { setPwMsg({ ok: false, text: data.error ?? "변경 실패" }); return; }
-    setCurPw(""); setNewPw(""); setNewPw2("");
-    setPwMsg({ ok: true, text: "비밀번호가 변경되었습니다." });
+    try {
+      const res = await fetch("/api/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currentPassword: curPw, newPassword: newPw }) });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setPwMsg({ ok: false, text: data.error ?? "변경 실패" }); return; }
+      setCurPw(""); setNewPw(""); setNewPw2("");
+      setPwMsg({ ok: true, text: "비밀번호가 변경되었습니다." });
+    } catch {
+      setPwMsg({ ok: false, text: "네트워크 오류로 변경하지 못했어요." });
+    } finally {
+      setPwBusy(false);
+    }
   }
 
   return (

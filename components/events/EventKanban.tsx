@@ -25,11 +25,12 @@ type EventFull = {
   closedAt: string | null;
 };
 
+// 상태색 — 디자인 토큰 사용 (다크모드 자동 대응)
 const COLS: { key: Item["status"]; label: string; color: string }[] = [
-  { key: "todo", label: "할 일", color: "#8b95a1" },
-  { key: "doing", label: "진행중", color: "#3182f6" },
-  { key: "hold", label: "보류", color: "#e8951b" },
-  { key: "done", label: "완료", color: "#22c55e" },
+  { key: "todo", label: "할 일", color: "var(--st-todo)" },
+  { key: "doing", label: "진행중", color: "var(--primary)" },
+  { key: "hold", label: "보류", color: "var(--st-prog)" },
+  { key: "done", label: "완료", color: "var(--st-done)" },
 ];
 function ddayOf(iso: string | null) {
   if (!iso) return null;
@@ -167,8 +168,14 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
       confirmText: "삭제", danger: true,
     });
     if (!ok) return;
-    await fetch(`/api/events/${eventId}`, { method: "DELETE" });
-    router.push("/events");
+    if (actBusy) return;
+    setActBusy(true);
+    try {
+      await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+      router.push("/events");
+    } finally {
+      setActBusy(false);
+    }
   }
   async function toggleClosed() {
     const closing = !ev?.closedAt;
@@ -186,12 +193,19 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
     });
     load();
   }
+  const [actBusy, setActBusy] = useState(false); // 복제·삭제·종료 진행 중 — 연속 클릭 방지
   async function duplicateEvent() {
+    if (actBusy) return;
     const ok = await confirm({ title: "행사 복제", message: "이 행사의 할 일 목록을 복사해 새 행사를 만듭니다. (상태·담당자·날짜는 초기화)", confirmText: "복제" });
     if (!ok) return;
-    const res = await fetch(`/api/events/${eventId}/duplicate`, { method: "POST" });
-    const data = await res.json();
-    if (res.ok) router.push(`/events/${data.id}`);
+    setActBusy(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/duplicate`, { method: "POST" });
+      const data = await res.json().catch(() => ({} as any));
+      if (res.ok) router.push(`/events/${data.id}`);
+    } catch { /* 네트워크 오류 — 버튼만 복구 */ } finally {
+      setActBusy(false);
+    }
   }
 
   if (loading) return <p className="muted-note">불러오는 중…</p>;
@@ -225,9 +239,9 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
         {canManage && (
           <div style={{ display: "flex", gap: 8, flex: "none", flexWrap: "wrap" }}>
             <button className="btn btn-line btn-sm" onClick={() => setEditEvent(true)}>행사 수정</button>
-            <button className="btn btn-line btn-sm" onClick={duplicateEvent}>복제</button>
-            <button className="btn btn-line btn-sm" onClick={toggleClosed}>{ev.closedAt ? "재개" : "행사 종료"}</button>
-            <button className="btn btn-danger btn-sm" onClick={deleteEvent}>삭제</button>
+            <button className="btn btn-line btn-sm" disabled={actBusy} onClick={duplicateEvent}>복제</button>
+            <button className="btn btn-line btn-sm" disabled={actBusy} onClick={toggleClosed}>{ev.closedAt ? "재개" : "행사 종료"}</button>
+            <button className="btn btn-danger btn-sm" disabled={actBusy} onClick={deleteEvent}>삭제</button>
           </div>
         )}
       </div>

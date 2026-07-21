@@ -1,11 +1,12 @@
 import { connectDB } from "@/lib/mongodb";
 import { Category } from "@/models/Category";
 import { Task } from "@/models/Task";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canManageTeams } from "@/lib/permissions";
 
 // PATCH /api/categories/:id — 이름·색상·활성 수정 (Admin)
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canManageTeams(user)) return json({ error: "권한이 없습니다." }, 403);
@@ -27,6 +28,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 // DELETE /api/categories/:id — 완전 삭제 (Admin). 사용 중이던 업무는 '분류 없음'으로.
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canManageTeams(user)) return json({ error: "권한이 없습니다." }, 403);

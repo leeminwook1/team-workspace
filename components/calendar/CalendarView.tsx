@@ -145,11 +145,16 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
     return [];
   }, [teams, user, isOrgEditor, isTeamMember]);
 
+  const [loadErr, setLoadErr] = useState(false);
   const fetchTasks = useCallback(async (from: string, to: string) => {
-    const res = await fetch(`/api/tasks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/tasks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+      if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setTasks(data.tasks ?? []);
+      setLoadErr(false);
+    } catch {
+      setLoadErr(true); // 무음 실패 방지 — 배너로 안내 (기존 데이터는 유지)
     }
   }, []);
 
@@ -328,6 +333,13 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           </button>
         )}
       </div>
+
+      {loadErr && (
+        <p className="err-msg" style={{ marginTop: 10 }}>
+          일정을 불러오지 못했어요. 네트워크 확인 후{" "}
+          <button className="rsv-linkbtn" style={{ color: "inherit", textDecoration: "underline" }} onClick={refetch}>다시 시도</button>
+        </p>
+      )}
 
       {/* 필터 — 기본 접힘, '필터' 버튼으로 펼침 (팀·분류·상태) */}
       {filtersOpen && (
@@ -1409,15 +1421,20 @@ function TaskDetailModal({
   async function setStatus(status: string) {
     setBusy(true);
     setErr("");
-    const res = await fetch(`/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "변경 실패"); return; }
-    onChanged();
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "변경 실패"); return; }
+      onChanged();
+    } catch {
+      setErr("네트워크 오류로 변경하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function remove(scope?: "series") {
@@ -1438,11 +1455,16 @@ function TaskDetailModal({
     });
     if (!ok) return;
     setBusy(true);
-    const res = await fetch(`/api/tasks/${task.id}${scope === "series" ? "?scope=series" : ""}`, { method: "DELETE" });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
-    onChanged();
+    try {
+      const res = await fetch(`/api/tasks/${task.id}${scope === "series" ? "?scope=series" : ""}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
+      onChanged();
+    } catch {
+      setErr("네트워크 오류로 삭제하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const [stLabel, stColor] = STATUS_LABEL[task.status] ?? STATUS_LABEL.todo;

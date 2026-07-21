@@ -1,12 +1,13 @@
 import { connectDB } from "@/lib/mongodb";
 import { Event } from "@/models/Event";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canManageEvents } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
 
 // POST /api/events/:id/duplicate — 행사 복제 (템플릿 재사용)
 // 필드·투두 목록을 복사하되, 투두 상태는 '할 일'로 초기화하고 담당자·마감·행사일은 비운다.
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canManageEvents(user)) return json({ error: "행사를 복제할 권한이 없습니다." }, 403);

@@ -1,11 +1,12 @@
 import { connectDB } from "@/lib/mongodb";
 import { Resource } from "@/models/Resource";
 import { Reservation } from "@/models/Reservation";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canManageTeams } from "@/lib/permissions";
 
 // PATCH /api/resources/:id — 자원 수정 (이름·카테고리·활성화, Admin)
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canManageTeams(user)) return json({ error: "자원 수정 권한이 없습니다." }, 403);
@@ -31,6 +32,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 // DELETE /api/resources/:id — 자원 완전 삭제 (Admin). 예정된 예약이 있으면 차단.
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canManageTeams(user)) return json({ error: "자원 삭제 권한이 없습니다." }, 403);

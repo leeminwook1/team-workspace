@@ -147,9 +147,9 @@ export default function TeamBoard({
         id: `abs-${a.id}`,
         title: mainText,
         start: a.startDate.slice(0, 10), end: end.toISOString().slice(0, 10), allDay: true,
-        backgroundColor: "color-mix(in srgb, #f04452 9%, transparent)",
-        borderColor: "color-mix(in srgb, #f04452 45%, transparent)",
-        textColor: "#f04452",
+        backgroundColor: "color-mix(in srgb, var(--danger) 9%, transparent)",
+        borderColor: "color-mix(in srgb, var(--danger) 45%, transparent)",
+        textColor: "var(--danger)",
         extendedProps: { timeText: "", mainText },
       };
     }),

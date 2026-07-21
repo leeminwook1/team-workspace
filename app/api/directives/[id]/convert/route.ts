@@ -1,7 +1,7 @@
 import { connectDB } from "@/lib/mongodb";
 import { Directive } from "@/models/Directive";
 import { Task } from "@/models/Task";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canManageDirective } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
@@ -10,6 +10,7 @@ import { touchChanged } from "@/lib/changes";
 // POST /api/directives/:id/convert — TODO(또는 분배 항목)를 달력 일정으로 등록
 // body: { assignmentId?: string } — 있으면 해당 팀원 담당 일정, 없으면 TODO 전체를 팀 일정으로
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

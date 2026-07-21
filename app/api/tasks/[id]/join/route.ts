@@ -2,7 +2,7 @@ import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
 import { User } from "@/models/User";
 import "@/models/Team";
-import { requireActiveUser, json, limitWrites } from "@/lib/api";
+import { requireActiveUser, json, limitWrites, badId } from "@/lib/api";
 import { canCreateTaskInAll } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
 import { touchChanged } from "@/lib/changes";
@@ -18,6 +18,7 @@ const joinSchema = z.object({
 // 권한: 실제로 "추가하는 팀"에 대해 일정을 새로 만들 수 있는 사람이면 참여 가능.
 // 담당자는 "관여된 팀(기존+추가)의 실제 소속 활성 사용자"만 허용 — 임의 사용자 주입·알림 스팸 차단.
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

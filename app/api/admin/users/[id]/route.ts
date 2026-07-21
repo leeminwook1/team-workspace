@@ -1,13 +1,14 @@
 import { connectDB } from "@/lib/mongodb";
 import { User } from "@/models/User";
 import { Team } from "@/models/Team";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canApproveUsers, canManageTeams } from "@/lib/permissions";
 import { userUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 
 // PATCH /api/admin/users/:id — 활성 사용자의 팀·역할·전사역할·활성상태 변경 (설계 7장: 권한변경=Admin)
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canManageTeams(user)) return json({ error: "권한 변경은 최고관리자만 가능합니다." }, 403);
@@ -62,6 +63,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 // DELETE /api/admin/users/:id — 사용자 삭제
 // pending 거절: 과장·부과장·admin / 활성·비활성 계정 삭제: admin만, 본인 불가
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

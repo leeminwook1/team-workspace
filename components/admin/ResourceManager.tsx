@@ -53,36 +53,49 @@ export default function ResourceManager({
     e.preventDefault();
     if (!newCat.trim()) return;
     setErr("");
-    const res = await fetch("/api/resource-categories", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newCat.trim() }),
-    });
-    const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "분류 추가 실패"); return; }
-    setNewCat("");
-    router.refresh();
+    try {
+      const res = await fetch("/api/resource-categories", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newCat.trim() }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "분류 추가 실패"); return; }
+      setNewCat("");
+      router.refresh();
+    } catch {
+      setErr("네트워크 오류로 추가하지 못했어요.");
+    }
   }
 
   async function removeCategory(c: Cat) {
     const ok = await confirm({ title: "분류 삭제", message: `"${c.name}" 분류를 삭제할까요?`, confirmText: "삭제", danger: true });
     if (!ok) return;
-    const res = await fetch(`/api/resource-categories/${c.id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
-    router.refresh();
+    try {
+      const res = await fetch(`/api/resource-categories/${c.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
+      router.refresh();
+    } catch {
+      setErr("네트워크 오류로 삭제하지 못했어요.");
+    }
   }
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
     setErr(""); setLoading(true);
-    const res = await fetch("/api/resources", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, ownerTeamId: form.ownerTeamId || null, managerId: form.managerId || null }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) { setErr(data.error ?? "등록 실패"); return; }
-    setForm({ ...form, name: "" }); // 팀·담당자는 유지 — 연속 등록 편의
-    router.refresh();
+    try {
+      const res = await fetch("/api/resources", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, ownerTeamId: form.ownerTeamId || null, managerId: form.managerId || null }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "등록 실패"); return; }
+      setForm({ ...form, name: "" }); // 팀·담당자는 유지 — 연속 등록 편의
+      router.refresh();
+    } catch {
+      setErr("네트워크 오류로 등록하지 못했어요.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function remove(r: ResourceRow) {
@@ -92,10 +105,14 @@ export default function ResourceManager({
       confirmText: "삭제", danger: true,
     });
     if (!ok) return;
-    const res = await fetch(`/api/resources/${r.id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
-    router.refresh();
+    try {
+      const res = await fetch(`/api/resources/${r.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
+      router.refresh();
+    } catch {
+      setErr("네트워크 오류로 삭제하지 못했어요.");
+    }
   }
 
   const uncategorized = initialResources.filter((r) => !r.category);

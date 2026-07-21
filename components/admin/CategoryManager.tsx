@@ -19,14 +19,19 @@ export default function CategoryManager({ initial }: { initial: CatRow[] }) {
   async function create(e: React.FormEvent) {
     e.preventDefault();
     setErr(""); setLoading(true);
-    const res = await fetch("/api/categories", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) { setErr(data.error ?? "등록 실패"); return; }
-    setForm({ name: "", color: PRESET_COLORS[0] });
-    router.refresh();
+    try {
+      const res = await fetch("/api/categories", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "등록 실패"); return; }
+      setForm({ name: "", color: PRESET_COLORS[0] });
+      router.refresh();
+    } catch {
+      setErr("네트워크 오류로 등록하지 못했어요.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function remove(c: CatRow) {
@@ -36,10 +41,14 @@ export default function CategoryManager({ initial }: { initial: CatRow[] }) {
       confirmText: "삭제", danger: true,
     });
     if (!ok) return;
-    const res = await fetch(`/api/categories/${c.id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
-    router.refresh();
+    try {
+      const res = await fetch(`/api/categories/${c.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "삭제 실패"); return; }
+      router.refresh();
+    } catch {
+      setErr("네트워크 오류로 삭제하지 못했어요.");
+    }
   }
 
   return (
@@ -95,14 +104,19 @@ function EditModal({ cat, onClose, onSaved }: { cat: CatRow; onClose: () => void
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr("");
-    const res = await fetch(`/api/categories/${cat.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, color, isActive: active }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
-    onSaved();
+    try {
+      const res = await fetch(`/api/categories/${cat.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, color, isActive: active }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
+      onSaved();
+    } catch {
+      setErr("네트워크 오류로 저장하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

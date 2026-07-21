@@ -1,7 +1,7 @@
 import { connectDB } from "@/lib/mongodb";
 import { Absence } from "@/models/Absence";
 import { User } from "@/models/User";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canManageAbsence } from "@/lib/permissions";
 import { absenceUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
@@ -9,6 +9,7 @@ import { ABSENCE_LABEL, type AbsenceType } from "@/lib/absenceTypes";
 
 // PATCH /api/absences/:id — 부재 수정 (권한: 등록·삭제와 동일 — 본인·팀장·과장단). 대상은 변경 불가.
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
@@ -56,6 +57,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 // DELETE /api/absences/:id — 부재 삭제 (등록 권한과 동일: 본인·팀장·과장단)
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

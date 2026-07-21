@@ -3,7 +3,7 @@ import { Event } from "@/models/Event";
 import "@/models/Team";
 import "@/models/User";
 import mongoose from "mongoose";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canManageEvents, canDeleteEvent } from "@/lib/permissions";
 import { eventUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
@@ -43,6 +43,7 @@ function serializeFull(e: any) {
 
 // GET /api/events/:id — 행사 + 투두(items) 상세
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { error } = await requireActiveUser();
   if (error) return error;
 
@@ -59,6 +60,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 // PATCH /api/events/:id — 행사 수정 + 투두(items) 갱신 (편집자 역할)
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canManageEvents(user)) return json({ error: "행사를 수정할 권한이 없습니다." }, 403);
@@ -159,6 +161,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 // DELETE /api/events/:id — admin·과장·부과장 또는 등록자 본인
 // 소프트 삭제: 30일간 DB에 남아 있어 복구 가능, 이후 크론이 완전 삭제
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

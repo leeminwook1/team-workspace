@@ -2,12 +2,13 @@ import { connectDB } from "@/lib/mongodb";
 import { Team } from "@/models/Team";
 import { User } from "@/models/User";
 import { Task } from "@/models/Task";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canManageTeams } from "@/lib/permissions";
 import { teamSchema } from "@/lib/validations";
 
 // PATCH /api/teams/:id — 팀 수정 (이름·색상·설명·활성화, Admin만)
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canManageTeams(user)) return json({ error: "팀 수정 권한이 없습니다." }, 403);
@@ -34,6 +35,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 // DELETE /api/teams/:id — 팀 완전 삭제 (Admin). 사용 중이면 차단.
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canManageTeams(user)) return json({ error: "팀 삭제 권한이 없습니다." }, 403);

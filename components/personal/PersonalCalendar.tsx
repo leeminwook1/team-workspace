@@ -239,24 +239,39 @@ function PersonalEventModal({ event, defaultDate, onClose, onSaved }: {
           endDate: new Date(`${startDate}T${endTime}`).toISOString(),
           allDay: false,
         };
-    const res = await fetch(isEdit ? `/api/personal-events/${event!.id}` : "/api/personal-events", {
-      method: isEdit ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, location, memo, ...when }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
-    onSaved();
+    try {
+      const res = await fetch(isEdit ? `/api/personal-events/${event!.id}` : "/api/personal-events", {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, location, memo, ...when }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
+      onSaved();
+    } catch {
+      setErr("네트워크 오류로 저장하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function remove() {
     const ok = await confirm({ title: "개인 일정 삭제", message: "이 일정을 삭제할까요?", confirmText: "삭제", danger: true });
     if (!ok) return;
     setBusy(true);
-    const res = await fetch(`/api/personal-events/${event!.id}`, { method: "DELETE" });
-    setBusy(false);
-    if (res.ok) onSaved();
+    try {
+      const res = await fetch(`/api/personal-events/${event!.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as any));
+        setErr(data.error ?? "삭제하지 못했어요.");
+        return;
+      }
+      onSaved();
+    } catch {
+      setErr("네트워크 오류로 삭제하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

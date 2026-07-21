@@ -1,12 +1,13 @@
 import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canDeleteTaskDoc } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
 
 // POST /api/tasks/:id/restore — 휴지통 복구 (삭제 권한과 동일: 팀장·본인·Admin)
 // 연동됐던 장비 예약은 삭제 시 취소된 상태로 남는다 — 필요하면 일정 수정에서 다시 선택.
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

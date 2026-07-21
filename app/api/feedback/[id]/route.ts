@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/mongodb";
 import { Feedback } from "@/models/Feedback";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canManageFeedback, canEditFeedback } from "@/lib/permissions";
 import { feedbackUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
@@ -13,6 +13,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 // PATCH /api/feedback/:id — 공감(전체) / 본문 수정(작성자·admin) / 상태 변경(admin)
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 
@@ -63,6 +64,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 // DELETE /api/feedback/:id — 작성자 또는 admin
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

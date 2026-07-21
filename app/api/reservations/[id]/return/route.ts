@@ -1,13 +1,14 @@
 import { connectDB } from "@/lib/mongodb";
 import { Reservation } from "@/models/Reservation";
 import { Resource } from "@/models/Resource";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canMarkReturned } from "@/lib/permissions";
 import { logActivity, reservationLabel } from "@/lib/activity";
 import { notify } from "@/lib/notify";
 
 // POST /api/reservations/:id/return — 반납 처리 (예약자·admin·과장·부과장·장비 관리 담당자)
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
 

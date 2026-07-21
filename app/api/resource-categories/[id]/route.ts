@@ -1,11 +1,12 @@
 import { connectDB } from "@/lib/mongodb";
 import { ResourceCategory } from "@/models/ResourceCategory";
 import { Resource } from "@/models/Resource";
-import { requireActiveUser, json } from "@/lib/api";
+import { requireActiveUser, json, badId } from "@/lib/api";
 import { canManageTeams } from "@/lib/permissions";
 
 // PATCH /api/resource-categories/:id — 이름·활성 수정 (Admin)
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canManageTeams(user)) return json({ error: "권한이 없습니다." }, 403);
@@ -31,6 +32,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 // DELETE /api/resource-categories/:id — 분류 삭제 (Admin). 소속 장비가 있으면 차단.
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canManageTeams(user)) return json({ error: "권한이 없습니다." }, 403);

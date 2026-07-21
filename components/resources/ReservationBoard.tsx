@@ -395,11 +395,16 @@ export default function ReservationBoard({
       confirmText: "삭제", cancelText: "닫기", danger: true,
     });
     if (!confirmed) return false;
-    const res = await fetch(`/api/reservations/${id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "삭제 실패"); return false; }
-    refreshRef.current();
-    return true;
+    try {
+      const res = await fetch(`/api/reservations/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "삭제 실패"); return false; }
+      refreshRef.current();
+      return true;
+    } catch {
+      setErr("네트워크 오류로 삭제하지 못했어요.");
+      return false;
+    }
   }
 
   async function markReturned(id: string) {
@@ -409,12 +414,17 @@ export default function ReservationBoard({
       confirmText: "반납 완료", cancelText: "닫기",
     });
     if (!confirmed) return false;
-    const res = await fetch(`/api/reservations/${id}/return`, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "반납 처리 실패"); return false; }
-    setErr("");
-    refreshRef.current();
-    return true;
+    try {
+      const res = await fetch(`/api/reservations/${id}/return`, { method: "POST" });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "반납 처리 실패"); return false; }
+      setErr("");
+      refreshRef.current();
+      return true;
+    } catch {
+      setErr("네트워크 오류로 반납 처리하지 못했어요.");
+      return false;
+    }
   }
 
   const isReturnManager = ["admin", "manager", "deputy"].includes(user?.role ?? "");
@@ -1127,19 +1137,25 @@ function EditReservationModal({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(""); setBusy(true);
-    const res = await fetch(`/api/reservations/${resv.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        teamId: form.teamId,
-        startAt: `${form.startDate}T${form.startTime}:00`,
-        endAt: `${form.endDate}T${form.endTime}:00`,
-        note: form.note,
-      }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setErr(data.error ?? "수정 실패"); return; }
-    onSaved();
+    try {
+      const res = await fetch(`/api/reservations/${resv.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teamId: form.teamId,
+          // 로컬시각 → ISO(UTC) 변환 — naive 문자열이면 UTC 서버에서 9시간 밀려 저장됨
+          startAt: new Date(`${form.startDate}T${form.startTime}:00`).toISOString(),
+          endAt: new Date(`${form.endDate}T${form.endTime}:00`).toISOString(),
+          note: form.note,
+        }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "수정 실패"); return; }
+      onSaved();
+    } catch {
+      setErr("네트워크 오류로 저장하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -1277,19 +1293,26 @@ function ReserveModal({
     const ids = Array.from(resIds);
     if (ids.length === 0) { setErr("장비를 하나 이상 선택하세요."); return; }
     setBusy(true);
+    // 시각은 브라우저 로컬시각 → ISO(UTC)로 변환해 전송 — naive 문자열이면 UTC 서버에서 9시간 밀려 저장됨
+    const startISO = new Date(`${form.startDate}T${form.startTime}:00`).toISOString();
+    const endISO = new Date(`${form.endDate}T${form.endTime}:00`).toISOString();
     // 선택한 장비마다 같은 기간으로 예약 — 병렬 요청 (충돌은 그 장비만 실패로 표시)
     const results = await Promise.all(ids.map(async (id) => {
-      const res = await fetch("/api/reservations", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          resourceId: id, teamId: form.teamId,
-          startAt: `${form.startDate}T${form.startTime}:00`,
-          endAt: `${form.endDate}T${form.endTime}:00`,
-          note: form.note,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      return { id, ok: res.ok, reason: data.error ?? "예약 실패" };
+      try {
+        const res = await fetch("/api/reservations", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            resourceId: id, teamId: form.teamId,
+            startAt: startISO,
+            endAt: endISO,
+            note: form.note,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        return { id, ok: res.ok, reason: data.error ?? "예약 실패" };
+      } catch {
+        return { id, ok: false, reason: "네트워크 오류" };
+      }
     }));
     const failures = results.filter((r) => !r.ok).map((r) => ({
       id: r.id, name: resources.find((x) => x.id === r.id)?.name ?? "장비", reason: r.reason,
