@@ -128,24 +128,29 @@ export default function TeamBoard({
           d.setDate(d.getDate() + 1);
           end = d.toISOString();
         }
-        // 시간 지정 일정은 시각(HH:mm)을 함께 표시 — "이정민 · 14:00 직장"
-        const label = e.allDay ? e.title : `${hhmm(e.startDate)} ${e.title}`;
+        // 2줄 표기 — 위: 시간대(HH:mm–HH:mm), 아래: 이름·제목. eventContent에서 렌더.
+        const sameDay = new Date(e.startDate).toDateString() === new Date(e.endDate).toDateString();
+        const timeText = e.allDay ? "" : sameDay ? `${hhmm(e.startDate)}–${hhmm(e.endDate)}` : `${hhmm(e.startDate)}~`;
+        const mainText = `${owner} · ${e.title}`;
         return {
-          id: e.id, title: `${owner} · ${label}`, start: e.startDate, end, allDay: e.allDay,
+          id: e.id, title: timeText ? `${mainText} (${timeText})` : mainText, start: e.startDate, end, allDay: e.allDay,
           backgroundColor: color + "22", borderColor: color, textColor: color,
+          extendedProps: { timeText, mainText },
         };
       }),
     // 부재·휴가 — 회색 계열로 구분해 함께 표시
     ...absences.map((a) => {
       const end = new Date(a.endDate);
       end.setUTCDate(end.getUTCDate() + 1); // allDay end exclusive
+      const mainText = `🏖 ${a.user?.name ?? "?"} ${a.typeLabel}`;
       return {
         id: `abs-${a.id}`,
-        title: `🏖 ${a.user?.name ?? "?"} ${a.typeLabel}`,
+        title: mainText,
         start: a.startDate.slice(0, 10), end: end.toISOString().slice(0, 10), allDay: true,
         backgroundColor: "color-mix(in srgb, #f04452 9%, transparent)",
         borderColor: "color-mix(in srgb, #f04452 45%, transparent)",
         textColor: "#f04452",
+        extendedProps: { timeText: "", mainText },
       };
     }),
   ];
@@ -231,6 +236,15 @@ export default function TeamBoard({
           eventDisplay="block"
           displayEventTime={false}
           events={fcEvents}
+          eventContent={(arg) => {
+            const { timeText, mainText } = arg.event.extendedProps as { timeText?: string; mainText?: string };
+            return (
+              <div className="ov-ev">
+                {timeText ? <span className="ov-ev-time">{timeText}</span> : null}
+                <span className="ov-ev-main">{mainText ?? arg.event.title}</span>
+              </div>
+            );
+          }}
           eventDidMount={(info) => { info.el.title = info.event.title; info.el.style.cursor = "pointer"; }}
           eventClick={(arg) => {
             const id = arg.event.id;

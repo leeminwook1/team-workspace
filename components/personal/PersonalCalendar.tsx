@@ -70,10 +70,13 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
       d.setDate(d.getDate() + 1);
       end = d.toISOString();
     }
-    // 시간 지정 일정은 제목 앞에 시각(HH:mm)을 붙여 달력에서 바로 보이게 한다
+    // 2줄 표기 — 위: 시간대(HH:mm–HH:mm), 아래: 제목. eventContent에서 렌더.
+    const sameDay = new Date(e.startDate).toDateString() === new Date(e.endDate).toDateString();
+    const timeText = e.allDay ? "" : sameDay ? `${hhmm(e.startDate)}–${hhmm(e.endDate)}` : `${hhmm(e.startDate)}~`;
     return {
-      id: e.id, title: e.allDay ? e.title : `${hhmm(e.startDate)} ${e.title}`, start: e.startDate, end, allDay: e.allDay,
+      id: e.id, title: timeText ? `${e.title} (${timeText})` : e.title, start: e.startDate, end, allDay: e.allDay,
       backgroundColor: PERSONAL_COLOR + "26", borderColor: PERSONAL_COLOR, textColor: PERSONAL_COLOR,
+      extendedProps: { timeText, mainText: e.title },
     };
   });
 
@@ -136,6 +139,15 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
           eventDisplay="block"
           displayEventTime={false}
           events={fcEvents}
+          eventContent={(arg) => {
+            const { timeText, mainText } = arg.event.extendedProps as { timeText?: string; mainText?: string };
+            return (
+              <div className="ov-ev">
+                {timeText ? <span className="ov-ev-time">{timeText}</span> : null}
+                <span className="ov-ev-main">{mainText ?? arg.event.title}</span>
+              </div>
+            );
+          }}
           datesSet={(arg) => {
             setCurStart(arg.view.currentStart);
             setRange({ from: arg.startStr, to: arg.endStr });
