@@ -12,7 +12,7 @@ import { touchChanged } from "@/lib/changes";
 import { notify } from "@/lib/notify";
 import { filterValidAssignees } from "@/lib/assignees";
 import { Reservation } from "@/models/Reservation";
-import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, cancelTaskReservations, findUnavailableResources, unavailableMessage } from "@/lib/taskReservations";
+import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, cancelTaskReservations, returnTaskReservations, findUnavailableResources, unavailableMessage } from "@/lib/taskReservations";
 
 // 변경 알림 본문용 KST 포맷
 const fmtDateTime = (dt: Date | string) =>
@@ -96,6 +96,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const assigneeIds = (task.assignees ?? []).map((a: any) => String(a));
   // 일정 변경 감지용 원본 시각 (수정 적용 전에 캡처)
   const oldStart = task.startDate, oldEnd = task.endDate, oldAllDay = task.allDay;
+  const oldStatus = task.status;
   const d = parsed.data;
   const keys = Object.keys(d);
   const statusOnly = keys.length === 1 && keys[0] === "status";
@@ -251,8 +252,26 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     }
   }
 
+  // 일정 완료 → 연동 장비 자동 반납 (아직 시작 전인 예약은 취소)
+  let equipReturned: string[] = [];
+  if (d.status === "done" && oldStatus !== "done") {
+    const rr = await returnTaskReservations(task._id, user.id);
+    equipReturned = [...rr.returned, ...rr.cancelled];
+    if (rr.returned.length > 0) {
+      await logActivity({
+        actorId: user.id, actorName: user.name, action: "status", targetType: "reservation",
+        targetTitle: `자동 반납 ${rr.returned.length}건 — ${task.title} 완료`,
+        meta: { detail: "일정 완료 자동 반납" },
+      });
+    }
+  }
+
   const warning = raced.length > 0 ? `동시 예약으로 일부 장비 연동에 실패했어요: ${raced.join(", ")}` : undefined;
-  return json({ id: String(task._id), ...(warning ? { warning } : {}) });
+  return json({
+    id: String(task._id),
+    ...(warning ? { warning } : {}),
+    ...(equipReturned.length > 0 ? { equipReturned } : {}),
+  });
 }
 
 // DELETE /api/tasks/:id — 삭제는 팀장·Admin만 (설계 확정)

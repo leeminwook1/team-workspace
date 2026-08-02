@@ -161,3 +161,37 @@ export async function cancelTaskReservations(taskIds: any[]) {
     { $set: { status: "cancelled" } }
   );
 }
+
+/**
+ * 일정 완료 시 연동 장비 자동 반납.
+ * - 사용이 시작된 예약(startAt ≤ 지금) → 반납 처리 (returned)
+ * - 아직 시작 전인 예약 → 취소 (수령한 적이 없으므로 반납 이력 대신 취소)
+ * 반환: 처리된 장비 이름 목록 (호출 측에서 로그·알림 문구에 사용)
+ */
+export async function returnTaskReservations(taskId: any, actorId: string) {
+  const now = new Date();
+  const linked: any[] = await Reservation.find({ relatedTaskId: taskId, status: "booked" })
+    .populate("resourceId", "name")
+    .lean();
+  if (linked.length === 0) return { returned: [] as string[], cancelled: [] as string[] };
+
+  const started = linked.filter((r) => new Date(r.startAt) <= now);
+  const future = linked.filter((r) => new Date(r.startAt) > now);
+
+  if (started.length > 0) {
+    await Reservation.updateMany(
+      { _id: { $in: started.map((r) => r._id) } },
+      { $set: { status: "returned", returnedAt: now, returnedBy: actorId } }
+    );
+  }
+  if (future.length > 0) {
+    await Reservation.updateMany(
+      { _id: { $in: future.map((r) => r._id) } },
+      { $set: { status: "cancelled" } }
+    );
+  }
+  return {
+    returned: started.map((r) => r.resourceId?.name ?? "장비"),
+    cancelled: future.map((r) => r.resourceId?.name ?? "장비"),
+  };
+}

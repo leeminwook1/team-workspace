@@ -10,7 +10,7 @@ import {
   canCreateTaskInAll, canReserve, visibleTeamIds, canChangeStatusAny, canDeleteTaskDoc, canMarkReturned,
   type SessionUser, type Role,
 } from "./permissions";
-import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, postCreateGuard, cancelTaskReservations, findUnavailableResources, unavailableMessage } from "./taskReservations";
+import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, postCreateGuard, cancelTaskReservations, returnTaskReservations, findUnavailableResources, unavailableMessage } from "./taskReservations";
 import { logActivity, reservationLabel } from "./activity";
 import { rateLimit } from "./rateLimit";
 import { notify } from "./notify";
@@ -872,7 +872,16 @@ export async function handleTelegramCallback(p: {
       task.status = "done";
       await task.save();
       await logActivity({ actorId: user.id, actorName: user.name ?? "", action: "status", targetTitle: task.title, meta: { status: "done", detail: "텔레그램에서 완료" } });
-      await finish("완료 처리했어요! 👏", `✅ 완료 처리됨 — ${user.name ?? ""}`);
+      // 연동 장비 자동 반납 (시작 전 예약은 취소)
+      const rr = await returnTaskReservations(task._id, user.id);
+      const equipDone = [...rr.returned, ...rr.cancelled];
+      const equipLine = equipDone.length > 0
+        ? `\n📦 장비 ${equipDone.length}건 자동 반납: ${equipDone.slice(0, 3).join(", ")}${equipDone.length > 3 ? ` 외 ${equipDone.length - 3}건` : ""}`
+        : "";
+      await finish(
+        equipDone.length > 0 ? `완료! 장비 ${equipDone.length}건도 반납했어요 👏` : "완료 처리했어요! 👏",
+        `✅ 완료 처리됨 — ${user.name ?? ""}${equipLine}`
+      );
       return;
     }
 

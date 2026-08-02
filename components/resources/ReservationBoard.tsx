@@ -433,6 +433,30 @@ export default function ReservationBoard({
     }
   }
 
+  // 여러 건 한 번에 반납 (묶음 예약·타임라인 그룹)
+  async function markReturnedBulk(ids: string[]) {
+    if (ids.length === 0) return false;
+    const confirmed = await confirm({
+      title: "일괄 반납",
+      message: `장비 ${ids.length}개를 모두 반납 처리할까요? 반납하면 남은 시간에 다른 팀이 예약할 수 있어요.`,
+      confirmText: `${ids.length}개 모두 반납`, cancelText: "닫기",
+    });
+    if (!confirmed) return false;
+    try {
+      const res = await fetch("/api/reservations/return-bulk", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(data.error ?? "일괄 반납 실패"); return false; }
+      setErr(data.skipped?.length > 0 ? `일부는 처리하지 못했어요: ${data.skipped.map((s: any) => `${s.name}(${s.reason})`).join(", ")}` : "");
+      refreshRef.current();
+      return true;
+    } catch {
+      setErr("네트워크 오류로 일괄 반납하지 못했어요.");
+      return false;
+    }
+  }
+
   const isReturnManager = ["admin", "manager", "deputy"].includes(user?.role ?? "");
   function canReturnUi(r: ReservationItem) {
     if (r.reservedBy?.id === user?.id || isReturnManager) return true;
@@ -1035,6 +1059,17 @@ export default function ReservationBoard({
                         {canDelete && <button className="btn btn-danger btn-sm" onClick={() => removeReservation(r.id)}>삭제</button>}
                       </div>
                     )}
+                    {/* 묶음 예약 — 반납 가능한 건 전부 한 번에 */}
+                    {!single && canReturn && (
+                      <div className="rsv2-item-actions">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => markReturnedBulk(items.filter((it) => canReturnUi(it)).map((it) => it.id))}
+                        >
+                          모두 반납 ({items.filter((it) => canReturnUi(it)).length})
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1060,6 +1095,28 @@ export default function ReservationBoard({
                 </>
               )}
             </p>
+            {/* 반납 가능한 장비가 2개 이상이면 일괄 반납 */}
+            {(() => {
+              const returnable = tlGroup.filter((r) => {
+                const st = rsvState(r);
+                return (st === "inuse" || st === "overdue") && canReturnUi(r);
+              });
+              if (returnable.length < 2) return null;
+              return (
+                <button
+                  className="btn btn-primary btn-sm"
+                  style={{ marginBottom: 10 }}
+                  onClick={async () => {
+                    if (await markReturnedBulk(returnable.map((r) => r.id))) {
+                      const ids = new Set(returnable.map((r) => r.id));
+                      setTlGroup((g) => g?.map((x) => ids.has(x.id) ? { ...x, status: "returned" as const } : x) ?? null);
+                    }
+                  }}
+                >
+                  모두 반납 ({returnable.length})
+                </button>
+              );
+            })()}
             <div className="tlg-list">
               {tlGroup.map((r) => {
                 const st = rsvState(r);
