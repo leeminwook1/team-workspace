@@ -2,6 +2,7 @@
 import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -14,9 +15,18 @@ type PEvent = {
   id: string; title: string; memo: string; location: string;
   startDate: string; endDate: string; allDay: boolean;
 };
+// 담당 업무 (팀 달력의 일정 중 이 캘린더 주인이 담당자인 것 — 읽기 전용 오버레이)
+type ATask = {
+  id: string; title: string; startDate: string; endDate: string; allDay: boolean;
+  status: string;
+  teams: { id: string; name: string; color: string }[];
+  category?: { name: string; color: string } | null;
+  assignees: { id: string; name: string }[];
+};
 type Viewable = { id: string; name: string; teamName: string };
 
 const PERSONAL_COLOR = "#7d5ef7"; // 개인 일정 색 (보라)
+const taskColor = (t: ATask) => t.category?.color ?? t.teams[0]?.color ?? "#8b95a1";
 
 // 로컬 시각 HH:mm — 달력 셀·상세에서 시간 표기용
 function hhmm(iso: string) {
@@ -24,9 +34,11 @@ function hhmm(iso: string) {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-export default function PersonalCalendar({ meName, viewables }: { meName: string; viewables: Viewable[] }) {
+export default function PersonalCalendar({ meId, meName, viewables }: { meId: string; meName: string; viewables: Viewable[] }) {
   const calRef = useRef<FullCalendar>(null);
   const [events, setEvents] = useState<PEvent[]>([]);
+  const [assigned, setAssigned] = useState<ATask[]>([]); // 담당 업무 오버레이
+  const [showTasks, setShowTasks] = useState(true);
   const [target, setTarget] = useState(""); // "" = 나
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [curStart, setCurStart] = useState<Date | null>(null);
@@ -37,6 +49,7 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
 
   const readOnly = target !== "";
   const api = () => calRef.current?.getApi();
+  const router = useRouter();
 
   const [loadErr, setLoadErr] = useState(false);
   const fetchEvents = useCallback(async (from: string, to: string, user: string) => {
@@ -51,7 +64,17 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
       setEvents([]);
       setLoadErr(true);
     }
-  }, []);
+    // 담당 업무 오버레이 — 팀 달력 일정 중 캘린더 주인이 담당자인 것 (내 조회 범위 내)
+    try {
+      const owner = user || meId;
+      const res = await fetch(`/api/tasks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const all: ATask[] = (await res.json()).tasks ?? [];
+      setAssigned(all.filter((t) => (t.assignees ?? []).some((a) => a.id === owner)));
+    } catch {
+      setAssigned([]);
+    }
+  }, [meId]);
 
   const refetch = useCallback(() => {
     if (range) fetchEvents(range.from, range.to, target);
@@ -63,22 +86,42 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
     if (range) fetchEvents(range.from, range.to, id);
   }
 
-  const fcEvents = events.map((e) => {
-    let end = e.endDate;
-    if (e.allDay) {
-      const d = new Date(e.endDate);
-      d.setDate(d.getDate() + 1);
-      end = d.toISOString();
-    }
-    // 2줄 표기 — 위: 시간대(HH:mm–HH:mm), 아래: 제목. eventContent에서 렌더.
-    const sameDay = new Date(e.startDate).toDateString() === new Date(e.endDate).toDateString();
-    const timeText = e.allDay ? "" : sameDay ? `${hhmm(e.startDate)}–${hhmm(e.endDate)}` : `${hhmm(e.startDate)}~`;
-    return {
-      id: e.id, title: timeText ? `${e.title} (${timeText})` : e.title, start: e.startDate, end, allDay: e.allDay,
-      backgroundColor: PERSONAL_COLOR + "26", borderColor: PERSONAL_COLOR, textColor: PERSONAL_COLOR,
-      extendedProps: { timeText, mainText: e.title },
-    };
-  });
+  const fcEvents = [
+    ...events.map((e) => {
+      let end = e.endDate;
+      if (e.allDay) {
+        const d = new Date(e.endDate);
+        d.setDate(d.getDate() + 1);
+        end = d.toISOString();
+      }
+      // 2줄 표기 — 위: 시간대(HH:mm–HH:mm), 아래: 제목. eventContent에서 렌더.
+      const sameDay = new Date(e.startDate).toDateString() === new Date(e.endDate).toDateString();
+      const timeText = e.allDay ? "" : sameDay ? `${hhmm(e.startDate)}–${hhmm(e.endDate)}` : `${hhmm(e.startDate)}~`;
+      return {
+        id: e.id, title: timeText ? `${e.title} (${timeText})` : e.title, start: e.startDate, end, allDay: e.allDay,
+        backgroundColor: PERSONAL_COLOR + "26", borderColor: PERSONAL_COLOR, textColor: PERSONAL_COLOR,
+        extendedProps: { timeText, mainText: e.title },
+      };
+    }),
+    // 담당 업무 — 팀/카테고리 색, 클릭 시 팀 달력 상세로 이동 (여기선 읽기 전용)
+    ...(showTasks ? assigned.map((t) => {
+      let end = t.endDate;
+      if (t.allDay) {
+        const d = new Date(t.endDate);
+        d.setDate(d.getDate() + 1);
+        end = d.toISOString();
+      }
+      const color = taskColor(t);
+      const sameDay = new Date(t.startDate).toDateString() === new Date(t.endDate).toDateString();
+      const timeText = t.allDay ? "" : sameDay ? `${hhmm(t.startDate)}–${hhmm(t.endDate)}` : `${hhmm(t.startDate)}~`;
+      return {
+        id: `task:${t.id}`, title: t.title, start: t.startDate, end, allDay: t.allDay,
+        backgroundColor: color + "26", borderColor: color, textColor: color,
+        classNames: t.status === "done" ? ["ev-done"] : [],
+        extendedProps: { timeText, mainText: `👤 ${t.title}`, taskId: t.id },
+      };
+    }) : []),
+  ];
 
   const bigLabel = curStart ? `${curStart.getMonth() + 1}월` : "";
   const yearLabel = curStart ? String(curStart.getFullYear()) : "";
@@ -118,6 +161,21 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
           <Icon name="userLine" size={14} /> <b>{targetName}</b> 님의 개인 캘린더 — 읽기 전용
         </p>
       )}
+
+      {/* 범례 + 담당 업무 오버레이 토글 */}
+      <div className="pc-legend">
+        <span className="pc-legend-item"><span className="dot" style={{ background: PERSONAL_COLOR }} />개인 일정</span>
+        <button
+          type="button"
+          className={`chip chip-btn${showTasks ? " sel" : ""}`}
+          onClick={() => setShowTasks((v) => !v)}
+        >
+          <Icon name="userLine" size={12} /> 담당 업무 {assigned.length > 0 ? `(${assigned.length})` : ""}
+        </button>
+        {showTasks && assigned.length > 0 && (
+          <span className="pc-legend-hint">담당 업무는 팀 색으로 표시 — 클릭하면 팀 달력 상세로 이동</span>
+        )}
+      </div>
       {loadErr && (
         <p className="err-msg" style={{ marginTop: 10 }}>
           일정을 불러오지 못했어요. 네트워크 확인 후 <button className="rsv-linkbtn" style={{ color: "inherit", textDecoration: "underline" }} onClick={refetch}>다시 시도</button>
@@ -159,6 +217,9 @@ export default function PersonalCalendar({ meName, viewables }: { meName: string
             setCreateOpen(true);
           }}
           eventClick={(arg) => {
+            // 담당 업무 → 팀 달력의 상세로 이동
+            const taskId = (arg.event.extendedProps as { taskId?: string }).taskId;
+            if (taskId) { router.push(`/calendar?task=${taskId}`); return; }
             const e = events.find((x) => x.id === arg.event.id);
             if (!e) return;
             if (readOnly) setViewing(e);

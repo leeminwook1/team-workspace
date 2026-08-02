@@ -33,5 +33,5 @@ export default async function PersonalPage() {
     viewables = leaders.map((m) => ({ id: String(m._id), name: m.name, teamName: m.teamId?.name ?? "" }));
   }
 
-  return <PersonalCalendar meName={user.name} viewables={viewables} />;
+  return <PersonalCalendar meId={user.id} meName={user.name} viewables={viewables} />;
 }
