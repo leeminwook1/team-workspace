@@ -115,6 +115,20 @@ export function canUseDirectives(u: SessionUser) {
   return isActive(u) && (ALL_TEAM_EDITORS.includes(u.role) || u.role === "leader");
 }
 
+// ── 과제 (레퍼런스 촬영 과제) ──
+// 출제·마감·피드백: admin 또는 그 팀의 팀장·부팀장. 열람: 그 팀 소속 + 전사 역할. 제출: 그 팀 소속.
+export function canManageAssignments(u: SessionUser, teamId: string) {
+  if (!isActive(u)) return false;
+  if (u.role === "admin") return true;
+  return (u.role === "leader" || u.role === "vice_leader") && inTeam(u, teamId);
+}
+export function canViewAssignment(u: SessionUser, teamId: string) {
+  return isActive(u) && (canViewAllTeams(u) || inTeam(u, teamId));
+}
+export function canSubmitAssignment(u: SessionUser, teamId: string) {
+  return isActive(u) && isTeamRole(u.role) && inTeam(u, teamId);
+}
+
 // ── 개인 캘린더 ──
 // 본인 + 같은 팀 "팀장" + admin + (과장·부과장·서기는 "팀장" 것만) 열람. 수정은 본인만.
 export function canViewPersonalCalendar(viewer: SessionUser, target: { id: string; teamId: string | null; role?: Role }) {

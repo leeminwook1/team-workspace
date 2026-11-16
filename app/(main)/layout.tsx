@@ -65,6 +65,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     ...(showTeamBoard ? [{ href: "/team", label: "팀 현황", icon: "users" as const }] : []),
     { href: "/resources", label: "자원 예약", icon: "resources" },
     { href: "/events", label: "행사 관리", icon: "board" },
+    { href: "/assignments", label: "과제", icon: "camera" },
     ...(canUseDirectives(user) ? [{ href: "/directives", label: "TODO", icon: "inbox" as const, badge: todoBadge }] : []),
     { href: "/notices", label: "공지사항", icon: "megaphone", badge: noticeBadge },
     { href: "/feedback", label: "피드백", icon: "chat" },
