@@ -13,6 +13,7 @@ import { sendTelegram, telegramEnabled, esc } from "@/lib/telegram";
 import { addInterval, RECUR_BATCH_CAP } from "@/lib/recurrence";
 import { Absence } from "@/models/Absence";
 import { ABSENCE_LABEL, type AbsenceType } from "@/lib/absenceTypes";
+import { isRetiredDeployment } from "@/lib/deployment";
 
 // 여러 팀의 팀장·부팀장을 한 번의 쿼리로 조회 → teamId별 사용자 id 목록 (N+1 방지)
 async function leadersByTeam(teamIds: string[]): Promise<Map<string, string[]>> {
@@ -32,6 +33,8 @@ async function leadersByTeam(teamIds: string[]): Promise<Map<string, string[]>> 
 // GET /api/cron/reminders — 오늘(KST) 마감 알림. vercel.json crons가 매일 UTC 0시(KST 9시)에 호출.
 // Vercel은 CRON_SECRET 환경변수를 설정하면 Authorization: Bearer로 함께 보낸다.
 export async function GET(req: Request) {
+  // 옛 Vercel 프로젝트의 크론 — 같은 DB에 중복 알림을 보내지 않도록 즉시 종료
+  if (isRetiredDeployment(req.headers.get("host"))) return json({ skipped: "retired deployment" });
   const secret = process.env.CRON_SECRET;
   if (secret) {
     if (req.headers.get("authorization") !== `Bearer ${secret}`) return json({ error: "unauthorized" }, 401);
