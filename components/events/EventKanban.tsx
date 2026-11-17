@@ -243,29 +243,31 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
   const totalCount = ev.items.length;
   const doneCount = ev.items.filter((i) => i.status === "done").length;
   const pct = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;
-  const countOf = (k: Item["status"]) => ev.items.filter((i) => i.status === k).length;
+  const myPositions = ev.positions.filter((p) => p.people.some((x) => x.id === myId)).map((p) => p.name);
 
   return (
     <div className="events">
       <Link href="/events" className="ev-back"><Icon name="chevronL" size={15} /> 행사 목록</Link>
 
-      <div className="page-head">
-        <div>
-          <div className="ev-detail-top">
+      {/* 헤더 — 제목 + D-day, 아래에 날짜·장소·집합·내 포지션 칩 */}
+      <div className="evd-head">
+        <div className="evd-head-main">
+          <div className="evd-title-row">
+            <h1 className="page-title evd-title">{ev.title}</h1>
             {dday && <span className={`kb-dday ${dday.tone}`}>{dday.label}</span>}
           </div>
-          <h1 className="page-title" style={{ margin: "8px 0 4px" }}>{ev.title}</h1>
-          <p className="page-sub">
-            {ev.eventDate && new Date(ev.eventDate).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" })}
-            {ev.location && ` · 📍 ${ev.location}`}
-            {(ev.meetTime || ev.meetPlace) && ` · ⏰ 집합 ${[fmtMeet(ev.meetTime), ev.meetPlace].filter(Boolean).join(" ")}`}
-          </p>
+          <div className="evd-meta">
+            {ev.eventDate && <span className="evd-chip"><Icon name="calendar" size={14} />{new Date(ev.eventDate).toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" })}</span>}
+            {ev.location && <span className="evd-chip"><Icon name="mapPin" size={14} />{ev.location}</span>}
+            {(ev.meetTime || ev.meetPlace) && <span className="evd-chip"><Icon name="clock" size={14} />집합 {[fmtMeet(ev.meetTime), ev.meetPlace].filter(Boolean).join(" · ")}</span>}
+            {myPositions.length > 0 && <span className="evd-chip mine">🎯 내 포지션 {myPositions.join(", ")}</span>}
+          </div>
         </div>
         {canManage && (
-          <div style={{ display: "flex", gap: 8, flex: "none", flexWrap: "wrap" }}>
-            <button className="btn btn-line btn-sm" onClick={() => setEditEvent(true)}>행사 수정</button>
+          <div className="evd-actions">
+            <button className="btn btn-line btn-sm" onClick={() => setEditEvent(true)}>수정</button>
             <button className="btn btn-line btn-sm" disabled={actBusy} onClick={duplicateEvent}>복제</button>
-            <button className="btn btn-line btn-sm" disabled={actBusy} onClick={toggleClosed}>{ev.closedAt ? "재개" : "행사 종료"}</button>
+            <button className="btn btn-line btn-sm" disabled={actBusy} onClick={toggleClosed}>{ev.closedAt ? "재개" : "종료"}</button>
             <button className="btn btn-danger btn-sm" disabled={actBusy} onClick={deleteEvent}>삭제</button>
           </div>
         )}
@@ -277,154 +279,113 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
         </p>
       )}
 
-      {/* 알아야 할 내용 */}
-      {(() => {
-        const rows: [string, string, string][] = [
-          ["⏰", "집합", [fmtMeet(ev.meetTime), ev.meetPlace].filter(Boolean).join(" · ")],
-          ["⚠️", "촬영 주의", ev.brief.caution],
-          ["👔", "복장", ev.brief.dress],
-          ["📦", "납품", ev.brief.delivery],
-          ["📞", "연락처", ev.brief.contact],
-          ["📝", "메모", ev.description],
-        ];
-        const filled = rows.filter((r) => r[2].trim());
-        if (filled.length === 0 && !canManage) return null;
-        return (
-          <div className="card ev-brief">
-            <div className="ev-program-head">
-              <h2>📌 알아야 할 내용</h2>
-              {canManage && <button className="btn btn-line btn-sm" onClick={() => setEditEvent(true)}>{filled.length ? "편집" : "작성하기"}</button>}
-            </div>
-            {filled.length === 0 ? (
-              <p className="muted-note" style={{ padding: "4px 0 0" }}>집합 시간·장소, 촬영 주의, 복장, 납품, 연락처를 적어두면 모두가 여기서 확인해요.</p>
-            ) : (
-              <dl className="ev-brief-list">
-                {filled.map(([ico, label, val]) => (
-                  <div className={`ev-brief-row${label === "촬영 주의" ? " caution" : ""}`} key={label}>
-                    <dt><span aria-hidden>{ico}</span> {label}</dt>
-                    <dd>{val}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </div>
-        );
-      })()}
+      {/* 정보 카드 — 알아야 할 내용 · 포지션 · 식순 (넓은 화면에선 나란히, 비어 있으면 작게) */}
+      <div className="evd-grid">
+        {(() => {
+          const rows: [string, string, string][] = [
+            ["⏰", "집합", [fmtMeet(ev.meetTime), ev.meetPlace].filter(Boolean).join(" · ")],
+            ["⚠️", "촬영 주의", ev.brief.caution],
+            ["👔", "복장", ev.brief.dress],
+            ["📦", "납품", ev.brief.delivery],
+            ["📞", "연락처", ev.brief.contact],
+            ["📝", "메모", ev.description],
+          ];
+          const filled = rows.filter((r) => r[2].trim());
+          if (filled.length === 0 && !canManage) return null;
+          return (
+            <section className={`card evd-card${filled.length ? "" : " empty"}`}>
+              <div className="evd-card-head">
+                <h2>📌 알아야 할 내용</h2>
+                {canManage && <button className="evd-link" onClick={() => setEditEvent(true)}>{filled.length ? "편집" : "+ 작성"}</button>}
+              </div>
+              {filled.length === 0 ? (
+                <p className="evd-empty">집합·촬영 주의·복장·납품·연락처를 적어두면 모두가 여기서 확인해요.</p>
+              ) : (
+                <dl className="evd-brief">
+                  {filled.map(([ico, label, val]) => (
+                    <div className={`evd-brief-row${label === "촬영 주의" ? " caution" : ""}`} key={label}>
+                      <dt><span aria-hidden>{ico}</span> {label}</dt>
+                      <dd>{val}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </section>
+          );
+        })()}
 
-      {/* 포지션 배치 — 촬영 당일 서 있는 위치 */}
-      {(canManage || ev.positions.length > 0) && (
-        <div className="card ev-pos">
-          <div className="ev-program-head">
-            <h2>🎯 포지션</h2>
-            {canManage && (
-              <button className="btn btn-line btn-sm" onClick={() => setPositionsOpen(true)}>
-                {ev.positions.length > 0 ? "배치 편집" : "배치하기"}
-              </button>
-            )}
-          </div>
-          {posErr && <p className="err-msg">{posErr}</p>}
-          {ev.positions.length === 0 ? (
-            <p className="muted-note" style={{ padding: "4px 0 0" }}>중앙·상수·하수·부감·3층처럼 촬영 당일 서 있을 위치와 사람을 정해요.</p>
-          ) : (
-            <>
-              <div className="ev-pos-grid">
+        {(canManage || ev.positions.length > 0) && (
+          <section className={`card evd-card${ev.positions.length ? "" : " empty"}`}>
+            <div className="evd-card-head">
+              <h2>🎯 포지션{ev.positions.length > 0 && <span className="evd-count">{ev.positions.length}</span>}</h2>
+              {canManage && <button className="evd-link" onClick={() => setPositionsOpen(true)}>{ev.positions.length ? "편집" : "+ 배치"}</button>}
+            </div>
+            {posErr && <p className="err-msg">{posErr}</p>}
+            {ev.positions.length === 0 ? (
+              <p className="evd-empty">중앙·상수·하수·부감·3층처럼 촬영 당일 서 있을 위치에 사람을 정해요.</p>
+            ) : (
+              <ul className="evd-pos">
                 {ev.positions.map((p) => {
                   const mine = p.people.some((x) => x.id === myId);
                   return (
-                    <div className={`ev-pos-card${mine ? " mine" : ""}`} key={p.id}>
-                      <div className="ev-pos-name">{p.name}{mine && <span className="ev-pos-me">내 자리</span>}</div>
-                      <div className="ev-pos-people">
-                        {p.people.length ? p.people.map((x) => <span key={x.id} className={x.id === myId ? "me" : ""}>{x.name}</span>) : <em>미배정</em>}
-                      </div>
-                      {p.note && <div className="ev-pos-note">{p.note}</div>}
-                    </div>
+                    <li className={`evd-pos-row${mine ? " mine" : ""}`} key={p.id}>
+                      <span className="evd-pos-name">{p.name}</span>
+                      <span className="evd-pos-body">
+                        <span className="evd-pos-people">
+                          {p.people.length ? p.people.map((x) => <span key={x.id} className={x.id === myId ? "me" : ""}>{x.name}</span>) : <em>미배정</em>}
+                        </span>
+                        {p.note && <span className="evd-pos-note">{p.note}</span>}
+                      </span>
+                    </li>
                   );
                 })}
-              </div>
-              {(() => {
-                // 사람 기준 요약 — 한 사람이 여러 자리를 맡는 경우도 한눈에
-                const byPerson = new Map<string, { name: string; spots: string[] }>();
-                for (const p of ev.positions) for (const x of p.people) {
-                  if (!byPerson.has(x.id)) byPerson.set(x.id, { name: x.name, spots: [] });
-                  byPerson.get(x.id)!.spots.push(p.name);
-                }
-                if (byPerson.size === 0) return null;
-                return (
-                  <p className="ev-pos-summary">
-                    {Array.from(byPerson.entries()).map(([id, v]) => (
-                      <span key={id} className={id === myId ? "me" : ""}><b>{v.name}</b> {v.spots.join("·")}</span>
-                    ))}
-                  </p>
-                );
-              })()}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* 식순·타임테이블 */}
-      {(canManage || ev.program.length > 0) && (
-        <div className="card ev-program">
-          <div className="ev-program-head">
-            <h2>🕒 식순</h2>
-            {canManage && (
-              <button className="btn btn-line btn-sm" onClick={() => setProgramOpen(true)}>
-                {ev.program.length > 0 ? "식순 편집" : "식순 만들기"}
-              </button>
+              </ul>
             )}
-          </div>
-          {ev.program.length === 0 ? (
-            <p className="muted-note" style={{ padding: "4px 0 0" }}>
-              {canManage ? "행사 진행 순서를 등록하고, 꼭 찍어야 하는 순간은 ⭐필수 컷으로 표시해요." : "등록된 식순이 없어요."}
-            </p>
-          ) : (
-            <ol className="ev-prog-list">
-              {ev.program.map((p) => (
-                <li className={`ev-prog-row${p.must ? " must" : ""}`} key={p.id}>
-                  <span className="ev-prog-time">{p.time || "—"}</span>
-                  <span className="ev-prog-title">{p.title}</span>
-                  {p.must && <span className="ev-prog-must">⭐ 필수 컷</span>}
-                  {p.note && <span className="ev-prog-note">{p.note}</span>}
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      )}
+          </section>
+        )}
 
-      {/* 진행률 요약 (Toss 스타일 숫자 강조) */}
-      {totalCount > 0 && (
-        <div className="ev-progress card">
-          <div className="ev-progress-main">
-            <span className="ev-progress-pct">{pct}<small>%</small></span>
-            <div className="ev-progress-body">
-              <div className="ev-progress-label">
-                {pct === 100 ? "모든 준비가 끝났어요 🎉" : `${totalCount}개 중 ${doneCount}개 완료`}
-              </div>
-              <div className="kb-check-bar big"><span style={{ width: `${pct}%` }} /></div>
+        {(canManage || ev.program.length > 0) && (
+          <section className={`card evd-card${ev.program.length ? "" : " empty"}`}>
+            <div className="evd-card-head">
+              <h2>🕒 식순{ev.program.length > 0 && <span className="evd-count">{ev.program.length}</span>}</h2>
+              {canManage && <button className="evd-link" onClick={() => setProgramOpen(true)}>{ev.program.length ? "편집" : "+ 만들기"}</button>}
             </div>
-          </div>
-          <div className="ev-progress-stats">
-            {COLS.map((c) => (
-              <span className="ev-stat" key={c.key}>
-                <span className="dot" style={{ background: c.color }} />
-                {c.label} <b>{countOf(c.key)}</b>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+            {ev.program.length === 0 ? (
+              <p className="evd-empty">{canManage ? "진행 순서를 적고, 꼭 찍어야 하는 순간은 ⭐필수 컷으로 표시해요." : "등록된 식순이 없어요."}</p>
+            ) : (
+              <ol className="evd-prog">
+                {ev.program.map((p) => (
+                  <li className={`evd-prog-row${p.must ? " must" : ""}`} key={p.id}>
+                    <span className="evd-prog-time">{p.time || "—"}</span>
+                    <span className="evd-prog-body">
+                      <span className="evd-prog-title">{p.must && <span className="evd-must" title="필수 컷">⭐</span>}{p.title}</span>
+                      {p.note && <span className="evd-prog-note">{p.note}</span>}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        )}
+      </div>
 
-      {/* 필터 + 뷰 전환 */}
-      <div className="ev-controls">
-        <div className="filter-row" style={{ margin: 0 }}>
+      {/* 할 일 — 제목 줄에 진행률을 합치고, 필터·보기 전환을 같은 줄에 */}
+      <div className="evd-toolbar">
+        <h2 className="evd-sec-title">✅ 할 일</h2>
+        {totalCount > 0 && (
+          <div className="evd-progress" title={`${totalCount}개 중 ${doneCount}개 완료`}>
+            <div className="kb-check-bar"><span style={{ width: `${pct}%` }} /></div>
+            <span>{pct === 100 ? "모두 완료 🎉" : <><b>{doneCount}</b>/{totalCount} 완료</>}</span>
+          </div>
+        )}
+        <div className="evd-toolbar-right">
           <button className={`chip chip-btn${mineOnly ? " sel" : ""}`} onClick={() => setMineOnly((v) => !v)}>
             <Icon name="userLine" size={13} /> 내 담당만
           </button>
-        </div>
-        <div className="seg" role="tablist" aria-label="보기 전환" style={{ flex: "none" }}>
-          <button className={view === "board" ? "on" : ""} onClick={() => setView("board")}>보드</button>
-          <button className={view === "calendar" ? "on" : ""} onClick={() => setView("calendar")}>달력</button>
+          <div className="seg" role="tablist" aria-label="보기 전환">
+            <button className={view === "board" ? "on" : ""} onClick={() => setView("board")}>보드</button>
+            <button className={view === "calendar" ? "on" : ""} onClick={() => setView("calendar")}>달력</button>
+          </div>
         </div>
       </div>
 

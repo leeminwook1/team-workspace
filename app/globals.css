@@ -3085,3 +3085,80 @@ a { color: inherit; text-decoration: none; }
 .rsvp-badge.all { color: #fff; background: var(--st-done); border-color: var(--st-done); }
 /* 참석 확인 — 좁은 화면에서 '응답 마감' 줄이 꺾이지 않게, 버튼은 다음 줄로 */
 .rsvp-panel .ps-due { flex-wrap: wrap; white-space: nowrap; row-gap: 8px; }
+
+/* ── 행사 상세 레이아웃 (사진과) ── */
+.evd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.evd-head-main { min-width: 0; flex: 1 1 360px; }
+.evd-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.evd-title { margin: 0; }
+.evd-title-row .kb-dday { margin-left: 0; font-size: 12px; padding: 3px 10px; }
+.evd-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.evd-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: var(--ink-soft); background: var(--surface); border: 1px solid var(--line); padding: 5px 10px; border-radius: 999px; }
+.evd-chip svg { color: var(--ink-faint); }
+.evd-chip.mine { color: var(--primary); background: var(--accent-soft); border-color: transparent; font-weight: 800; }
+.evd-actions { display: flex; gap: 6px; flex-wrap: wrap; flex: none; }
+
+.evd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; align-items: start; margin-bottom: 22px; }
+.evd-card { padding: 16px 18px; margin: 0; min-width: 0; }
+.evd-card.empty { padding: 14px 18px; background: var(--surface-2); box-shadow: none; border-style: dashed; }
+.evd-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.evd-card.empty .evd-card-head { margin-bottom: 4px; }
+.evd-card-head h2 { font-size: 15px; font-weight: 800; margin: 0; display: inline-flex; align-items: center; gap: 6px; }
+.evd-count { font-size: 11.5px; font-weight: 800; color: var(--ink-faint); background: var(--surface-2); border: 1px solid var(--line); padding: 0 7px; border-radius: 999px; }
+.evd-link { border: 0; background: none; font-family: inherit; font-size: 13px; font-weight: 700; color: var(--primary); cursor: pointer; padding: 4px 6px; border-radius: 8px; flex: none; }
+.evd-link:hover { background: var(--accent-soft); }
+.evd-empty { margin: 0; font-size: 12.5px; color: var(--ink-faint); line-height: 1.5; }
+
+/* 알아야 할 내용 — 좁은 카드에 맞게 라벨 위·내용 아래 */
+.evd-brief { margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.evd-brief-row { padding: 8px 0; border-top: 1px solid var(--line); }
+.evd-brief-row:first-child { border-top: 0; padding-top: 0; }
+.evd-brief-row dt { font-size: 12px; font-weight: 800; color: var(--ink-faint); margin-bottom: 2px; }
+.evd-brief-row dd { margin: 0; font-size: 14px; color: var(--ink); white-space: pre-wrap; line-height: 1.55; }
+.evd-brief-row.caution { background: color-mix(in srgb, var(--danger) 7%, transparent); border-radius: 10px; padding: 8px 10px; border-top-color: transparent; margin: 2px 0; }
+.evd-brief-row.caution dt { color: var(--danger); }
+
+/* 포지션 — 한 줄에 자리 이름 · 사람 · 메모 */
+.evd-pos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.evd-pos-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); }
+.evd-pos-row.mine { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--primary); }
+.evd-pos-name { flex: none; min-width: 52px; font-size: 13px; font-weight: 800; color: var(--ink); padding-top: 1px; }
+.evd-pos-row.mine .evd-pos-name { color: var(--primary); }
+.evd-pos-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.evd-pos-people { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 13.5px; font-weight: 600; color: var(--ink-soft); }
+.evd-pos-people .me { color: var(--primary); font-weight: 800; }
+.evd-pos-people em { font-style: normal; color: var(--ink-faint); font-weight: 500; }
+.evd-pos-note { font-size: 12px; color: var(--ink-faint); }
+
+/* 식순 — 시간 · 내용 */
+.evd-prog { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.evd-prog-row { display: flex; align-items: baseline; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+.evd-prog-row:first-child { border-top: 0; padding-top: 0; }
+.evd-prog-time { flex: none; min-width: 48px; font-size: 12.5px; font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; }
+.evd-prog-body { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.evd-prog-title { font-size: 14px; font-weight: 600; color: var(--ink); }
+.evd-prog-row.must .evd-prog-title { font-weight: 800; }
+.evd-must { margin-right: 4px; }
+.evd-prog-note { font-size: 12px; color: var(--ink-faint); }
+
+/* 할 일 툴바 — 제목 + 진행률 + 필터/보기 */
+.evd-toolbar { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.evd-sec-title { font-size: 16px; font-weight: 800; margin: 0; }
+.evd-progress { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-soft); }
+.evd-progress .kb-check-bar { flex: none; width: 140px; margin: 0; }
+.evd-progress b { color: var(--ink); }
+.evd-toolbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+@media (max-width: 640px) {
+  .evd-toolbar-right { margin-left: 0; width: 100%; justify-content: space-between; }
+  .evd-progress .kb-check-bar { width: 90px; }
+}
+
+/* 할 일 카드 — 이동 버튼을 작게, 오른쪽 아래로 */
+.kb-card .kb-move { margin-top: 8px; padding-top: 0; border-top: 0; justify-content: flex-end; gap: 4px; }
+.kb-card .kb-move-btn { flex: none; width: 30px; height: 24px; background: transparent; }
+/* 마우스 환경 — 평소엔 숨기고 카드에 올리면 오른쪽 아래에 떠서 자리를 차지하지 않게 */
+@media (hover: hover) {
+  .kb-card { position: relative; }
+  .kb-card .kb-move { position: absolute; right: 8px; bottom: 8px; margin: 0; opacity: 0; transition: opacity 0.12s; background: var(--surface); border-radius: 8px; }
+  .kb-card:hover .kb-move, .kb-card:focus-within .kb-move { opacity: 1; }
+}
