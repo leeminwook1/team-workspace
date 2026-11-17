@@ -7,6 +7,7 @@ import { Icon } from "@/components/icons";
 import { LoadError } from "@/components/LoadError";
 import { useAutoRefresh } from "@/components/useAutoRefresh";
 import { useConfirm } from "@/components/ConfirmProvider";
+import { DateField } from "@/components/DateTimePicker";
 import { PIPELINE_STEPS, STEP_KEYS, STEP_LABEL, type PipelineState, type StepKey } from "@/lib/pipeline";
 
 type ColKey = StepKey | "done";
@@ -193,17 +194,17 @@ export default function PipelineBoard() {
                       {alert && <span className={`asg-due asg-due-${alert.tone}`}>{alert.text}</span>}
                       {/* 셀렉 마감 — 셀렉 전까지 표시. 바로 못 할 때 담당자가 날짜를 적어둔다 */}
                       {it.next && !it.pipeline.steps.select && (it.canStep || it.pipeline.selectDue) && (
-                        <label className={`pl-seldue${it.pipeline.selectDue ? " set" : ""}`}>
-                          <span>{it.pipeline.selectDue ? `셀렉 마감 ${md(it.pipeline.selectDue)}` : "+ 셀렉 마감"}</span>
-                          {it.canStep && (
-                            <input
-                              type="date" value={kstDay(it.pipeline.selectDue)} disabled={busy === it.id}
-                              aria-label="셀렉 마감일"
-                              onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* 일부 브라우저 미지원 */ } }}
-                              onChange={(e) => setSelectDue(it, e.target.value)}
-                            />
-                          )}
-                        </label>
+                        it.canStep ? (
+                          <DateField
+                            variant="bare" className={`pl-seldue${it.pipeline.selectDue ? " set" : ""}`}
+                            value={kstDay(it.pipeline.selectDue)} disabled={busy === it.id} clearable aria-label="셀렉 마감일"
+                            onChange={(v) => setSelectDue(it, v)}
+                          >
+                            {it.pipeline.selectDue ? `셀렉 마감 ${md(it.pipeline.selectDue)}` : "+ 셀렉 마감"}
+                          </DateField>
+                        ) : (
+                          <span className="pl-seldue set">셀렉 마감 {md(it.pipeline.selectDue!)}</span>
+                        )
                       )}
                       {it.canStep && (
                         <div className="pl-card-actions">

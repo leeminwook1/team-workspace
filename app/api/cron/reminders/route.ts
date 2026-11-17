@@ -14,6 +14,8 @@ import { addInterval, RECUR_BATCH_CAP } from "@/lib/recurrence";
 import { Absence } from "@/models/Absence";
 import { ABSENCE_LABEL, type AbsenceType } from "@/lib/absenceTypes";
 import { isRetiredDeployment } from "@/lib/deployment";
+import { sendShootBriefs } from "@/lib/shootBrief";
+import { rsvpSummary, sendRsvpRequest } from "@/lib/rsvp";
 
 // 여러 팀의 팀장·부팀장을 한 번의 쿼리로 조회 → teamId별 사용자 id 목록 (N+1 방지)
 async function leadersByTeam(teamIds: string[]): Promise<Map<string, string[]>> {
@@ -50,12 +52,18 @@ export async function GET(req: Request) {
   const start = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()) - 9 * 3600_000);
   const end = new Date(start.getTime() + 86_400_000);
 
+  // 0) 촬영 당일 아침 — 오늘 시작하는 촬영의 담당자에게 시간·장소·장비 안내
+  const shoot = await sendShootBriefs(start, end);
+  const shootSent = new Set(shoot.tasks);
+
   // 1) 오늘 마감(종료)인 미완료 업무 → 담당자에게 (텔레그램에는 [완료] 버튼)
+  //    오늘 촬영 알림을 이미 받은 일정은 제외 (하루짜리 촬영이 두 번 오지 않게)
   const tasks: any[] = await Task.find({ status: { $ne: "done" }, endDate: { $gte: start, $lt: end } })
     .select("title assignees")
     .lean();
   let taskNotified = 0;
   for (const t of tasks) {
+    if (shootSent.has(String(t._id))) continue;
     const ids = (t.assignees ?? []).map(String);
     if (ids.length === 0) continue;
     await notify(ids, {
@@ -227,7 +235,7 @@ export async function GET(req: Request) {
       // 팀별 읽기 쿼리는 서로 독립 — 병렬로 묶어 라운드트립 단축 (전송만 순차: 텔레그램 rate limit 보호)
       const [dayTasks, dayResv, weekTasks, dayAbs]: any[][] = await Promise.all([
         Task.find({ teamIds: team._id, startDate: { $lt: end }, endDate: { $gt: start } })
-          .sort({ allDay: -1, startDate: 1 }).limit(12).select("title allDay startDate status").lean(),
+          .sort({ allDay: -1, startDate: 1 }).limit(12).select("title allDay startDate status rsvp").lean(),
         Reservation.find({ teamId: team._id, status: "booked", startAt: { $lt: end }, endAt: { $gt: start } })
           .populate("resourceId", "name").populate("reservedBy", "name").sort({ startAt: 1 }).limit(12).lean(),
         isMonday
@@ -248,8 +256,11 @@ export async function GET(req: Request) {
 
       if (dayTasks.length === 0 && dayResv.length === 0 && dayAbs.length === 0 && !weekSection) continue; // 빈 브리핑은 보내지 않음
 
-      const taskLines = dayTasks.map((t) =>
-        `· ${t.allDay ? "종일" : fmtT(t.startDate)} ${esc(t.title)}${t.status === "done" ? " ✔" : ""}`);
+      const taskLines = dayTasks.map((t) => {
+        const r = rsvpSummary(t.rsvp);
+        const rsvpPart = r ? `\n   👥 참석 ${r.yes} · 불참 ${r.no}${r.maybe ? ` · 미정 ${r.maybe}` : ""} · 미응답 ${r.none}` : "";
+        return `· ${t.allDay ? "종일" : fmtT(t.startDate)} ${esc(t.title)}${t.status === "done" ? " ✔" : ""}${rsvpPart}`;
+      });
       const resvLines = dayResv.map((r) =>
         `· ${esc(r.resourceId?.name ?? "?")} ${fmtT(r.startAt)}~${fmtT(r.endAt)}${r.reservedBy?.name ? ` (${esc(r.reservedBy.name)})` : ""}`);
       const absLine = dayAbs.length > 0
@@ -264,6 +275,20 @@ export async function GET(req: Request) {
       ].filter(Boolean).join("\n");
       if (await sendTelegram(team.telegramChatId, text, { html: true })) briefed += 1;
     }
+  }
+
+  // 6-1) 모임 참석 확인 — 오늘이 응답 마감인데 아직 답하지 않은 사람에게 재알림 (하루 1번)
+  const rsvpDue: any[] = await Task.find({
+    "rsvp.on": true, "rsvp.deadline": { $gte: start, $lt: end },
+    $or: [{ "rsvp.remindedAt": null }, { "rsvp.remindedAt": { $lt: start } }],
+  }).select("title startDate allDay location rsvp").lean();
+  let rsvpReminded = 0;
+  for (const t of rsvpDue) {
+    const answered = new Set((t.rsvp.responses ?? []).map((r: any) => String(r.userId)));
+    const pending = (t.rsvp.targets ?? []).map(String).filter((id: string) => !answered.has(id));
+    await sendRsvpRequest(t, pending, { reminder: true });
+    await Task.updateOne({ _id: t._id }, { $set: { "rsvp.remindedAt": new Date() } });
+    rsvpReminded += pending.length;
   }
 
   // 7) 소프트 삭제된 행사·업무 완전 삭제 (30일 경과분) + 고아 댓글·오래된 취소 예약 정리
@@ -361,6 +386,7 @@ export async function GET(req: Request) {
   }
 
   return json({
+    shootTasks: shoot.tasks.length, shootNotified: shoot.notified, rsvpReminded,
     selectDue: sel.length, selectNotified,
     reportDue: pl.length, reportNotified,
     tasksDue: tasks.length, taskNotified, directivesDue: dirs.length, dirNotified,

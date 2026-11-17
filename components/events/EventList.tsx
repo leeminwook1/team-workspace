@@ -1,4 +1,5 @@
 "use client";
+import { DateField, TimeField } from "@/components/DateTimePicker";
 import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useState } from "react";
@@ -210,7 +211,7 @@ export function EventFormModal({
           <div className="form-grid-2">
             <div className="field">
               <label>행사일 (선택)</label>
-              <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+              <DateField value={eventDate} onChange={(v) => setEventDate(v)} clearable placeholder="날짜 미정" />
             </div>
             <div className="field">
               <label>담당자 (선택)</label>

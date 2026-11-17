@@ -13,6 +13,7 @@ import { notify } from "@/lib/notify";
 import { filterValidAssignees } from "@/lib/assignees";
 import { Reservation } from "@/models/Reservation";
 import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, cancelTaskReservations, returnTaskReservations, findUnavailableResources, unavailableMessage } from "@/lib/taskReservations";
+import { rsvpSummary } from "@/lib/rsvp";
 import { serializePipeline } from "@/lib/pipeline";
 
 // 변경 알림 본문용 KST 포맷
@@ -71,6 +72,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       recurrenceId: t.recurrenceId ? String(t.recurrenceId) : null,
       program: (t.program ?? []).map((p: any) => ({ id: String(p._id), time: p.time ?? "", title: p.title, note: p.note ?? "" })),
       pipeline: serializePipeline(t.pipeline),
+      rsvp: rsvpSummary(t.rsvp, user.id),
       // 반복 시리즈 전체 회차 수 — 전체 삭제 확인 문구용
       seriesCount: t.recurrenceId ? await Task.countDocuments({ recurrenceId: t.recurrenceId }) : 0,
     },

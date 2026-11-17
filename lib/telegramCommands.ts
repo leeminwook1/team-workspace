@@ -5,10 +5,11 @@ import { Category } from "@/models/Category";
 import { Task } from "@/models/Task";
 import { Resource } from "@/models/Resource";
 import { ResourceSet } from "@/models/ResourceSet";
+import { applyResponse, parseRsvpCode, rsvpButtons, RSVP_EMOJI, RSVP_LABEL } from "./rsvp";
 import { Reservation } from "@/models/Reservation";
 import { PersonalEvent } from "@/models/PersonalEvent";
 import {
-  canCreateTaskInAll, canReserve, visibleTeamIds, canChangeStatusAny, canDeleteTaskDoc, canMarkReturned,
+  canCreateTaskInAll, canReserve, visibleTeamIds, canChangeStatusAny, canDeleteTaskDoc, canMarkReturned, isTeamRole,
   type SessionUser, type Role,
 } from "./permissions";
 import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, postCreateGuard, cancelTaskReservations, returnTaskReservations, findUnavailableResources, unavailableMessage } from "./taskReservations";
@@ -828,6 +829,27 @@ export async function handleTelegramCallback(p: {
       await Task.deleteOne({ _id: task._id });
       await logActivity({ actorId: user.id, actorName: user.name ?? "", action: "delete", targetTitle: `${task.title} (텔레그램 등록 취소)` });
       await finish("등록을 취소했어요.", `↩ 등록이 취소되었습니다. (${user.name ?? ""})`);
+      return;
+    }
+
+    if (action === "rsvp") {
+      // 모임 참석 확인 — 응답을 기록하고, 버튼은 남겨 다시 눌러 바꿀 수 있게 한다
+      const status = parseRsvpCode(p.data.split(":")[2]);
+      if (!status) { await answerCallback(p.callbackId, "알 수 없는 응답이에요."); return; }
+      const task: any = await Task.findById(id);
+      if (!task) { await finish("삭제된 일정이에요.", "⚠ 삭제된 일정입니다."); return; }
+      if (!task.rsvp?.on) { await finish("참석 확인이 끝난 일정이에요.", "참석 확인이 마감되었습니다."); return; }
+      const isTarget = (task.rsvp.targets ?? []).some((x: any) => String(x) === user.id);
+      if (!isTarget && !isTeamRole(user.role)) { await answerCallback(p.callbackId, "참석 확인 대상이 아니에요."); return; }
+      applyResponse(task, user.id, status);
+      await task.save();
+      await touchChanged("task");
+      const base = p.messageText.split("\n\n➡️ ")[0]; // 이전 응답 표시는 지우고 새로 붙임
+      const tail = status === "no" ? " — 사유는 웹 일정 상세에서 적을 수 있어요" : "";
+      await answerCallback(p.callbackId, `${RSVP_EMOJI[status]} ${RSVP_LABEL[status]}으로 응답했어요`);
+      await editTelegramMessage(p.chatId, p.messageId,
+        `${base}\n\n➡️ 내 응답: ${RSVP_EMOJI[status]} ${RSVP_LABEL[status]}${tail}\n(바꾸려면 다른 버튼을 누르세요)`,
+        { buttons: rsvpButtons(String(task._id)) });
       return;
     }
 

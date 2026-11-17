@@ -1,4 +1,5 @@
 "use client";
+import { DateField, TimeField } from "@/components/DateTimePicker";
 import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -728,16 +729,16 @@ function PersonalEventModal({ event, defaultDate, defaultEndDate, prefill, onClo
 
           {allDay ? (
             <div className="form-grid-2 pe-dates">
-              <div className="field"><label htmlFor="pe-sd">시작일</label><input id="pe-sd" type="date" value={startDate} onChange={(e) => changeStartDate(e.target.value)} required /></div>
-              <div className="field"><label htmlFor="pe-ed">종료일</label><input id="pe-ed" type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} required /></div>
+              <div className="field"><label htmlFor="pe-sd">시작일</label><DateField id="pe-sd" value={startDate} onChange={(v) => changeStartDate(v)} /></div>
+              <div className="field"><label htmlFor="pe-ed">종료일</label><DateField id="pe-ed" value={endDate} min={startDate} onChange={(v) => setEndDate(v)} /></div>
             </div>
           ) : (
             <>
-              <div className="field"><label htmlFor="pe-d">날짜</label><input id="pe-d" type="date" value={startDate} onChange={(e) => changeStartDate(e.target.value)} required /></div>
+              <div className="field"><label htmlFor="pe-d">날짜</label><DateField id="pe-d" value={startDate} onChange={(v) => changeStartDate(v)} /></div>
               {mode === "custom" && (
                 <div className="form-grid-2 pe-dates">
-                  <div className="field"><label htmlFor="pe-st">시작 시각</label><input id="pe-st" type="time" value={startTime} onChange={(e) => changeStartTime(e.target.value)} required /></div>
-                  <div className="field"><label htmlFor="pe-et">종료 시각</label><input id="pe-et" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} required /></div>
+                  <div className="field"><label htmlFor="pe-st">시작 시각</label><TimeField id="pe-st" value={startTime} onChange={(v) => changeStartTime(v)} /></div>
+                  <div className="field"><label htmlFor="pe-et">종료 시각</label><TimeField id="pe-et" value={endTime} onChange={(v) => setEndTime(v)} /></div>
                 </div>
               )}
             </>
@@ -778,11 +779,7 @@ function PersonalEventModal({ event, defaultDate, defaultEndDate, prefill, onClo
               {repeat !== "none" && (
                 <div className="pe-repeat-until">
                   <label htmlFor="pe-ru">반복 종료일</label>
-                  <input
-                    id="pe-ru" type="date" value={repeatUntil || addMonths(startDate, 3)}
-                    min={startDate} max={addMonths(startDate, 12)}
-                    onChange={(e) => setRepeatUntil(e.target.value)}
-                  />
+                  <DateField id="pe-ru" value={repeatUntil || addMonths(startDate, 3)} min={startDate} max={addMonths(startDate, 12)} onChange={(v) => setRepeatUntil(v)} />
                   <span className="pe-hint">최대 1년</span>
                 </div>
               )}

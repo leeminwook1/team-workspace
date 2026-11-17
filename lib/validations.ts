@@ -44,6 +44,7 @@ export const taskCreateSchema = z.object({
   resourceOwners: z.record(objectId, objectId).optional(),
   // 촬영 진행 관리(촬영→백업→셀렉→보정→보고) — 생략 시 촬영 카테고리면 자동으로 켬
   pipelineOn: z.boolean().optional(),
+  rsvpOn: z.boolean().optional(), // 참석 확인 (모임) — 단건 일정만
 });
 
 export const taskUpdateSchema = z.object({

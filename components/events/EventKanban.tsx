@@ -1,4 +1,5 @@
 "use client";
+import { DateField, TimeField } from "@/components/DateTimePicker";
 import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -458,7 +459,7 @@ function ItemModal({
           </div>
           <div className="field">
             <label>마감일 (선택)</label>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            <DateField value={dueDate} onChange={(v) => setDueDate(v)} clearable placeholder="마감일 없음" />
           </div>
           <div className="field">
             <label>상태</label>

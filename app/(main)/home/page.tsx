@@ -17,6 +17,7 @@ import {
 } from "@/lib/permissions";
 import { Icon } from "@/components/icons";
 import HomeWidgets, { type WTask } from "@/components/home/HomeWidgets";
+import RsvpPending from "@/components/rsvp/RsvpPending";
 import AutoRefresh from "@/components/AutoRefresh";
 import { DEFAULT_LAYOUT, type WidgetSlot } from "@/lib/widgets";
 
@@ -192,6 +193,9 @@ export default async function HomePage() {
           <span className="dash-stat-body"><b>{todayResv.length}</b><span>오늘 예약</span></span>
         </Link>
       </div>
+
+      {/* 응답이 필요한 모임 — 있을 때만 표시 */}
+      <RsvpPending />
 
       {/* 위젯 대시보드 — 추가·제거·순서·크기 커스터마이즈 (계정에 저장) */}
       <HomeWidgets initialLayout={layout} canDirectives={canUseDirectives(user)} data={widgetData} />

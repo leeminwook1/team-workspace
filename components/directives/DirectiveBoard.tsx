@@ -1,4 +1,5 @@
 "use client";
+import { DateField, TimeField } from "@/components/DateTimePicker";
 import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useState } from "react";
@@ -413,7 +414,7 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
           <div className="form-grid-2">
             <div className="field">
               <label>마감일 (선택)</label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <DateField value={dueDate} onChange={(v) => setDueDate(v)} clearable placeholder="마감일 없음" />
             </div>
             <div className="field">
               <label>우선순위</label>
@@ -476,7 +477,7 @@ function EditModal({ dir, onClose, onSaved }: { dir: Directive; onClose: () => v
           <div className="form-grid-2">
             <div className="field">
               <label>마감일 (선택)</label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <DateField value={dueDate} onChange={(v) => setDueDate(v)} clearable placeholder="마감일 없음" />
             </div>
             <div className="field">
               <label>우선순위</label>

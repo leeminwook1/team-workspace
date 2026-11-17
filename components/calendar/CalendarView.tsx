@@ -1,4 +1,6 @@
 "use client";
+import { DateField, TimeField } from "@/components/DateTimePicker";
+import RsvpPanel from "@/components/rsvp/RsvpPanel";
 import { ModalClose } from "@/components/ModalClose";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -37,6 +39,7 @@ type TaskItem = {
   resources?: { id: string; name: string; ownerId?: string; ownerName?: string }[]; // 연동된 대여 장비 (+장비별 담당자)
   program?: ProgramRow[]; // 식순·타임테이블 (촬영 등)
   pipeline?: PipelineState | null; // 촬영 진행 관리 (촬영→백업→셀렉→보정→보고)
+  rsvp?: { on: true; total: number; yes: number; no: number; maybe: number; none: number; isTarget: boolean; mine: "yes" | "no" | "maybe" | null } | null; // 모임 참석 확인 요약
 };
 
 type ResourceOpt = { id: string; name: string; category: { id: string; name: string; color?: string; order?: number } | null; status?: "available" | "maintenance" | "broken" };
@@ -213,7 +216,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
             textColor: color,
             classNames: t.status === "done" ? ["ev-done"] : [],
             editable: canEditTask(t), // 권한 있는 일정만 드래그 이동·리사이즈
-            extendedProps: { taskId: t.id, urgent: t.priority === "urgent", done: t.status === "done" },
+            extendedProps: { taskId: t.id, urgent: t.priority === "urgent", done: t.status === "done", rsvp: t.rsvp ?? null },
           };
         }),
     [filteredTasks, visible, canEditTask]
@@ -444,7 +447,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           eventContent={(arg) => {
             // 월간 뷰: 팀색 칩(틴트 배경 + 왼쪽 컬러바) — 나머지 뷰는 기본 렌더링(true 반환)
             if (arg.view.type !== "dayGridMonth") return true;
-            const p = arg.event.extendedProps as { urgent?: boolean; done?: boolean };
+            const p = arg.event.extendedProps as { urgent?: boolean; done?: boolean; rsvp?: TaskItem["rsvp"] };
             const color = arg.event.borderColor;
             return (
               <span
@@ -455,6 +458,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
                 }}
               >
                 <span className="ev1c-t" style={{ color }}>{arg.event.title}</span>
+                {p.rsvp && <RsvpBadge r={p.rsvp} compact />}
                 {p.urgent && !p.done && <b className="ev1c-urgent">긴급</b>}
               </span>
             );
@@ -589,6 +593,16 @@ function TrashModal({ onClose, onRestored }: { onClose: () => void; onRestored: 
 }
 
 /* ── 모바일 월간 뷰 — 도트 그리드 + 선택일 아젠다 (1d) ── */
+// 모임 참석 현황 배지 — 참석/전체. 내가 아직 답하지 않았으면 강조
+function RsvpBadge({ r, compact }: { r: NonNullable<TaskItem["rsvp"]>; compact?: boolean }) {
+  const pending = r.isTarget && !r.mine;
+  return (
+    <b className={`rsvp-badge${pending ? " pending" : ""}${compact ? " compact" : ""}`} title={pending ? "참석 여부를 알려주세요" : `참석 ${r.yes} · 불참 ${r.no} · 미응답 ${r.none}`}>
+      👥{compact ? "" : " "}{r.yes}/{r.total}{pending && !compact && " · 응답 필요"}
+    </b>
+  );
+}
+
 function MobileMonthCal({ monthDate, tasks, selected, onSelect, onTaskClick, onAddAt }: {
   monthDate: Date; tasks: TaskItem[]; selected: string;
   onSelect: (day: string) => void; onTaskClick: (t: TaskItem) => void;
@@ -665,6 +679,7 @@ function MobileMonthCal({ monthDate, tasks, selected, onSelect, onTaskClick, onA
               <span className="mc-item-body">
                 <span className="mc-item-title">
                   {t.title}
+                  {t.rsvp && <RsvpBadge r={t.rsvp} />}
                   {t.priority === "urgent" && t.status !== "done" && <b className="ev1c-urgent" style={{ marginLeft: 5 }}>긴급</b>}
                 </span>
                 <span className="mc-item-sub">
@@ -717,6 +732,7 @@ function MobileWeekList({ weekStart, tasks, onTaskClick, onAddAt }: {
                   <span className="mc-item-body">
                     <span className="mc-item-title">
                       {t.title}
+                      {t.rsvp && <RsvpBadge r={t.rsvp} />}
                       {t.priority === "urgent" && t.status !== "done" && <b className="ev1c-urgent" style={{ marginLeft: 5 }}>긴급</b>}
                     </span>
                     <span className="mc-item-sub">
@@ -761,6 +777,13 @@ function TaskFormModal({
   // 촬영 진행 관리 — 새 일정만. 촬영 카테고리를 고르면 자동으로 켬 (직접 끄고 켤 수 있음)
   const [pipelineOn, setPipelineOn] = useState(false);
   const [pipelineTouched, setPipelineTouched] = useState(false);
+  // 참석 확인 — 새 단건 일정만. "모임" 카테고리를 고르면 자동으로 켬
+  const [rsvpOn, setRsvpOn] = useState(false);
+  const [rsvpTouched, setRsvpTouched] = useState(false);
+  useEffect(() => {
+    if (task || rsvpTouched) return;
+    setRsvpOn((categories.find((c) => c.id === categoryId)?.name ?? "").includes("모임"));
+  }, [categoryId, categories, task, rsvpTouched]);
   useEffect(() => {
     if (task || pipelineTouched) return;
     setPipelineOn(isShootCategory(categories.find((c) => c.id === categoryId)?.name));
@@ -1076,7 +1099,7 @@ function TaskFormModal({
           resourceOwners: repeat !== "none" ? undefined : Object.fromEntries(
             Object.entries(resourceOwners).filter(([rid, uid]) => resourceIds.includes(rid) && assignees.has(uid))
           ),
-          ...(isEdit ? {} : { repeat, repeatUntil: repeat !== "none" && repeatUntil ? repeatUntil : undefined, pipelineOn: repeat === "none" ? pipelineOn : false }),
+          ...(isEdit ? {} : { repeat, repeatUntil: repeat !== "none" && repeatUntil ? repeatUntil : undefined, pipelineOn: repeat === "none" ? pipelineOn : false, rsvpOn: repeat === "none" ? rsvpOn : false }),
         }),
       });
       const data = await res.json().catch(() => ({} as any));
@@ -1156,27 +1179,27 @@ function TaskFormModal({
               <div className="form-grid-2">
                 <div className="field">
                   <label>시작일</label>
-                  <input type="date" value={startDate} required onChange={(e) => changeStartDate(e.target.value)} />
+                  <DateField value={startDate} onChange={(v) => changeStartDate(v)} />
                 </div>
                 <div className="field">
                   <label>종료일</label>
-                  <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} required />
+                  <DateField value={endDate} min={startDate} onChange={(v) => setEndDate(v)} />
                 </div>
               </div>
             ) : (
               <>
                 <div className="field">
                   <label>날짜</label>
-                  <input type="date" value={startDate} onChange={(e) => changeStartDate(e.target.value)} required />
+                  <DateField value={startDate} onChange={(v) => changeStartDate(v)} />
                 </div>
                 <div className="form-grid-2">
                   <div className="field">
                     <label>시작 시각</label>
-                    <input type="time" value={startTime} onChange={(e) => changeStartTime(e.target.value)} required />
+                    <TimeField value={startTime} onChange={(v) => changeStartTime(v)} />
                   </div>
                   <div className="field">
                     <label>종료 시각</label>
-                    <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
+                    <TimeField value={endTime} onChange={(v) => setEndTime(v)} />
                   </div>
                 </div>
               </>
@@ -1228,6 +1251,18 @@ function TaskFormModal({
                   type="button" role="switch" aria-checked={pipelineOn} aria-label="촬영 진행 관리"
                   className={`toggle${pipelineOn ? " on" : ""}`}
                   onClick={() => { setPipelineTouched(true); setPipelineOn(!pipelineOn); }}
+                >
+                  <span className="toggle-knob" />
+                </button>
+              </div>
+              <div className="switch-row" style={{ marginTop: 10 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink-soft)" }}>
+                  참석 확인 받기 <em style={{ fontStyle: "normal", fontWeight: 500, color: "var(--ink-faint)", fontSize: 12.5 }}>과원 전체에게 참석·불참 묻기</em>
+                </span>
+                <button
+                  type="button" role="switch" aria-checked={rsvpOn} aria-label="참석 확인 받기"
+                  className={`toggle${rsvpOn ? " on" : ""}`}
+                  onClick={() => { setRsvpTouched(true); setRsvpOn(!rsvpOn); }}
                 >
                   <span className="toggle-knob" />
                 </button>
@@ -1493,7 +1528,7 @@ function TaskFormModal({
                   {repeat !== "none" && (
                     <div className="field">
                       <label>반복 종료일 (기본 3개월)</label>
-                      <input type="date" value={repeatUntil} min={startDate} onChange={(e) => setRepeatUntil(e.target.value)} />
+                      <DateField value={repeatUntil} min={startDate} onChange={(v) => setRepeatUntil(v)} clearable placeholder="종료일 (기본 3개월)" />
                     </div>
                   )}
                 </div>
@@ -1812,6 +1847,9 @@ function TaskDetailModal({
           )
         ))}
 
+        {/* 모임 참석 확인 */}
+        <RsvpPanel taskId={task.id} initialOn={!!task.rsvp} canEdit={canEdit} onChanged={onChanged} />
+
         {/* 촬영 진행 단계 */}
         <PipelineStepper
           taskId={task.id}
@@ -1991,7 +2029,7 @@ function PipelineStepper({ taskId, initial, canStep, canEdit, onChanged }: {
         <div className="ps-due">
           셀렉 마감
           {canStep ? (
-            <input type="date" value={selStr} disabled={busy} aria-label="셀렉 마감" onChange={(e) => send({ selectDue: e.target.value ? new Date(`${e.target.value}T23:59:00+09:00`).toISOString() : null })} />
+            <DateField variant="inline" short clearable placeholder="날짜 정하기" value={selStr} disabled={busy} aria-label="셀렉 마감" onChange={(v) => send({ selectDue: v ? new Date(`${v}T23:59:00+09:00`).toISOString() : null })} />
           ) : <b>{selStr ? fmt(p.selectDue) : "없음"}</b>}
           {canStep && !selStr && <em className="ps-due-hint">바로 못 하면 날짜를 적어두세요</em>}
         </div>
@@ -1999,7 +2037,7 @@ function PipelineStepper({ taskId, initial, canStep, canEdit, onChanged }: {
       <div className="ps-due">
         보고 마감
         {canEdit ? (
-          <input type="date" value={dueStr} disabled={busy} onChange={(e) => send({ reportDue: e.target.value ? new Date(`${e.target.value}T23:59:00+09:00`).toISOString() : null })} />
+          <DateField variant="inline" short clearable placeholder="없음" aria-label="보고 마감" value={dueStr} disabled={busy} onChange={(v) => send({ reportDue: v ? new Date(`${v}T23:59:00+09:00`).toISOString() : null })} />
         ) : <b>{dueStr ? fmt(p.reportDue) : "없음"}</b>}
       </div>
       {err && <p className="err-msg" style={{ marginTop: 6 }}>{err}</p>}

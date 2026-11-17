@@ -14,10 +14,11 @@ import { Reservation } from "@/models/Reservation";
 import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, findUnavailableResources, unavailableMessage } from "@/lib/taskReservations";
 import { addInterval, RECUR_BATCH_CAP } from "@/lib/recurrence";
 import { getDeptId } from "@/lib/dept";
+import { rsvpSummary, rsvpTargetIds, defaultRsvpDeadline, sendRsvpRequest, isMeetingCategory } from "@/lib/rsvp";
 import { serializePipeline, isShootCategory, defaultReportDue } from "@/lib/pipeline";
 import { Category } from "@/models/Category";
 
-function serialize(t: any, resourcesByTask?: Map<string, { id: string; name: string }[]>) {
+function serialize(t: any, resourcesByTask?: Map<string, { id: string; name: string }[]>, meId?: string) {
   return {
     resources: resourcesByTask?.get(String(t._id)) ?? [],
     id: String(t._id),
@@ -44,6 +45,7 @@ function serialize(t: any, resourcesByTask?: Map<string, { id: string; name: str
     location: t.location,
     recurrenceId: t.recurrenceId ? String(t.recurrenceId) : null,
     pipeline: serializePipeline(t.pipeline),
+    rsvp: rsvpSummary(t.rsvp, meId),
   };
 }
 
@@ -104,7 +106,7 @@ export async function GET(req: Request) {
     });
   }
 
-  return json({ tasks: tasks.map((t: any) => serialize(t, resourcesByTask)) });
+  return json({ tasks: tasks.map((t: any) => serialize(t, resourcesByTask, user.id)) });
 }
 
 // POST /api/tasks — 일정 등록 (사진과 소속 전원 + 부장단·admin)
@@ -134,8 +136,8 @@ export async function POST(req: Request) {
   await connectDB();
   // 담당자는 관여 팀의 활성 소속자만 — 임의 userId 주입·알림 스팸 차단 (join과 동일 정책)
   const validAssignees = await filterValidAssignees(d.assignees ?? [], d.teamIds);
-  const { repeat, repeatUntil, resourceIds, resourceOwners, pipelineOn: _pipelineOn, ...fields } = d;
-  void _pipelineOn;
+  const { repeat, repeatUntil, resourceIds, resourceOwners, pipelineOn: _pipelineOn, rsvpOn: _rsvpOn, ...fields } = d;
+  void _pipelineOn; void _rsvpOn;
   // 장비별 담당자 — 이 일정의 담당자(또는 등록자)만 허용, 그 외 값은 무시(등록자로 대체)
   const ownerAllowed = new Set([...validAssignees, user.id]);
   const owners: Record<string, string> = {};
@@ -174,20 +176,26 @@ export async function POST(req: Request) {
     });
 
   // 촬영 진행 관리 — 명시값 우선, 없으면 촬영 카테고리일 때 자동 (반복 일정은 제외)
+  // 참석 확인 — 명시값 우선, 없으면 "모임" 카테고리일 때 자동 (반복 일정은 제외)
   let pipelineOn = d.pipelineOn;
-  if (pipelineOn === undefined && d.categoryId) {
+  let rsvpOn = d.rsvpOn;
+  if ((pipelineOn === undefined || rsvpOn === undefined) && d.categoryId) {
     const cat: any = await Category.findById(d.categoryId).select("name").lean();
-    pipelineOn = isShootCategory(cat?.name);
+    if (pipelineOn === undefined) pipelineOn = isShootCategory(cat?.name);
+    if (rsvpOn === undefined) rsvpOn = isMeetingCategory(cat?.name);
   }
   const pipeline = pipelineOn ? { on: true, reportDue: defaultReportDue(end) } : undefined;
 
   // 단건
   if (!repeat || repeat === "none") {
-    const task = await Task.create({ ...base, startDate: start, endDate: end, ...(pipeline ? { pipeline } : {}) });
+    const rsvpTargets = rsvpOn ? await rsvpTargetIds() : [];
+    const rsvp = rsvpOn ? { on: true, targets: rsvpTargets, deadline: defaultRsvpDeadline(start), responses: [] } : undefined;
+    const task = await Task.create({ ...base, startDate: start, endDate: end, ...(pipeline ? { pipeline } : {}), ...(rsvp ? { rsvp } : {}) });
     let raced: string[] = [];
     if (equip.length > 0) ({ raced } = await syncTaskReservations(task, equip, window, user.id, owners));
     await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetTitle: task.title });
     await notifyAssignees(String(task._id));
+    if (rsvp) await sendRsvpRequest(task, rsvpTargets.filter((id) => id !== user.id));
     // 동시 예약으로 일부 장비 연동이 밀렸으면 성공(201)이되 경고를 함께 반환
     const warning = raced.length > 0 ? `동시 예약으로 일부 장비 연동에 실패했어요: ${raced.join(", ")}` : undefined;
     return json({ id: String(task._id), ...(warning ? { warning } : {}) }, 201);

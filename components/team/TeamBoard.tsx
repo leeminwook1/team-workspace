@@ -1,5 +1,6 @@
 "use client";
 
+import { DateField, TimeField } from "@/components/DateTimePicker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -448,13 +449,13 @@ function AbsenceModal({
           <div className="form-grid-2">
             <div className="field">
               <label>{half ? "날짜" : "시작일"}</label>
-              <input type="date" value={form.startDate} required
-                onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, startDate: v, endDate: f.endDate < v ? v : f.endDate })); }} />
+              <DateField value={form.startDate}
+                onChange={(v) => setForm((f) => ({ ...f, startDate: v, endDate: f.endDate < v ? v : f.endDate }))} />
             </div>
             {!half && (
               <div className="field">
                 <label>종료일</label>
-                <input type="date" value={form.endDate} min={form.startDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
+                <DateField value={form.endDate} min={form.startDate} onChange={(v) => setForm({ ...form, endDate: v })} />
               </div>
             )}
           </div>

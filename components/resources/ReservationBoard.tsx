@@ -1,5 +1,6 @@
 "use client";
 
+import { DateField, TimeField } from "@/components/DateTimePicker";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
@@ -754,7 +755,7 @@ export default function ReservationBoard({
                   <button className="avb-nav-btn" aria-label="이전 날" onClick={() => setRtlDate(addDays(rtlDate, -1))}>‹</button>
                   <button className="avb-nav-btn" onClick={() => setRtlDate(todayYmd)}>오늘</button>
                   <button className="avb-nav-btn" aria-label="다음 날" onClick={() => setRtlDate(addDays(rtlDate, 1))}>›</button>
-                  <input type="date" className="rtl-date" value={rtlDate} onChange={(e) => e.target.value && setRtlDate(e.target.value)} aria-label="날짜 선택" />
+                  <DateField className="rtl-date" value={rtlDate} onChange={(v) => v && setRtlDate(v)} aria-label="날짜 선택" variant="inline" short />
                   <span className="avb-range">{dObj.getMonth() + 1}/{dObj.getDate()} ({dow}){rtlDate === todayYmd ? " · 오늘" : ""}</span>
                 </div>
               </div>
@@ -945,9 +946,9 @@ export default function ReservationBoard({
             {/* 기간 필터 */}
             <div className="rsv2-range">
               <span className="rsv2-range-label">기간</span>
-              <input type="date" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)} aria-label="시작일" />
+              <DateField value={rangeFrom} onChange={(v) => setRangeFrom(v)} aria-label="시작일" variant="inline" short />
               <span className="rsv2-range-sep">~</span>
-              <input type="date" value={rangeTo} min={rangeFrom || undefined} onChange={(e) => setRangeTo(e.target.value)} aria-label="종료일" />
+              <DateField value={rangeTo} min={rangeFrom || undefined} onChange={(v) => setRangeTo(v)} aria-label="종료일" variant="inline" short />
               {(rangeFrom || rangeTo) && <button type="button" className="rsv2-clear" aria-label="기간 초기화" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>×</button>}
             </div>
           </div>
@@ -1222,20 +1223,20 @@ function EditReservationModal({
           <div className="rsv2-daterow">
             <div className="field">
               <label>시작일</label>
-              <input type="date" value={form.startDate} required
-                onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, startDate: v, endDate: f.endDate < v ? v : f.endDate })); }} />
+              <DateField value={form.startDate}
+                onChange={(v) => setForm((f) => ({ ...f, startDate: v, endDate: f.endDate < v ? v : f.endDate }))} />
             </div>
             <div className="field">
               <label>종료일 (반납일)</label>
-              <input type="date" value={form.endDate} min={form.startDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
+              <DateField value={form.endDate} min={form.startDate} onChange={(v) => setForm({ ...form, endDate: v })} />
             </div>
             <div className="field">
               <label>수령 시각</label>
-              <input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} required />
+              <TimeField value={form.startTime} onChange={(v) => setForm({ ...form, startTime: v })} />
             </div>
             <div className="field">
               <label>반납 시각</label>
-              <input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} required />
+              <TimeField value={form.endTime} onChange={(v) => setForm({ ...form, endTime: v })} />
             </div>
           </div>
           <p className="rsv-form-hint" style={{ margin: "-2px 0 12px" }}>
@@ -1465,20 +1466,20 @@ function ReserveModal({
           <div className="rsv2-daterow">
             <div className="field">
               <label>시작일</label>
-              <input type="date" value={form.startDate} required
-                onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, startDate: v, endDate: f.endDate < v ? v : f.endDate })); }} />
+              <DateField value={form.startDate}
+                onChange={(v) => setForm((f) => ({ ...f, startDate: v, endDate: f.endDate < v ? v : f.endDate }))} />
             </div>
             <div className="field">
               <label>종료일 (반납일)</label>
-              <input type="date" value={form.endDate} min={form.startDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
+              <DateField value={form.endDate} min={form.startDate} onChange={(v) => setForm({ ...form, endDate: v })} />
             </div>
             <div className="field">
               <label>수령 시각</label>
-              <input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} required />
+              <TimeField value={form.startTime} onChange={(v) => setForm({ ...form, startTime: v })} />
             </div>
             <div className="field">
               <label>반납 시각</label>
-              <input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} required />
+              <TimeField value={form.endTime} onChange={(v) => setForm({ ...form, endTime: v })} />
             </div>
           </div>
           <p className="rsv-form-hint" style={{ margin: "-2px 0 12px" }}>
