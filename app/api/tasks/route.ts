@@ -109,7 +109,7 @@ export async function GET(req: Request) {
 
   // 모임 참석자 이름 — 참석(yes) 응답한 사람들을 한 번에 조회 (달력 칸에 이름 표시)
   const yesIds = new Set<string>();
-  for (const t of tasks as any[]) if (t.rsvp?.on) for (const r of t.rsvp.responses ?? []) if (r.status === "yes") yesIds.add(String(r.userId));
+  for (const t of tasks as any[]) for (const r of t.rsvp?.responses ?? []) if (r.status === "yes") yesIds.add(String(r.userId));
   const nameById = new Map<string, string>();
   if (yesIds.size > 0) {
     const us: any[] = await User.find({ _id: { $in: Array.from(yesIds) } }).select("name").lean();

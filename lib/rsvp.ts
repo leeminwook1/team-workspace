@@ -64,7 +64,9 @@ export function rsvpMessageText(t: any, forUserId: string, opts?: { reminder?: b
   const resp = new Map<string, any>((t.rsvp?.responses ?? []).filter((r: any) => targets.includes(String(r.userId))).map((r: any) => [String(r.userId), r]));
   const cnt = (s: RsvpStatus) => Array.from(resp.values()).filter((r: any) => r.status === s).length;
   const maybe = cnt("maybe");
-  lines.push("", `✅ 참석 ${cnt("yes")} · ❌ 불참 ${cnt("no")}${maybe ? ` · 🤔 미정 ${maybe}` : ""} · ⏳ 미응답 ${targets.length - resp.size}`);
+  lines.push("", targets.length > 0 && cnt("yes") === targets.length
+    ? `🎉 <b>전원 참석</b> (${targets.length}명)`
+    : `✅ 참석 ${cnt("yes")} · ❌ 불참 ${cnt("no")}${maybe ? ` · 🤔 미정 ${maybe}` : ""} · ⏳ 미응답 ${targets.length - resp.size}`);
 
   const mine = resp.get(forUserId)?.status as RsvpStatus | undefined;
   if (t.rsvp?.on) lines.push("", mine ? `➡️ 내 응답: <b>${RSVP_EMOJI[mine]} ${RSVP_LABEL[mine]}</b> (바꾸려면 다른 버튼)` : "➡️ 아래 버튼으로 응답해 주세요");
@@ -130,16 +132,19 @@ export function applyResponse(task: any, userId: string, status: RsvpStatus, rea
 
 /** 목록·달력용 요약 */
 export function rsvpSummary(rsvp: any, meId?: string, nameById?: Map<string, string>) {
-  if (!rsvp?.on) return null;
+  // 꺼진(마감된) 참석 확인도 응답이 하나라도 있으면 요약을 돌려준다 — 받은 응답을 숨기지 않게
+  if (!rsvp?.on && !(rsvp?.responses ?? []).length) return null;
   const targets = (rsvp.targets ?? []).map(String);
   const resp = (rsvp.responses ?? []).filter((r: any) => targets.includes(String(r.userId)));
   const count = (s: RsvpStatus) => resp.filter((r: any) => r.status === s).length;
   const mine = meId ? resp.find((r: any) => String(r.userId) === meId)?.status ?? null : null;
+  const yes = count("yes");
   return {
-    on: true,
+    on: !!rsvp.on,
     deadline: rsvp.deadline ?? null,
     total: targets.length,
-    yes: count("yes"), no: count("no"), maybe: count("maybe"),
+    yes, no: count("no"), maybe: count("maybe"),
+    allYes: targets.length > 0 && yes === targets.length, // 전원 참석
     none: targets.length - resp.length,
     isTarget: !!meId && targets.includes(meId),
     mine: mine as RsvpStatus | null,

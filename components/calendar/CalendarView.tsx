@@ -39,7 +39,7 @@ type TaskItem = {
   resources?: { id: string; name: string; ownerId?: string; ownerName?: string }[]; // 연동된 대여 장비 (+장비별 담당자)
   program?: ProgramRow[]; // 식순·타임테이블 (촬영 등)
   pipeline?: PipelineState | null; // 촬영 진행 관리 (촬영→백업→셀렉→보정→보고)
-  rsvp?: { on: true; total: number; yes: number; no: number; maybe: number; none: number; isTarget: boolean; mine: "yes" | "no" | "maybe" | null; yesNames?: string[] } | null; // 모임 참석 확인 요약 (+ 참석자 이름)
+  rsvp?: { on: boolean; allYes: boolean; total: number; yes: number; no: number; maybe: number; none: number; isTarget: boolean; mine: "yes" | "no" | "maybe" | null; yesNames?: string[] } | null; // 모임 참석 확인 요약 (+ 참석자 이름)
 };
 
 type ResourceOpt = { id: string; name: string; category: { id: string; name: string; color?: string; order?: number } | null; status?: "available" | "maintenance" | "broken" };
@@ -219,7 +219,7 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
             extendedProps: {
               taskId: t.id, urgent: t.priority === "urgent", done: t.status === "done", rsvp: t.rsvp ?? null,
               // 칸 아래 이름 줄 — 모임은 참석자, 그 외는 담당자
-              names: t.rsvp ? (t.rsvp.yesNames ?? []) : t.assignees.map((a) => a.name),
+              names: t.rsvp ? (t.rsvp.allYes ? ["전원 참석"] : (t.rsvp.yesNames ?? [])) : t.assignees.map((a) => a.name),
               namesKind: t.rsvp ? "참석" : "담당",
             },
           };
@@ -607,10 +607,10 @@ function namesLabel(names: string[]) {
 
 // 모임 참석 현황 배지 — 참석/전체. 내가 아직 답하지 않았으면 강조
 function RsvpBadge({ r, compact }: { r: NonNullable<TaskItem["rsvp"]>; compact?: boolean }) {
-  const pending = r.isTarget && !r.mine;
+  const pending = r.on && r.isTarget && !r.mine; // 마감된 참석 확인은 응답 요청 표시 안 함
   return (
-    <b className={`rsvp-badge${pending ? " pending" : ""}${compact ? " compact" : ""}`} title={pending ? "참석 여부를 알려주세요" : `참석 ${r.yes} · 불참 ${r.no} · 미응답 ${r.none}`}>
-      👥{compact ? "" : " "}{r.yes}/{r.total}{pending && !compact && " · 응답 필요"}
+    <b className={`rsvp-badge${pending ? " pending" : ""}${r.allYes ? " all" : ""}${compact ? " compact" : ""}`} title={pending ? "참석 여부를 알려주세요" : r.allYes ? "전원 참석" : `참석 ${r.yes} · 불참 ${r.no} · 미응답 ${r.none}`}>
+      👥{compact ? "" : " "}{r.allYes ? "전원" : `${r.yes}/${r.total}`}{pending && !compact && " · 응답 필요"}
     </b>
   );
 }
@@ -699,7 +699,7 @@ function MobileMonthCal({ monthDate, tasks, selected, onSelect, onTaskClick, onA
                   {t.location && ` · ${t.location}`}
                   {!t.rsvp && t.assignees.length > 0 && ` · ${namesLabel(t.assignees.map((a) => a.name))}`}
                 </span>
-                {t.rsvp?.yesNames?.length ? <span className="mc-item-sub mc-item-att">✅ 참석 {namesLabel(t.rsvp.yesNames)}</span> : null}
+                {t.rsvp?.allYes ? <span className="mc-item-sub mc-item-att">🎉 전원 참석</span> : t.rsvp?.yesNames?.length ? <span className="mc-item-sub mc-item-att">✅ 참석 {namesLabel(t.rsvp.yesNames)}</span> : null}
               </span>
               <span className={`wbadge${t.status === "in_progress" ? " prog" : t.status === "done" ? " done" : ""}`}>{stLabel}</span>
             </button>
@@ -754,7 +754,7 @@ function MobileWeekList({ weekStart, tasks, onTaskClick, onAddAt }: {
                       {t.location && ` · ${t.location}`}
                       {t.assignees.length > 0 && ` · ${t.assignees.map((a) => a.name).join(", ")}`}
                     </span>
-                    {t.rsvp?.yesNames?.length ? <span className="mc-item-sub mc-item-att">✅ 참석 {namesLabel(t.rsvp.yesNames)}</span> : null}
+                    {t.rsvp?.allYes ? <span className="mc-item-sub mc-item-att">🎉 전원 참석</span> : t.rsvp?.yesNames?.length ? <span className="mc-item-sub mc-item-att">✅ 참석 {namesLabel(t.rsvp.yesNames)}</span> : null}
                   </span>
                   <span className={`wbadge${t.status === "in_progress" ? " prog" : t.status === "done" ? " done" : ""}`}>{stLabel}</span>
                 </button>

@@ -261,7 +261,7 @@ export async function GET(req: Request) {
 
       const taskLines = dayTasks.map((t) => {
         const r = rsvpSummary(t.rsvp);
-        const rsvpPart = r ? `\n   👥 참석 ${r.yes} · 불참 ${r.no}${r.maybe ? ` · 미정 ${r.maybe}` : ""} · 미응답 ${r.none}` : "";
+        const rsvpPart = !r ? "" : r.allYes ? `\n   👥 전원 참석 (${r.total}명)` : `\n   👥 참석 ${r.yes} · 불참 ${r.no}${r.maybe ? ` · 미정 ${r.maybe}` : ""} · 미응답 ${r.none}`;
         return `· ${t.allDay ? "종일" : fmtT(t.startDate)} ${esc(t.title)}${t.status === "done" ? " ✔" : ""}${rsvpPart}`;
       });
       const resvLines = dayResv.map((r) =>

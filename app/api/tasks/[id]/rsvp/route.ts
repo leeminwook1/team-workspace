@@ -4,6 +4,7 @@ import { User } from "@/models/User";
 import { requireActiveUser, json, badId } from "@/lib/api";
 import { canEditTaskDoc, isTeamRole } from "@/lib/permissions";
 import { touchChanged } from "@/lib/changes";
+import { logActivity } from "@/lib/activity";
 import {
   RSVP_STATUSES, applyResponse, rsvpSummary, rsvpTargetIds, sendRsvpRequest, defaultRsvpDeadline, refreshRsvpMessages, type RsvpStatus,
 } from "@/lib/rsvp";
@@ -36,7 +37,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   await connectDB();
   const task: any = await load(params.id);
   if (!task) return json({ error: "일정을 찾을 수 없습니다." }, 404);
-  if (!task.rsvp?.on) return json({ summary: null, people: [] });
+  if (!task.rsvp?.on && !(task.rsvp?.responses ?? []).length) return json({ summary: null, people: [] });
   return json(await detail(task, user.id));
 }
 
@@ -79,15 +80,22 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   let sendTo: string[] = [];
   let reminder = false;
+  let toggled: "on" | "off" | null = null;
   if (body.on === true && !task.rsvp?.on) {
-    // 처음 켜면 과원 전체를 대상으로 잡고 요청을 보낸다 (본인은 화면에서 바로 응답)
-    const targets = await rsvpTargetIds();
+    // 켜면 과원 전체를 대상으로 잡고 요청을 보낸다 (본인은 화면에서 바로 응답).
+    // 다시 켜는 경우 기존 대상·응답은 유지하고, 새 과원을 더해 아직 답하지 않은 사람에게만 보낸다.
+    const current = await rsvpTargetIds();
+    const prev: string[] = (task.rsvp.targets ?? []).map(String);
+    const targets = Array.from(new Set([...prev, ...current]));
+    const answered = new Set((task.rsvp.responses ?? []).map((r: any) => String(r.userId)));
     task.rsvp.on = true;
     task.rsvp.targets = targets;
     if (!task.rsvp.deadline) task.rsvp.deadline = defaultRsvpDeadline(task.startDate);
-    sendTo = targets.filter((id) => id !== user.id);
-  } else if (body.on === false) {
+    sendTo = targets.filter((id) => id !== user.id && !answered.has(id));
+    toggled = "on";
+  } else if (body.on === false && task.rsvp?.on) {
     task.rsvp.on = false; // 응답 기록은 남겨두고 끈다 (다시 켜면 이어서)
+    toggled = "off";
   }
   if (body.deadline !== undefined) {
     const d = body.deadline ? new Date(body.deadline) : null;
@@ -104,6 +112,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   task.markModified("rsvp");
   await task.save();
   await sendRsvpRequest(task, sendTo, { reminder });
+  if (toggled) {
+    // 누가 켜고 껐는지 남긴다 (실수로 끈 경우 추적)
+    await logActivity({
+      actorId: user.id, actorName: user.name, action: "update", targetTitle: task.title,
+      meta: { detail: toggled === "on" ? "참석 확인 켬" : "참석 확인 끔" },
+    });
+  }
   if (!reminder) await refreshRsvpMessages(String(task._id)); // 마감 변경·끄기도 기존 메시지에 반영
   await touchChanged("task");
   return json({ ...(await detail(task, user.id)), sent: sendTo.length });

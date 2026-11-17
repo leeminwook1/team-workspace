@@ -6,7 +6,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 
 // 일정 상세의 "참석 확인" — 내 응답 버튼, 현황 막대, 명단(응답별), 마감·재알림 (관리자)
 type Status = "yes" | "no" | "maybe";
-type Summary = { on: true; deadline: string | null; total: number; yes: number; no: number; maybe: number; none: number; isTarget: boolean; mine: Status | null };
+type Summary = { on: boolean; allYes: boolean; deadline: string | null; total: number; yes: number; no: number; maybe: number; none: number; isTarget: boolean; mine: Status | null };
 type Person = { id: string; name: string; status: Status | null; reason: string };
 
 const LABEL: Record<Status, string> = { yes: "참석", no: "불참", maybe: "미정" };
@@ -80,17 +80,22 @@ export default function RsvpPanel({ taskId, initialOn, canEdit, onChanged }: {
   return (
     <div className="rv">
       <div className="ps-head">
-        <div className="detail-status-label" style={{ margin: 0 }}>참석 확인</div>
-        {canEdit && (
+        <div className="detail-status-label" style={{ margin: 0 }}>참석 확인{!sum.on && <span className="rv-closed">마감됨</span>}</div>
+        {canEdit && (sum.on ? (
           <button type="button" className="rsv-linkbtn" disabled={busy}
             onClick={async () => {
-              const ok = await confirm({ title: "참석 확인 끄기", message: "참석 확인을 끌까요? 받은 응답은 남아 있어 다시 켜면 이어져요.", confirmText: "끄기" });
+              const ok = await confirm({ title: "참석 확인 마감", message: "참석 확인을 마감할까요? 더 이상 응답을 받지 않아요. 받은 응답은 그대로 보이고, 다시 켜면 이어져요.", confirmText: "마감" });
               if (ok) call("PATCH", { on: false });
-            }}>끄기</button>
-        )}
+            }}>마감하기</button>
+        ) : (
+          <button type="button" className="rsv-linkbtn" disabled={busy}
+            onClick={async () => { const d = await call("PATCH", { on: true }); if (d) setMsg(d.sent ? `미응답 ${d.sent}명에게 다시 물어봤어요.` : "다시 켰어요."); }}>다시 켜기</button>
+        ))}
       </div>
 
-      {sum.isTarget && (
+      {sum.allYes && <p className="rv-allyes">🎉 전원 참석 ({sum.total}명)</p>}
+
+      {sum.on && sum.isTarget && (
         <div className="rv-mine">
           <div className="seg rv-seg" role="radiogroup" aria-label="내 응답">
             {(["yes", "no", "maybe"] as Status[]).map((s) => (
@@ -144,7 +149,7 @@ export default function RsvpPanel({ taskId, initialOn, canEdit, onChanged }: {
         })}
       </div>
 
-      <div className="ps-due">
+      {sum.on && <div className="ps-due">
         응답 마감
         {canEdit ? (
           <DateField variant="inline" short clearable placeholder="없음" aria-label="응답 마감" value={kstDay(sum.deadline)} disabled={busy}
@@ -156,7 +161,7 @@ export default function RsvpPanel({ taskId, initialOn, canEdit, onChanged }: {
             미응답 {sum.none}명에게 다시 알림
           </button>
         )}
-      </div>
+      </div>}
       {msg && <p className="rv-msg">{msg}</p>}
       {err && <p className="err-msg" style={{ marginTop: 6 }}>{err}</p>}
     </div>
