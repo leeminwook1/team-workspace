@@ -2873,3 +2873,15 @@ a { color: inherit; text-decoration: none; }
 @media (max-height: 760px) {
   .side .nav a { padding: 6px 12px; font-size: 13.5px; }
 }
+
+/* 홈 위젯 — 브라우저에서 그리기 전 자리 확보 (레이아웃 튐 방지) */
+.hw-skeleton { min-height: 60vh; border-radius: var(--r-lg, 16px); background: var(--surface-2); animation: hw-pulse 1.2s ease-in-out infinite alternate; }
+@keyframes hw-pulse { from { opacity: 0.55; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .hw-skeleton { animation: none; } }
+
+/* 촬영 진행 — 드래그 이동 */
+.pl-card.can-drag { cursor: grab; }
+.pl-card.can-drag:active { cursor: grabbing; }
+.pl-card.dragging { opacity: 0.4; }
+.pl-col { transition: background 0.12s, box-shadow 0.12s; }
+.pl-col.drop-over { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--primary); }

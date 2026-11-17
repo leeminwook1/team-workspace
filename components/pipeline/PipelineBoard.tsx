@@ -6,7 +6,12 @@ import { useSession } from "next-auth/react";
 import { Icon } from "@/components/icons";
 import { LoadError } from "@/components/LoadError";
 import { useAutoRefresh } from "@/components/useAutoRefresh";
-import { PIPELINE_STEPS, STEP_LABEL, type PipelineState, type StepKey } from "@/lib/pipeline";
+import { useConfirm } from "@/components/ConfirmProvider";
+import { PIPELINE_STEPS, STEP_KEYS, STEP_LABEL, type PipelineState, type StepKey } from "@/lib/pipeline";
+
+type ColKey = StepKey | "done";
+// 열 순서 — 0 촬영 예정 … 4 보고 대기, 5 완료
+const colIndex = (k: ColKey) => (k === "done" ? STEP_KEYS.length : STEP_KEYS.indexOf(k));
 
 type Item = {
   id: string; title: string; startDate: string; endDate: string; allDay: boolean; location: string;
@@ -62,6 +67,29 @@ export default function PipelineBoard() {
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(load, ["task"]);
 
+  // 드래그 이동 — 앞 열로 끌면 그 앞 단계까지 완료, 뒤 열로 끌면 그 단계부터 해제
+  const confirm = useConfirm();
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<ColKey | null>(null);
+  async function moveTo(it: Item, target: ColKey) {
+    const from = colIndex(it.next ?? "done");
+    const to = colIndex(target);
+    if (from === to) return;
+    if (to > from) {
+      if (target === "done") {
+        const ok = await confirm({
+          title: "보고 완료",
+          message: `"${it.title}"을(를) 보고까지 완료할까요? 일정이 완료되고 연동 장비도 반납돼요.`,
+          confirmText: "완료",
+        });
+        if (!ok) return;
+      }
+      await advance(it, STEP_KEYS[to - 1], true); // 앞 단계는 서버가 함께 체크
+    } else {
+      await advance(it, STEP_KEYS[to], false); // 그 단계와 뒤 단계 해제
+    }
+  }
+
   async function advance(it: Item, step: StepKey, done = true) {
     setBusy(it.id); setErr("");
     try {
@@ -106,7 +134,7 @@ export default function PipelineBoard() {
       <div className="page-head">
         <div>
           <h1 className="page-title">촬영 진행</h1>
-          <p className="page-sub">촬영 → 백업 → 셀렉 → 보정 → 보고. 다음 단계 버튼을 눌러 진행 상황을 함께 맞춰요. 셀렉을 바로 못 하면 카드의 <b>+ 셀렉 마감</b>에 날짜를 적어두세요.</p>
+          <p className="page-sub">촬영 → 백업 → 셀렉 → 보정 → 보고. 다음 단계 버튼을 눌러 진행 상황을 함께 맞춰요. 카드를 <b>끌어서 다른 칸으로</b> 옮겨도 돼요. 셀렉을 바로 못 하면 카드의 <b>+ 셀렉 마감</b>에 날짜를 적어두세요.</p>
         </div>
         <button className={`chip chip-btn${mineOnly ? " sel" : ""}`} onClick={() => setMineOnly((v) => !v)}>
           <Icon name="userLine" size={13} /> 내 담당만
@@ -128,12 +156,27 @@ export default function PipelineBoard() {
           {columns.map((col) => {
             const list = shown.filter((it) => (col.key === "done" ? !it.next : it.next === col.key));
             return (
-              <section className={`pl-col${col.key === "done" ? " done" : ""}`} key={col.key}>
+              <section
+                className={`pl-col${col.key === "done" ? " done" : ""}${dragOver === col.key ? " drop-over" : ""}`} key={col.key}
+                onDragOver={dragId ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragOver !== col.key) setDragOver(col.key); } : undefined}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver((cur) => (cur === col.key ? null : cur)); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const it = items.find((x) => x.id === dragId);
+                  setDragId(null); setDragOver(null);
+                  if (it) moveTo(it, col.key);
+                }}
+              >
                 <div className="pl-col-head">{col.title} <span className="kb-count">{list.length}</span></div>
                 {list.map((it) => {
                   const alert = alertOf(it);
                   return (
-                    <div className={`pl-card${alert?.tone === "late" ? " late" : ""}`} key={it.id}>
+                    <div
+                      className={`pl-card${alert?.tone === "late" ? " late" : ""}${it.canStep ? " can-drag" : ""}${dragId === it.id ? " dragging" : ""}`} key={it.id}
+                      draggable={it.canStep && busy !== it.id}
+                      onDragStart={it.canStep ? (e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", it.id); setDragId(it.id); } : undefined}
+                      onDragEnd={() => { setDragId(null); setDragOver(null); }}
+                    >
                       <Link href={`/calendar?task=${it.id}`} className="pl-card-title">
                         {it.category && <span className="dot" style={{ background: it.category.color }} />}
                         {it.title}

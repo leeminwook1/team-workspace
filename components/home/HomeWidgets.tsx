@@ -1,4 +1,5 @@
 "use client";
+import { useMounted } from "@/components/useMounted";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -429,7 +430,17 @@ function EventsWidget({ items }: { items: WEvent[] }) {
 }
 
 /* ══════════ 위젯 그리드 + 편집 모드 ══════════ */
-export default function HomeWidgets({ initialLayout, canDirectives, data }: {
+// 홈 위젯은 날짜(오늘·D-day·요일)를 브라우저 시간(KST)으로 계산한다. 서버(Vercel)는 UTC라 미리 그리면
+// hydration 불일치(React #418/#422)가 나므로, 위젯 영역은 브라우저에 올라온 뒤에 그린다 (데이터는 서버에서 이미 받아옴).
+export default function HomeWidgets(props: {
+  initialLayout: WidgetSlot[]; canDirectives: boolean; data: WidgetData;
+}) {
+  const mounted = useMounted();
+  if (!mounted) return <div className="hw-skeleton" aria-busy="true" aria-label="불러오는 중" />;
+  return <HomeWidgetsInner {...props} />;
+}
+
+function HomeWidgetsInner({ initialLayout, canDirectives, data }: {
   initialLayout: WidgetSlot[]; canDirectives: boolean; data: WidgetData;
 }) {
   const [layout, setLayout] = useState<WidgetSlot[]>(initialLayout);
