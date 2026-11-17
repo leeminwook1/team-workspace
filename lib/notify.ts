@@ -20,7 +20,7 @@ const PREF_KEY: Record<string, "assign" | "due" | "late" | "directive" | "equip"
 export async function notify(
   userIds: (string | { toString(): string })[],
   n: { type?: string; title: string; body?: string; link?: string },
-  opts?: { tgButtons?: TgButton[][] } // 텔레그램 전용 인라인 버튼 (예: 완료·반납 처리)
+  opts?: { tgButtons?: TgButton[][]; skipTelegram?: boolean } // 텔레그램 인라인 버튼 / 텔레그램은 호출한 쪽이 직접 보낼 때(참석 확인)
 ) {
   const ids = Array.from(new Set(userIds.map(String))).filter(Boolean);
   if (ids.length === 0) return;
@@ -31,7 +31,7 @@ export async function notify(
     );
 
     // 텔레그램 — 챗 ID를 등록했고 이 알림 타입을 끄지 않은 사용자에게만
-    if (telegramEnabled()) {
+    if (telegramEnabled() && !opts?.skipTelegram) {
       const linked: any[] = await User.find({
         _id: { $in: ids },
         telegramChatId: { $nin: ["", null] },

@@ -51,6 +51,37 @@ async function tgCall(method: string, payload: Record<string, unknown>): Promise
   }
 }
 
+/** 전송 후 message_id 반환 (나중에 메시지를 고쳐 쓸 때 — 참석 확인 현황 등). 실패 시 null */
+export async function sendTelegramWithId(chatId: string, text: string, opts?: TgSendOpts): Promise<number | null> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !chatId) return null;
+  const markup = replyMarkup(opts?.buttons);
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch(`${API}/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId, text, disable_web_page_preview: true,
+        ...(opts?.html ? { parse_mode: "HTML" } : {}),
+        ...(markup ? { reply_markup: markup } : {}),
+      }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    const data: any = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) {
+      console.error("[telegram] sendMessage 실패:", JSON.stringify(data ?? {}).slice(0, 200));
+      return null;
+    }
+    return data.result?.message_id ?? null;
+  } catch (e) {
+    console.error("[telegram] sendMessage 오류:", e);
+    return null;
+  }
+}
+
 /** 단건 전송 — 성공 여부 반환 */
 export async function sendTelegram(chatId: string, text: string, opts?: TgSendOpts): Promise<boolean> {
   if (!chatId) return false;

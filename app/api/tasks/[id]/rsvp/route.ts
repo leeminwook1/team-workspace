@@ -5,7 +5,7 @@ import { requireActiveUser, json, badId } from "@/lib/api";
 import { canEditTaskDoc, isTeamRole } from "@/lib/permissions";
 import { touchChanged } from "@/lib/changes";
 import {
-  RSVP_STATUSES, applyResponse, rsvpSummary, rsvpTargetIds, sendRsvpRequest, defaultRsvpDeadline, type RsvpStatus,
+  RSVP_STATUSES, applyResponse, rsvpSummary, rsvpTargetIds, sendRsvpRequest, defaultRsvpDeadline, refreshRsvpMessages, type RsvpStatus,
 } from "@/lib/rsvp";
 
 // /api/tasks/:id/rsvp — 모임 참석 확인
@@ -59,6 +59,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   applyResponse(task, user.id, status, reason);
   await task.save();
   await touchChanged("task");
+  await refreshRsvpMessages(String(task._id)); // 웹에서 응답해도 텔레그램 현황 갱신
   return json(await detail(task, user.id));
 }
 
@@ -103,6 +104,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   task.markModified("rsvp");
   await task.save();
   await sendRsvpRequest(task, sendTo, { reminder });
+  if (!reminder) await refreshRsvpMessages(String(task._id)); // 마감 변경·끄기도 기존 메시지에 반영
   await touchChanged("task");
   return json({ ...(await detail(task, user.id)), sent: sendTo.length });
 }

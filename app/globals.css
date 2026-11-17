@@ -3076,3 +3076,7 @@ a { color: inherit; text-decoration: none; }
 .pos-picker { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
 .pos-elsewhere { font-style: normal; font-weight: 500; opacity: 0.7; font-size: 11.5px; }
 .pos-edit-note { width: 100%; padding: 8px 10px; font-size: 13px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font-family: inherit; }
+/* 달력 월간 칸 — 모임 참석자 이름 줄 */
+.ev1c.has-names { flex-wrap: wrap; row-gap: 1px; }
+.ev1c-names { flex-basis: 100%; text-align: center; font-size: 10.5px; font-weight: 600; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-item-att { color: var(--st-done); font-weight: 700; }

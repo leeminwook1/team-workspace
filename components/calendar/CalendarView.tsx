@@ -39,7 +39,7 @@ type TaskItem = {
   resources?: { id: string; name: string; ownerId?: string; ownerName?: string }[]; // 연동된 대여 장비 (+장비별 담당자)
   program?: ProgramRow[]; // 식순·타임테이블 (촬영 등)
   pipeline?: PipelineState | null; // 촬영 진행 관리 (촬영→백업→셀렉→보정→보고)
-  rsvp?: { on: true; total: number; yes: number; no: number; maybe: number; none: number; isTarget: boolean; mine: "yes" | "no" | "maybe" | null } | null; // 모임 참석 확인 요약
+  rsvp?: { on: true; total: number; yes: number; no: number; maybe: number; none: number; isTarget: boolean; mine: "yes" | "no" | "maybe" | null; yesNames?: string[] } | null; // 모임 참석 확인 요약 (+ 참석자 이름)
 };
 
 type ResourceOpt = { id: string; name: string; category: { id: string; name: string; color?: string; order?: number } | null; status?: "available" | "maintenance" | "broken" };
@@ -216,7 +216,12 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
             textColor: color,
             classNames: t.status === "done" ? ["ev-done"] : [],
             editable: canEditTask(t), // 권한 있는 일정만 드래그 이동·리사이즈
-            extendedProps: { taskId: t.id, urgent: t.priority === "urgent", done: t.status === "done", rsvp: t.rsvp ?? null },
+            extendedProps: {
+              taskId: t.id, urgent: t.priority === "urgent", done: t.status === "done", rsvp: t.rsvp ?? null,
+              // 칸 아래 이름 줄 — 모임은 참석자, 그 외는 담당자
+              names: t.rsvp ? (t.rsvp.yesNames ?? []) : t.assignees.map((a) => a.name),
+              namesKind: t.rsvp ? "참석" : "담당",
+            },
           };
         }),
     [filteredTasks, visible, canEditTask]
@@ -447,11 +452,11 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
           eventContent={(arg) => {
             // 월간 뷰: 팀색 칩(틴트 배경 + 왼쪽 컬러바) — 나머지 뷰는 기본 렌더링(true 반환)
             if (arg.view.type !== "dayGridMonth") return true;
-            const p = arg.event.extendedProps as { urgent?: boolean; done?: boolean; rsvp?: TaskItem["rsvp"] };
+            const p = arg.event.extendedProps as { urgent?: boolean; done?: boolean; rsvp?: TaskItem["rsvp"]; names?: string[]; namesKind?: string };
             const color = arg.event.borderColor;
             return (
               <span
-                className="ev1c"
+                className={`ev1c${p.names?.length ? " has-names" : ""}`}
                 style={{
                   background: `color-mix(in srgb, ${color} 13%, transparent)`,
                   borderLeft: `3px solid ${color}`,
@@ -460,6 +465,8 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
                 <span className="ev1c-t" style={{ color }}>{arg.event.title}</span>
                 {p.rsvp && <RsvpBadge r={p.rsvp} compact />}
                 {p.urgent && !p.done && <b className="ev1c-urgent">긴급</b>}
+                {/* 이름 줄 — 모임은 참석 응답한 사람, 그 외는 담당자 */}
+                {p.names?.length ? <span className="ev1c-names" title={`${p.namesKind}: ${p.names.join(", ")}`}>{namesLabel(p.names)}</span> : null}
               </span>
             );
           }}
@@ -593,6 +600,11 @@ function TrashModal({ onClose, onRestored }: { onClose: () => void; onRestored: 
 }
 
 /* ── 모바일 월간 뷰 — 도트 그리드 + 선택일 아젠다 (1d) ── */
+// 참석자 이름 — 4명까지, 나머지는 "외 N명"
+function namesLabel(names: string[]) {
+  return names.length > 4 ? `${names.slice(0, 4).join("·")} 외 ${names.length - 4}명` : names.join("·");
+}
+
 // 모임 참석 현황 배지 — 참석/전체. 내가 아직 답하지 않았으면 강조
 function RsvpBadge({ r, compact }: { r: NonNullable<TaskItem["rsvp"]>; compact?: boolean }) {
   const pending = r.isTarget && !r.mine;
@@ -685,7 +697,9 @@ function MobileMonthCal({ monthDate, tasks, selected, onSelect, onTaskClick, onA
                 <span className="mc-item-sub">
                   {t.allDay ? "하루 종일" : `${fmtT(t.startDate)}–${fmtT(t.endDate)}`}
                   {t.location && ` · ${t.location}`}
+                  {!t.rsvp && t.assignees.length > 0 && ` · ${namesLabel(t.assignees.map((a) => a.name))}`}
                 </span>
+                {t.rsvp?.yesNames?.length ? <span className="mc-item-sub mc-item-att">✅ 참석 {namesLabel(t.rsvp.yesNames)}</span> : null}
               </span>
               <span className={`wbadge${t.status === "in_progress" ? " prog" : t.status === "done" ? " done" : ""}`}>{stLabel}</span>
             </button>
@@ -740,6 +754,7 @@ function MobileWeekList({ weekStart, tasks, onTaskClick, onAddAt }: {
                       {t.location && ` · ${t.location}`}
                       {t.assignees.length > 0 && ` · ${t.assignees.map((a) => a.name).join(", ")}`}
                     </span>
+                    {t.rsvp?.yesNames?.length ? <span className="mc-item-sub mc-item-att">✅ 참석 {namesLabel(t.rsvp.yesNames)}</span> : null}
                   </span>
                   <span className={`wbadge${t.status === "in_progress" ? " prog" : t.status === "done" ? " done" : ""}`}>{stLabel}</span>
                 </button>

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
+import { User } from "@/models/User";
 import "@/models/Team";
 import "@/models/User";
 import "@/models/Category";
@@ -18,7 +19,7 @@ import { rsvpSummary, rsvpTargetIds, defaultRsvpDeadline, sendRsvpRequest, isMee
 import { serializePipeline, isShootCategory, defaultReportDue } from "@/lib/pipeline";
 import { Category } from "@/models/Category";
 
-function serialize(t: any, resourcesByTask?: Map<string, { id: string; name: string }[]>, meId?: string) {
+function serialize(t: any, resourcesByTask?: Map<string, { id: string; name: string }[]>, meId?: string, nameById?: Map<string, string>) {
   return {
     resources: resourcesByTask?.get(String(t._id)) ?? [],
     id: String(t._id),
@@ -45,7 +46,7 @@ function serialize(t: any, resourcesByTask?: Map<string, { id: string; name: str
     location: t.location,
     recurrenceId: t.recurrenceId ? String(t.recurrenceId) : null,
     pipeline: serializePipeline(t.pipeline),
-    rsvp: rsvpSummary(t.rsvp, meId),
+    rsvp: rsvpSummary(t.rsvp, meId, nameById),
   };
 }
 
@@ -106,7 +107,16 @@ export async function GET(req: Request) {
     });
   }
 
-  return json({ tasks: tasks.map((t: any) => serialize(t, resourcesByTask, user.id)) });
+  // 모임 참석자 이름 — 참석(yes) 응답한 사람들을 한 번에 조회 (달력 칸에 이름 표시)
+  const yesIds = new Set<string>();
+  for (const t of tasks as any[]) if (t.rsvp?.on) for (const r of t.rsvp.responses ?? []) if (r.status === "yes") yesIds.add(String(r.userId));
+  const nameById = new Map<string, string>();
+  if (yesIds.size > 0) {
+    const us: any[] = await User.find({ _id: { $in: Array.from(yesIds) } }).select("name").lean();
+    for (const u of us) nameById.set(String(u._id), u.name);
+  }
+
+  return json({ tasks: tasks.map((t: any) => serialize(t, resourcesByTask, user.id, nameById)) });
 }
 
 // POST /api/tasks — 일정 등록 (사진과 소속 전원 + 부장단·admin)

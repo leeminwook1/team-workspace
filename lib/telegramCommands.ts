@@ -5,7 +5,7 @@ import { Category } from "@/models/Category";
 import { Task } from "@/models/Task";
 import { Resource } from "@/models/Resource";
 import { ResourceSet } from "@/models/ResourceSet";
-import { applyResponse, parseRsvpCode, rsvpButtons, RSVP_EMOJI, RSVP_LABEL } from "./rsvp";
+import { applyResponse, parseRsvpCode, refreshRsvpMessages } from "./rsvp";
 import { Reservation } from "@/models/Reservation";
 import { PersonalEvent } from "@/models/PersonalEvent";
 import {
@@ -833,23 +833,20 @@ export async function handleTelegramCallback(p: {
     }
 
     if (action === "rsvp") {
-      // 모임 참석 확인 — 응답을 기록하고, 버튼은 남겨 다시 눌러 바꿀 수 있게 한다
+      // 모임 참석 확인 — 응답을 기록하고, 팝업 없이 메시지 안의 현황을 바로 고쳐 쓴다.
+      // 다른 사람에게 보낸 메시지도 함께 갱신되어 누가 응답했는지 모두가 본다.
       const status = parseRsvpCode(p.data.split(":")[2]);
-      if (!status) { await answerCallback(p.callbackId, "알 수 없는 응답이에요."); return; }
+      if (!status) { await answerCallback(p.callbackId); return; }
       const task: any = await Task.findById(id);
       if (!task) { await finish("삭제된 일정이에요.", "⚠ 삭제된 일정입니다."); return; }
-      if (!task.rsvp?.on) { await finish("참석 확인이 끝난 일정이에요.", "참석 확인이 마감되었습니다."); return; }
+      if (!task.rsvp?.on) { await answerCallback(p.callbackId); await refreshRsvpMessages(String(task._id), { chatId: p.chatId, messageId: p.messageId, userId: user.id }); return; }
       const isTarget = (task.rsvp.targets ?? []).some((x: any) => String(x) === user.id);
       if (!isTarget && !isTeamRole(user.role)) { await answerCallback(p.callbackId, "참석 확인 대상이 아니에요."); return; }
       applyResponse(task, user.id, status);
       await task.save();
       await touchChanged("task");
-      const base = p.messageText.split("\n\n➡️ ")[0]; // 이전 응답 표시는 지우고 새로 붙임
-      const tail = status === "no" ? " — 사유는 웹 일정 상세에서 적을 수 있어요" : "";
-      await answerCallback(p.callbackId, `${RSVP_EMOJI[status]} ${RSVP_LABEL[status]}으로 응답했어요`);
-      await editTelegramMessage(p.chatId, p.messageId,
-        `${base}\n\n➡️ 내 응답: ${RSVP_EMOJI[status]} ${RSVP_LABEL[status]}${tail}\n(바꾸려면 다른 버튼을 누르세요)`,
-        { buttons: rsvpButtons(String(task._id)) });
+      await answerCallback(p.callbackId); // 토스트(팝업) 없이 로딩 표시만 끝낸다
+      await refreshRsvpMessages(String(task._id), { chatId: p.chatId, messageId: p.messageId, userId: user.id });
       return;
     }
 

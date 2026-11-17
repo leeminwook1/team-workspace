@@ -53,6 +53,13 @@ const TaskSchema = new Schema(
         at: { type: Date, default: Date.now },
       }],
       remindedAt: { type: Date, default: null },
+      // 보낸 텔레그램 메시지 — 누가 응답하면 모두의 메시지를 현황으로 고쳐 쓴다
+      tgMessages: [{
+        _id: false,
+        userId: { type: Schema.Types.ObjectId, ref: "User" },
+        chatId: { type: String },
+        messageId: { type: Number },
+      }],
     },
 
     // 촬영 진행 관리 — 촬영 → 백업 → 셀렉 → 보정 → 보고 (lib/pipeline.ts). 각 단계 완료 시각·처리자
