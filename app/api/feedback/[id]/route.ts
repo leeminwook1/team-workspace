@@ -31,7 +31,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return json({ error: "내용 수정은 작성자만 가능합니다." }, 403);
   }
   if (d.status !== undefined && !canManageFeedback(user)) {
-    return json({ error: "상태 변경은 최고관리자만 가능합니다." }, 403);
+    return json({ error: "상태 변경은 시스템 관리자만 가능합니다." }, 403);
   }
 
   if (d.vote !== undefined) {
@@ -72,7 +72,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const fb: any = await Feedback.findById(params.id).lean();
   if (!fb) return json({ error: "피드백을 찾을 수 없습니다." }, 404);
   if (!canEditFeedback(user, String(fb.createdBy))) {
-    return json({ error: "피드백 삭제는 작성자 또는 최고관리자만 가능합니다." }, 403);
+    return json({ error: "피드백 삭제는 작성자 또는 시스템 관리자만 가능합니다." }, 403);
   }
 
   await Feedback.deleteOne({ _id: params.id });

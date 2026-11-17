@@ -5,26 +5,28 @@ import { useConfirm } from "@/components/ConfirmProvider";
 
 type PendingUser = {
   id: string; name: string; email: string; requestedAt: string;
-  role?: string | null; teamId?: string | null; // 신청자가 희망한 역할·팀
+  role?: string | null; teamId?: string | null; // 신청자가 희망한 직급
 };
-type TeamOpt = { id: string; name: string; color: string };
 
 const TEAM_ROLE_VALUES = ["leader", "vice_leader", "member"];
 const isTeamRole = (r: string) => TEAM_ROLE_VALUES.includes(r);
-// isAdmin이면 전사 역할까지 선택 가능
+// 부장단·시스템 관리자 직급은 시스템 관리자만 부여 (서버에서도 검증)
 function roleOptions(isAdmin: boolean) {
   const base = [
-    { value: "member", label: "팀원" },
-    { value: "vice_leader", label: "부팀장" },
-    { value: "leader", label: "팀장" },
-    { value: "secretary", label: "서기" },
-    { value: "deputy", label: "부과장" },
-    { value: "manager", label: "과장" },
+    { value: "member", label: "과원" },
+    { value: "vice_leader", label: "부과장" },
+    { value: "leader", label: "과장" },
   ];
-  return isAdmin ? [...base, { value: "admin", label: "최고관리자" }] : base;
+  const board = [
+    { value: "deputy", label: "총교관 (부장단)" },
+    { value: "secretary", label: "서무 (부장단)" },
+    { value: "manager", label: "부장 (부장단)" },
+    { value: "admin", label: "시스템 관리자" },
+  ];
+  return isAdmin ? [...base, ...board] : base;
 }
 
-export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isAdmin: boolean }) {
+export default function ApprovalList({ isAdmin }: { isAdmin: boolean }) {
   const [users, setUsers] = useState<PendingUser[]>([]);
   const [loaded, setLoaded] = useState(false);
   // 사용자별 선택값 (역할 하나 + 소속 팀)
@@ -48,7 +50,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
   function getSel(u: PendingUser) {
     // 관리자가 바꾸기 전에는 신청자가 희망한 역할·팀이 기본 선택
     const wantedRole = u.role && TEAM_ROLE_VALUES.includes(u.role) ? u.role : "member";
-    const wantedTeam = u.teamId && teams.some((t) => t.id === u.teamId) ? u.teamId : (teams[0]?.id ?? "");
+    const wantedTeam = "";
     return sel[u.id] ?? { role: wantedRole, teamId: wantedTeam };
   }
 
@@ -56,7 +58,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
     const s = getSel(u);
     setBusy(u.id);
     setErr("");
-    const body = { role: s.role, teamId: isTeamRole(s.role) ? s.teamId : null };
+    const body = { role: s.role }; // 소속(사진과)은 서버가 채움
     try {
       const res = await fetch(`/api/admin/users/${u.id}/approve`, {
         method: "POST",
@@ -110,7 +112,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
       <table className="table table-center">
         <thead>
           <tr>
-            <th>이름</th><th>이메일</th><th>역할</th><th>소속 팀</th>
+            <th>이름</th><th>이메일</th><th>직급</th>
             <th style={{ width: 160 }}>처리</th>
           </tr>
         </thead>
@@ -121,7 +123,7 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
               <tr key={u.id}>
                 <td>{u.name}</td>
                 <td data-label="이메일" style={{ color: "var(--ink-soft)" }}>{u.email}</td>
-                <td data-label="역할">
+                <td data-label="직급">
                   <select
                     value={s.role}
                     onChange={(e) => setSel({ ...sel, [u.id]: { ...s, role: e.target.value } })}
@@ -129,19 +131,6 @@ export default function ApprovalList({ teams, isAdmin }: { teams: TeamOpt[]; isA
                   >
                     {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
-                </td>
-                <td data-label="소속 팀">
-                  {isTeamRole(s.role) ? (
-                    <select
-                      value={s.teamId}
-                      onChange={(e) => setSel({ ...sel, [u.id]: { ...s, teamId: e.target.value } })}
-                      className="mini-select"
-                    >
-                      {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
-                  ) : (
-                    <span style={{ color: "var(--ink-faint)", fontSize: 13 }}>전체</span>
-                  )}
                 </td>
                 <td className="td-actions">
                   <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>

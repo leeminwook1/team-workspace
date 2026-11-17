@@ -31,7 +31,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const needsEdit = keys.some((k) => EDIT_KEYS.includes(k));
 
   if (needsManage && !canManageDirective(user, teamId)) {
-    return json({ error: "상태 변경·재분배는 담당 팀장만 가능합니다." }, 403);
+    return json({ error: "상태 변경·배분은 과장만 가능합니다." }, 403);
   }
   if (needsEdit && !canEditDirective(user, String(dir.createdBy))) {
     return json({ error: "TODO 내용 수정은 발신자만 가능합니다." }, 403);
@@ -76,7 +76,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const dir: any = await Directive.findById(params.id).lean();
   if (!dir) return json({ error: "TODO를 찾을 수 없습니다." }, 404);
   if (!canEditDirective(user, String(dir.createdBy))) {
-    return json({ error: "TODO 삭제는 발신자 또는 최고관리자만 가능합니다." }, 403);
+    return json({ error: "TODO 삭제는 발신자 또는 시스템 관리자만 가능합니다." }, 403);
   }
 
   await Directive.deleteOne({ _id: params.id });

@@ -14,8 +14,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const tabs = [
     canApproveUsers(user) && { href: "/admin/pending", label: "가입 승인" },
-    canApproveUsers(user) && { href: "/admin/stats", label: "통계" },
-    canManageTeams(user) && { href: "/admin/teams", label: "팀 관리" },
+    canManageTeams(user) && { href: "/admin/teams", label: "과 설정" },
     canManageTeams(user) && { href: "/admin/categories", label: "카테고리" },
     canManageTeams(user) && { href: "/admin/resources", label: "자원 관리" },
     canManageTeams(user) && { href: "/admin/users", label: "사용자 관리" },

@@ -180,9 +180,9 @@ export default function TeamBoard({
         <div>
           <h1 className="page-title">
             <span className="dot" style={{ background: teamColor, width: 12, height: 12, marginRight: 8 }} />
-            {teamName} 팀 현황
+            과원 현황
           </h1>
-          <p className="page-sub">팀원들의 개인 일정을 한눈에 겹쳐서 확인하세요.</p>
+          <p className="page-sub">과원들의 개인 일정과 부재를 한눈에 겹쳐서 확인하세요.</p>
         </div>
         {teams.length > 0 && (
           <select className="pc-viewer" value={teamId} onChange={(e) => router.push(`/team?team=${e.target.value}`)} aria-label="팀 선택">
@@ -193,7 +193,7 @@ export default function TeamBoard({
 
       {/* 개인일정 겹쳐보기 */}
       <div className="tb-cal-head">
-        <h2><Icon name="userLine" size={17} /> 팀원 개인일정 겹쳐보기</h2>
+        <h2><Icon name="userLine" size={17} /> 과원 개인일정 겹쳐보기</h2>
         <div className="cal1c-nav">
           <button className="cal1c-arrow" aria-label="이전" onClick={() => api()?.prev()}><Icon name="chevronL" size={15} /></button>
           <span className="tb-cal-month">{monthLabel}</span>

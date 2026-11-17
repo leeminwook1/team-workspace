@@ -29,7 +29,8 @@ export function dueLabel(iso: string | null) {
 }
 
 export default function AssignmentBoard({ manageTeams }: { manageTeams: TeamOpt[] }) {
-  const [tab, setTab] = useState<"open" | "closed">("open");
+  const [tab, setTab] = useState<"open" | "closed" | "best">("open");
+  const [best, setBest] = useState<{ pathname: string; caption: string; who: string; assignmentId: string; assignmentTitle: string }[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState(false);
@@ -37,9 +38,15 @@ export default function AssignmentBoard({ manageTeams }: { manageTeams: TeamOpt[
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/assignments?status=${tab}`);
-      if (!res.ok) throw new Error();
-      setItems((await res.json()).assignments ?? []);
+      if (tab === "best") {
+        const res = await fetch("/api/assignments/best");
+        if (!res.ok) throw new Error();
+        setBest((await res.json()).photos ?? []);
+      } else {
+        const res = await fetch(`/api/assignments?status=${tab}`);
+        if (!res.ok) throw new Error();
+        setItems((await res.json()).assignments ?? []);
+      }
       setLoadErr(false);
     } catch {
       setLoadErr(true);
@@ -68,12 +75,27 @@ export default function AssignmentBoard({ manageTeams }: { manageTeams: TeamOpt[
       <div className="seg" role="tablist" aria-label="과제 상태" style={{ marginBottom: 14 }}>
         <button className={tab === "open" ? "on" : ""} onClick={() => setTab("open")}>진행 중</button>
         <button className={tab === "closed" ? "on" : ""} onClick={() => setTab("closed")}>마감</button>
+        <button className={tab === "best" ? "on" : ""} onClick={() => setTab("best")}>★ 베스트 컷</button>
       </div>
 
       {loading ? (
         <p className="muted-note">불러오는 중…</p>
       ) : loadErr ? (
         <LoadError onRetry={() => { setLoading(true); load(); }} />
+      ) : tab === "best" ? (
+        best.length === 0 ? (
+          <p className="muted-note">아직 베스트 컷이 없어요. 과제 점검 때 과장이 ★를 누르면 여기에 모여요.</p>
+        ) : (
+          <div className="asg-wall">
+            {best.map((p) => (
+              <Link key={p.pathname} href={`/assignments/${p.assignmentId}`} className="asg-wall-item" title={p.caption}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photoUrl(p.pathname)} alt={p.caption || p.who} loading="lazy" />
+                <span className="asg-wall-who">{p.who} · {p.assignmentTitle}</span>
+              </Link>
+            ))}
+          </div>
+        )
       ) : items.length === 0 ? (
         <p className="muted-note">{tab === "open" ? "진행 중인 과제가 없어요." : "마감된 과제가 없어요."}</p>
       ) : (

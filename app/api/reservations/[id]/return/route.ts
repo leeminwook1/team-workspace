@@ -5,9 +5,10 @@ import { requireActiveUser, json, badId } from "@/lib/api";
 import { canMarkReturned } from "@/lib/permissions";
 import { logActivity, reservationLabel } from "@/lib/activity";
 import { notify } from "@/lib/notify";
+import { parseReturnCheck, reportIssue } from "@/lib/returnCheck";
 
 // POST /api/reservations/:id/return — 반납 처리 (예약자·admin·과장·부과장·장비 관리 담당자)
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
@@ -23,12 +24,18 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     return json({ error: "반납 처리 권한이 없습니다. (예약자·관리 담당자·과장단)" }, 403);
   }
 
+  const body = await req.json().catch(() => null);
+  const check = parseReturnCheck(body?.check);
+  if (check && "error" in check) return json({ error: check.error }, 400);
+
   const now = new Date();
   const late = now.getTime() > new Date(r.endAt).getTime() + 10 * 60_000; // 10분 유예 후 지연 판정
   r.status = "returned";
   r.returnedAt = now;
   r.returnedBy = user.id;
+  if (check) r.returnCheck = check;
   await r.save();
+  if (check) await reportIssue([res?.name ?? "장비"], check, user, res?.managerId ? [String(res.managerId)] : []);
 
   const label = reservationLabel(res?.name ?? "자원", r.startAt, r.endAt);
   await logActivity({

@@ -11,6 +11,7 @@ import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
 import koLocale from "@fullcalendar/core/locales/ko";
 import { Icon } from "@/components/icons";
+import { PIPELINE_STEPS, nextStep, isShootCategory, type PipelineState, type StepKey } from "@/lib/pipeline";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useAutoRefresh } from "@/components/useAutoRefresh";
 import { ProgramModal, type ProgramRow } from "@/components/ProgramModal";
@@ -35,6 +36,7 @@ type TaskItem = {
   recurrenceId?: string | null;
   resources?: { id: string; name: string; ownerId?: string; ownerName?: string }[]; // 연동된 대여 장비 (+장비별 담당자)
   program?: ProgramRow[]; // 식순·타임테이블 (촬영 등)
+  pipeline?: PipelineState | null; // 촬영 진행 관리 (촬영→백업→셀렉→보정→보고)
 };
 
 type ResourceOpt = { id: string; name: string; category: { id: string; name: string; color?: string; order?: number } | null; status?: "available" | "maintenance" | "broken" };
@@ -268,7 +270,6 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
   // 필터가 기본(전체 표시)에서 벗어났는지 → 버튼에 활성 표시
   const filtersActive =
     mineOnly ||
-    visible.size !== teams.length ||
     visibleCats.size !== categories.length ||
     visibleStatus.size !== 4;
 
@@ -341,23 +342,9 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
         </p>
       )}
 
-      {/* 필터 — 기본 접힘, '필터' 버튼으로 펼침 (팀·분류·상태) */}
+      {/* 필터 — 기본 접힘, '필터' 버튼으로 펼침 (분류·상태) */}
       {filtersOpen && (
         <div className="filter-panel">
-          <div className="filter-row">
-            <span className="filter-label">팀</span>
-            {teams.map((t) => (
-              <button
-                key={t.id}
-                className="chip chip-btn"
-                style={{ opacity: visible.has(t.id) ? 1 : 0.4 }}
-                onClick={() => toggleTeam(t.id)}
-              >
-                <span className="dot" style={{ background: t.color }} />
-                {t.name}
-              </button>
-            ))}
-          </div>
           {categories.length > 0 && (
             <div className="filter-row">
               <span className="filter-label">분류</span>
@@ -576,7 +563,6 @@ function TrashModal({ onClose, onRestored }: { onClose: () => void; onRestored: 
                   {r.title}
                   <span className="trash-meta"> · {fmtD(r.startDate)} 일정 · {fmtD(r.deletedAt)} 삭제</span>
                 </span>
-                {r.teams[0] && <span className="chip"><span className="dot" style={{ background: r.teams[0].color }} />{r.teams[0].name}</span>}
                 <span className="tlg-actions">
                   <button className="btn btn-line btn-sm" onClick={() => restore(r.id)}>복구</button>
                 </span>
@@ -672,7 +658,6 @@ function MobileMonthCal({ monthDate, tasks, selected, onSelect, onTaskClick, onA
                 </span>
                 <span className="mc-item-sub">
                   {t.allDay ? "하루 종일" : `${fmtT(t.startDate)}–${fmtT(t.endDate)}`}
-                  {t.teams.length > 0 && ` · ${t.teams.map((tm) => tm.name).join("·")}`}
                   {t.location && ` · ${t.location}`}
                 </span>
               </span>
@@ -707,6 +692,13 @@ function TaskFormModal({
   const [endTime, setEndTime] = useState(task && !task.allDay ? toTime(task.endDate) : "11:00");
   const [priority, setPriority] = useState(task?.priority ?? "normal");
   const [categoryId, setCategoryId] = useState(task?.category?.id ?? "");
+  // 촬영 진행 관리 — 새 일정만. 촬영 카테고리를 고르면 자동으로 켬 (직접 끄고 켤 수 있음)
+  const [pipelineOn, setPipelineOn] = useState(false);
+  const [pipelineTouched, setPipelineTouched] = useState(false);
+  useEffect(() => {
+    if (task || pipelineTouched) return;
+    setPipelineOn(isShootCategory(categories.find((c) => c.id === categoryId)?.name));
+  }, [categoryId, categories, task, pipelineTouched]);
   const [location, setLocation] = useState(task?.location ?? "");
   const [repeat, setRepeat] = useState("none"); // 반복 — 생성 시에만
   const [repeatUntil, setRepeatUntil] = useState("");
@@ -762,6 +754,10 @@ function TaskFormModal({
     fetch("/api/resources")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d?.resources) setAllResources(d.resources); })
+      .catch(() => {});
+    fetch("/api/resource-sets")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.sets) setEquipSets(d.sets); })
       .catch(() => {});
   }, []);
 
@@ -854,6 +850,20 @@ function TaskFormModal({
     }, 250);
     return () => { alive = false; clearTimeout(t); };
   }, [startDate, endDate, startTime, endTime, allDay, task]);
+
+  // 장비 세트 — 구성 장비(예약 가능한 것만)를 한 번에 선택/해제
+  const [equipSets, setEquipSets] = useState<{ id: string; name: string; resources: { id: string }[] }[]>([]);
+  function setResourceIdsOf(set: { resources: { id: string }[] }) {
+    const avail = new Set(allResources.filter((r) => (r.status ?? "available") === "available").map((r) => r.id));
+    return set.resources.map((r) => r.id).filter((id) => avail.has(id));
+  }
+  function toggleSet(set: { resources: { id: string }[] }) {
+    const ids = setResourceIdsOf(set);
+    if (ids.length === 0) return;
+    const allOn = ids.every((id) => resourceIds.includes(id));
+    if (allOn) ids.forEach((id) => toggleResource(id));
+    else setResourceIds((prev) => Array.from(new Set([...prev, ...ids])));
+  }
 
   function toggleResource(id: string) {
     setResourceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -961,7 +971,7 @@ function TaskFormModal({
           resourceOwners: repeat !== "none" ? undefined : Object.fromEntries(
             Object.entries(resourceOwners).filter(([rid, uid]) => resourceIds.includes(rid) && assignees.has(uid))
           ),
-          ...(isEdit ? {} : { repeat, repeatUntil: repeat !== "none" && repeatUntil ? repeatUntil : undefined }),
+          ...(isEdit ? {} : { repeat, repeatUntil: repeat !== "none" && repeatUntil ? repeatUntil : undefined, pipelineOn: repeat === "none" ? pipelineOn : false }),
         }),
       });
       const data = await res.json().catch(() => ({} as any));
@@ -985,54 +995,23 @@ function TaskFormModal({
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 홍보영상 본 촬영" required />
             {!isEdit && similar.length > 0 && (
               <div className="dup-warn">
-                <p className="dup-warn-head">⚠️ 비슷한 일정이 이미 있어요 — 같은 일정이면 등록 대신 참여하세요</p>
+                <p className="dup-warn-head">⚠️ 비슷한 일정이 이미 있어요 — 중복 등록이 아닌지 확인하세요</p>
                 {similar.map((s) => {
                   const d1 = new Date(s.startDate), d2 = new Date(s.endDate);
                   const md = (d: Date) => (s.allDay ? `${d.getUTCMonth() + 1}/${d.getUTCDate()}` : `${d.getMonth() + 1}/${d.getDate()}`);
                   const range = md(d1) === md(d2) ? md(d1) : `${md(d1)}~${md(d2)}`;
-                  const joined = teamIds.length > 0 && teamIds.every((id) => s.teams.some((t) => t.id === id));
                   return (
                     <div className="dup-row" key={s.id}>
                       <div className="dup-info">
                         <b>{s.title}</b>
-                        <span className="dup-meta">
-                          {range}
-                          {s.teams.map((t) => (
-                            <span className="chip" key={t.id} style={{ marginLeft: 4 }}>
-                              <span className="dot" style={{ background: t.color }} />{t.name}
-                            </span>
-                          ))}
-                        </span>
+                        <span className="dup-meta">{range}</span>
                       </div>
-                      {joined ? (
-                        <span className="dup-joined">참여 중</span>
-                      ) : (
-                        <button type="button" className="btn btn-sm" disabled={!!joining} onClick={() => joinExisting(s)}>
-                          {joining === s.id ? "참여 중…" : "이 일정에 참여"}
-                        </button>
-                      )}
                     </div>
                   );
                 })}
-                {joinErr && <p className="err-msg" style={{ margin: "6px 0 0" }}>{joinErr}</p>}
                 <p className="dup-hint">다른 일정이 맞으면 그대로 아래 등록 버튼을 누르면 돼요.</p>
               </div>
             )}
-          </div>
-
-          <div className="field">
-            <label>팀 · 여러 팀 선택 가능</label>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {teams.map((t) => (
-                <button
-                  type="button" key={t.id}
-                  className={`chip chip-btn${teamIds.includes(t.id) ? " sel" : ""}`}
-                  onClick={() => toggleTeam(t.id)}
-                >
-                  <span className="dot" style={{ background: t.color }} />{t.name}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="field">
@@ -1139,6 +1118,23 @@ function TaskFormModal({
               </select>
             </div>
           </div>
+
+          {!isEdit && repeat === "none" && (
+            <div className="field">
+              <div className="switch-row">
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink-soft)" }}>
+                  촬영 진행 관리 <em style={{ fontStyle: "normal", fontWeight: 500, color: "var(--ink-faint)", fontSize: 12.5 }}>촬영→백업→셀렉→보정→보고</em>
+                </span>
+                <button
+                  type="button" role="switch" aria-checked={pipelineOn} aria-label="촬영 진행 관리"
+                  className={`toggle${pipelineOn ? " on" : ""}`}
+                  onClick={() => { setPipelineTouched(true); setPipelineOn(!pipelineOn); }}
+                >
+                  <span className="toggle-knob" />
+                </button>
+              </div>
+            </div>
+          )}
 
           {members.length > 0 && (
             <div className="field">
@@ -1251,6 +1247,21 @@ function TaskFormModal({
                       </div>
                     );
                   })()}
+                  {equipSets.length > 0 && (
+                    <div className="set-chips" aria-label="장비 세트">
+                      {equipSets.map((st) => {
+                        const ids = setResourceIdsOf(st);
+                        const on = ids.length > 0 && ids.every((id) => resourceIds.includes(id));
+                        return (
+                          <button type="button" key={st.id} className={`set-chip${on ? " on" : ""}`} disabled={ids.length === 0}
+                            title={ids.length < st.resources.length ? "일부 장비는 수리·고장 중이라 빠져요" : undefined}
+                            onClick={() => toggleSet(st)}>
+                            📦 {st.name} <span>{ids.length}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div className="equip-search">
                     <Icon name="search" size={15} />
                     <input
@@ -1499,12 +1510,6 @@ function TaskDetailModal({
         <ModalClose onClose={onClose} />
         {/* 팀 · 카테고리 */}
         <div className="detail-teams">
-          {task.teams.map((tm) => (
-            <span className="chip" key={tm.id}>
-              <span className="dot" style={{ background: tm.color }} />
-              {tm.name}
-            </span>
-          ))}
           {task.category && (
             <span className="chip" style={{ color: task.category.color, borderColor: `color-mix(in srgb, ${task.category.color} 40%, var(--line))` }}>
               # {task.category.name}
@@ -1638,6 +1643,15 @@ function TaskDetailModal({
           )
         ))}
 
+        {/* 촬영 진행 단계 */}
+        <PipelineStepper
+          taskId={task.id}
+          initial={task.pipeline ?? null}
+          canStep={canStatus}
+          canEdit={canEdit}
+          onChanged={onChanged}
+        />
+
         {/* 상태 변경 */}
         {canStatus && (
           <div className="detail-status">
@@ -1739,5 +1753,75 @@ function TaskDetailModal({
       </div>
     )}
     </>
+  );
+}
+
+/* ── 촬영 진행 단계 (촬영 → 백업 → 셀렉 → 보정 → 보고) ── */
+function PipelineStepper({ taskId, initial, canStep, canEdit, onChanged }: {
+  taskId: string; initial: PipelineState | null; canStep: boolean; canEdit: boolean; onChanged: () => void;
+}) {
+  const [p, setP] = useState<PipelineState | null>(initial);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => { setP(initial); }, [initial]);
+
+  async function send(body: object) {
+    setBusy(true); setErr("");
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/pipeline`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const d = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(d.error ?? "처리하지 못했어요."); return; }
+      setP(d.pipeline);
+      if ("step" in body || d.status) onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!p) {
+    return canEdit ? (
+      <button type="button" className="task-prog-add" disabled={busy} onClick={() => send({ on: true })}>
+        <Icon name="check" size={14} strokeWidth={2.4} /> 촬영 진행 관리 켜기 <em>(촬영→백업→셀렉→보정→보고)</em>
+      </button>
+    ) : null;
+  }
+
+  const next = nextStep(p);
+  const fmt = (v: any) => { const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  const dueStr = p.reportDue ? new Date(p.reportDue).toISOString().slice(0, 10) : "";
+  return (
+    <div className="ps">
+      <div className="ps-head">
+        <div className="detail-status-label" style={{ margin: 0 }}>촬영 진행</div>
+        {canEdit && <button type="button" className="rsv-linkbtn" disabled={busy} onClick={() => send({ on: false })}>진행 관리 끄기</button>}
+      </div>
+      <div className="ps-row">
+        {PIPELINE_STEPS.map((s) => {
+          const at = p.steps[s.key as StepKey];
+          return (
+            <button
+              type="button" key={s.key}
+              className={`ps-step${at ? " on" : ""}${next === s.key ? " next" : ""}`}
+              disabled={!canStep || busy}
+              title={at ? `${s.label} 완료 취소` : `${s.label} 완료로 표시`}
+              onClick={() => send({ step: s.key, done: !at })}
+            >
+              <span className="ps-check">{at && <Icon name="check" size={12} strokeWidth={3} />}</span>
+              {s.label}
+              <span className="ps-when">{at ? fmt(at) : "\u00a0"}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="ps-due">
+        보고 마감
+        {canEdit ? (
+          <input type="date" value={dueStr} disabled={busy} onChange={(e) => send({ reportDue: e.target.value ? new Date(`${e.target.value}T23:59:00+09:00`).toISOString() : null })} />
+        ) : <b>{dueStr ? fmt(p.reportDue) : "없음"}</b>}
+      </div>
+      {err && <p className="err-msg" style={{ marginTop: 6 }}>{err}</p>}
+    </div>
   );
 }

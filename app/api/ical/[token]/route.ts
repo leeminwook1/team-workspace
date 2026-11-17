@@ -120,10 +120,10 @@ export async function GET(_req: Request, { params }: { params: { token: string }
   const ics = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//CHQ//Culture HQ Calendar//KO",
+    "PRODID:-//PhotoDept//사진과 Calendar//KO",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    fold(`X-WR-CALNAME:CHQ — ${icsEscape(me.name ?? "내 일정")}`),
+    fold(`X-WR-CALNAME:사진과 — ${icsEscape(me.name ?? "내 일정")}`),
     "X-WR-TIMEZONE:Asia/Seoul",
     ...events,
     "END:VCALENDAR",

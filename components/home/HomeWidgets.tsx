@@ -182,7 +182,6 @@ function MiniCalWidget({ initialTasks }: { initialTasks: WTask[] }) {
               <span className="mc-item-title">{t.title}</span>
               <span className="mc-item-sub">
                 {t.allDay ? "하루 종일" : `${fmtTime(t.startDate)}–${fmtTime(t.endDate)}`}
-                {t.teams.length > 0 && ` · ${t.teams.map((tm) => tm.name).join("·")}`}
                 {t.location && ` · ${t.location}`}
               </span>
             </span>
@@ -230,7 +229,6 @@ function MyTasksWidget({ tasks }: { tasks: WTask[] }) {
                   </span>
                   <span className="up-sub">
                     {fmtMD(t.endDate)}까지
-                    {t.teams.length > 0 && ` · ${t.teams.map((tm) => tm.name).join("·")}`}
                   </span>
                 </span>
               </Link>
@@ -266,8 +264,8 @@ function UpcomingWidget({ tasks }: { tasks: WTask[] }) {
                     {t.priority === "urgent" && <b className="ev1c-urgent">긴급</b>}
                   </span>
                   <span className="up-sub">
-                    {t.teams.map((tm) => tm.name).join("·")}
-                    {t.location && ` · ${t.location}`}
+                    {t.category?.name ?? ""}
+                    {t.location && `${t.category ? " · " : ""}${t.location}`}
                   </span>
                 </span>
               </Link>

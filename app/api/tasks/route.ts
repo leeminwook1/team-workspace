@@ -13,6 +13,9 @@ import { filterValidAssignees } from "@/lib/assignees";
 import { Reservation } from "@/models/Reservation";
 import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, findUnavailableResources, unavailableMessage } from "@/lib/taskReservations";
 import { addInterval, RECUR_BATCH_CAP } from "@/lib/recurrence";
+import { getDeptId } from "@/lib/dept";
+import { serializePipeline, isShootCategory, defaultReportDue } from "@/lib/pipeline";
+import { Category } from "@/models/Category";
 
 function serialize(t: any, resourcesByTask?: Map<string, { id: string; name: string }[]>) {
   return {
@@ -40,6 +43,7 @@ function serialize(t: any, resourcesByTask?: Map<string, { id: string; name: str
     priority: t.priority,
     location: t.location,
     recurrenceId: t.recurrenceId ? String(t.recurrenceId) : null,
+    pipeline: serializePipeline(t.pipeline),
   };
 }
 
@@ -103,7 +107,7 @@ export async function GET(req: Request) {
   return json({ tasks: tasks.map((t: any) => serialize(t, resourcesByTask)) });
 }
 
-// POST /api/tasks — 업무 등록 (팀장·부팀장·과장·부과장·Admin)
+// POST /api/tasks — 일정 등록 (사진과 소속 전원 + 부장단·admin)
 export async function POST(req: Request) {
   const { user, error } = await requireActiveUser();
   if (error) return error;
@@ -116,8 +120,12 @@ export async function POST(req: Request) {
   if (!parsed.success) return json({ error: parsed.error.issues[0].message }, 400);
 
   const d = parsed.data;
+  // 사진과 전용 — 클라이언트가 보낸 팀은 무시하고 항상 과로 등록
+  const deptId = await getDeptId();
+  if (!deptId) return json({ error: "과 설정이 아직 없습니다. 관리자에게 문의해주세요." }, 500);
+  d.teamIds = [deptId];
   if (!canCreateTaskInAll(user, d.teamIds)) {
-    return json({ error: "선택한 팀 중 등록 권한이 없는 팀이 있습니다." }, 403);
+    return json({ error: "일정을 등록할 권한이 없습니다." }, 403);
   }
   if (new Date(d.endDate) < new Date(d.startDate)) {
     return json({ error: "종료가 시작보다 빠를 수 없습니다." }, 400);
@@ -126,7 +134,8 @@ export async function POST(req: Request) {
   await connectDB();
   // 담당자는 관여 팀의 활성 소속자만 — 임의 userId 주입·알림 스팸 차단 (join과 동일 정책)
   const validAssignees = await filterValidAssignees(d.assignees ?? [], d.teamIds);
-  const { repeat, repeatUntil, resourceIds, resourceOwners, ...fields } = d;
+  const { repeat, repeatUntil, resourceIds, resourceOwners, pipelineOn: _pipelineOn, ...fields } = d;
+  void _pipelineOn;
   // 장비별 담당자 — 이 일정의 담당자(또는 등록자)만 허용, 그 외 값은 무시(등록자로 대체)
   const ownerAllowed = new Set([...validAssignees, user.id]);
   const owners: Record<string, string> = {};
@@ -164,9 +173,17 @@ export async function POST(req: Request) {
       link: `/calendar?task=${taskId}`,
     });
 
+  // 촬영 진행 관리 — 명시값 우선, 없으면 촬영 카테고리일 때 자동 (반복 일정은 제외)
+  let pipelineOn = d.pipelineOn;
+  if (pipelineOn === undefined && d.categoryId) {
+    const cat: any = await Category.findById(d.categoryId).select("name").lean();
+    pipelineOn = isShootCategory(cat?.name);
+  }
+  const pipeline = pipelineOn ? { on: true, reportDue: defaultReportDue(end) } : undefined;
+
   // 단건
   if (!repeat || repeat === "none") {
-    const task = await Task.create({ ...base, startDate: start, endDate: end });
+    const task = await Task.create({ ...base, startDate: start, endDate: end, ...(pipeline ? { pipeline } : {}) });
     let raced: string[] = [];
     if (equip.length > 0) ({ raced } = await syncTaskReservations(task, equip, window, user.id, owners));
     await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetTitle: task.title });

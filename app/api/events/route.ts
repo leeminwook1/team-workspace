@@ -7,6 +7,7 @@ import { canManageEvents } from "@/lib/permissions";
 import { eventCreateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
+import { getDeptId } from "@/lib/dept";
 
 // 목록용 요약 (투두 진행률 포함, items 본문은 제외)
 function serializeSummary(e: any) {
@@ -55,10 +56,11 @@ export async function POST(req: Request) {
 
   const d = parsed.data;
   await connectDB();
+  const deptId = await getDeptId(); // 사진과 전용 — 참여 팀은 항상 과
   const created = await Event.create({
     title: d.title,
     description: d.description,
-    teamIds: d.teamIds,
+    teamIds: deptId ? [deptId] : [],
     managerId: d.managerId || null,
     eventDate: d.eventDate ? new Date(d.eventDate) : null,
     location: d.location,

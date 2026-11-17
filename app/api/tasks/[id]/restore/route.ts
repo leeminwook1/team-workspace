@@ -17,7 +17,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   const teamIds = (task.teamIds ?? []).map((t: any) => String(t));
   if (!canDeleteTaskDoc(user, teamIds, task.createdBy ? String(task.createdBy) : null)) {
-    return json({ error: "복구 권한이 없습니다. (팀장·최고관리자 또는 본인이 만든 일정)" }, 403);
+    return json({ error: "복구 권한이 없습니다. (과장·시스템 관리자 또는 본인이 만든 일정)" }, 403);
   }
 
   await Task.updateOne({ _id: params.id }, { $set: { deletedAt: null } });

@@ -8,6 +8,7 @@ import { approveSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
 import { ROLE_LABEL } from "@/lib/permissions";
+import { getDeptId } from "@/lib/dept";
 
 // POST /api/admin/users/:id/approve — 승인 + 팀·역할 배정 (설계 5.3)
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -20,13 +21,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const parsed = approveSchema.safeParse(body);
   if (!parsed.success) return json({ error: parsed.error.issues[0].message }, 400);
 
-  const { role, teamId } = parsed.data;
+  const { role } = parsed.data;
   const isOrgRole = ["admin", "manager", "deputy", "secretary"].includes(role);
 
-  // 전사 역할(과장/부과장/서기/admin) 부여는 최고관리자만 가능
+  // 부장단·시스템 관리자 직급 부여는 시스템 관리자만 가능
   if (isOrgRole && user.role !== "admin") {
-    return json({ error: "전사 역할 부여는 최고관리자만 가능합니다." }, 403);
+    return json({ error: "부장단 직급은 시스템 관리자만 부여할 수 있습니다." }, 403);
   }
+  const teamId = await getDeptId(); // 과장·부과장·과원은 항상 사진과 소속
 
   await connectDB();
   const target: any = await User.findById(params.id);
@@ -34,10 +36,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (target.status !== "pending") return json({ error: "승인 대기 상태가 아닙니다." }, 400);
 
   // 팀 소속 역할이면 실제 존재하는 팀인지 검증 — 없는 팀에 배정돼 팀 스코프 쿼리에서 사라지는 것 방지
-  if (!isOrgRole) {
-    if (!teamId || !mongoose.isValidObjectId(teamId) || !(await Team.countDocuments({ _id: teamId }))) {
-      return json({ error: "선택한 팀을 찾을 수 없습니다." }, 400);
-    }
+  if (!isOrgRole && !teamId) {
+    return json({ error: "과 설정이 아직 없습니다." }, 500);
   }
 
   target.role = role;

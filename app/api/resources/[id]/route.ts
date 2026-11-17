@@ -20,9 +20,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   if (typeof body.name === "string" && body.name.trim()) r.name = body.name.trim();
   if (typeof body.categoryId === "string" && body.categoryId) r.categoryId = body.categoryId;
-  if (body.ownerTeamId !== undefined) r.ownerTeamId = body.ownerTeamId || null; // 관리 팀 (null = 공용)
-  if (body.managerId !== undefined) r.managerId = body.managerId || null;
-  if (!r.ownerTeamId) r.managerId = null; // 팀 없이 담당자만 남는 상태 방지
+  if (body.managerId !== undefined) r.managerId = body.managerId || null; // 장비 담당자 (사진과 전용 — 관리팀 개념 없음)
   if (typeof body.isActive === "boolean") r.isActive = body.isActive;
   if (["available", "maintenance", "broken"].includes(body.status)) r.status = body.status;
   await r.save();

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 export type IconName =
   | "calendar" | "resources" | "admin" | "logout" | "plus" | "chevronL" | "chevronR"
   | "check" | "clock" | "mapPin" | "userLine" | "inbox" | "filter" | "board" | "home" | "search" | "bell" | "users" | "gear"
-  | "megaphone" | "chat" | "menu" | "book" | "camera";
+  | "megaphone" | "chat" | "menu" | "book" | "camera" | "chart";
 
 const PATHS: Record<IconName, ReactNode> = {
   calendar: (
@@ -121,6 +121,7 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  chart: <path d="M4.5 19.5h15M7.5 16v-4.5M12 16V7.5M16.5 16v-7" />,
   book: (
     <>
       <path d="M4 5a2 2 0 0 1 2-2h6.5v16H6a2 2 0 0 0-2 2V5z" />

@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   await connectDB();
   const a: any = await Assignment.findById(params.id).select("teamId title").lean();
   if (!a) return json({ error: "과제를 찾을 수 없습니다." }, 404);
-  if (!canManageAssignments(user, String(a.teamId))) return json({ error: "피드백 권한이 없습니다. (팀장·부팀장)" }, 403);
+  if (!canManageAssignments(user, String(a.teamId))) return json({ error: "피드백 권한이 없습니다. (과장·부과장)" }, 403);
 
   const s: any = await Submission.findOne({ assignmentId: a._id, userId: targetId });
   if (!s) return json({ error: "제출물이 없습니다." }, 404);

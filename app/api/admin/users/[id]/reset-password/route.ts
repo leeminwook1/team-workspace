@@ -21,7 +21,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
   if (error) return error;
-  if (!canManageTeams(user)) return json({ error: "임시 비밀번호 발급은 최고관리자만 가능합니다." }, 403);
+  if (!canManageTeams(user)) return json({ error: "임시 비밀번호 발급은 시스템 관리자만 가능합니다." }, 403);
 
   await connectDB();
   const target: any = await User.findById(params.id);

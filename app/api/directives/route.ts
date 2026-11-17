@@ -9,6 +9,7 @@ import { directiveCreateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
 import { User } from "@/models/User";
+import { getDeptId } from "@/lib/dept";
 
 function serialize(d: any) {
   return {
@@ -82,6 +83,10 @@ export async function POST(req: Request) {
 
   const d = parsed.data;
   await connectDB();
+  // 사진과 전용 — 지시 대상은 항상 과 (과장이 받아 과원에게 배분)
+  const deptId = await getDeptId();
+  if (!deptId) return json({ error: "과 설정이 아직 없습니다." }, 500);
+  d.teamId = deptId;
   const created = await Directive.create({
     title: d.title,
     body: d.body,

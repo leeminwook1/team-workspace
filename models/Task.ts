@@ -39,6 +39,26 @@ const TaskSchema = new Schema(
     // 식순·타임테이블 — 촬영 등 진행 순서가 있는 업무에서만 사용 (없으면 표시 안 함)
     program: { type: [TaskProgramSchema], default: [] },
 
+    // 촬영 진행 관리 — 촬영 → 백업 → 셀렉 → 보정 → 보고 (lib/pipeline.ts). 각 단계 완료 시각·처리자
+    pipeline: {
+      on: { type: Boolean, default: false },
+      steps: {
+        shoot: { type: Date, default: null },
+        backup: { type: Date, default: null },
+        select: { type: Date, default: null },
+        retouch: { type: Date, default: null },
+        report: { type: Date, default: null },
+      },
+      stepBy: {
+        shoot: { type: Schema.Types.ObjectId, ref: "User", default: null },
+        backup: { type: Schema.Types.ObjectId, ref: "User", default: null },
+        select: { type: Schema.Types.ObjectId, ref: "User", default: null },
+        retouch: { type: Schema.Types.ObjectId, ref: "User", default: null },
+        report: { type: Schema.Types.ObjectId, ref: "User", default: null },
+      },
+      reportDue: { type: Date, default: null },
+    },
+
     deletedAt: { type: Date, default: null }, // 소프트 삭제 — 30일 내 복구 가능, 이후 크론이 완전 삭제
   },
   { timestamps: true }
@@ -52,6 +72,7 @@ TaskSchema.index({ status: 1, endDate: 1 }); // 크론(마감·지연)·팀 현�
 TaskSchema.index({ startDate: 1, endDate: 1 }); // 중복감지(팀무관 기간겹침)·기간 목록 스캔
 TaskSchema.index({ recurrenceId: 1, startDate: 1 }); // 반복 롤링 연장 조회
 TaskSchema.index({ deletedAt: 1 }, { sparse: true }); // 휴지통·퍼지용
+TaskSchema.index({ "pipeline.on": 1, endDate: 1 }); // 촬영 진행 보드·통계
 
 // 소프트 삭제 기본 필터 — deletedAt 있는 문서는 모든 조회에서 제외
 // (휴지통 조회처럼 삭제분이 필요하면 쿼리에 deletedAt 조건을 직접 넣으면 이 필터를 건너뛴다)

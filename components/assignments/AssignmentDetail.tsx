@@ -24,6 +24,13 @@ type Sub = {
 };
 type Data = { assignment: Assignment; submissions: Sub[]; pending: Person[]; canManage: boolean; canSubmit: boolean };
 
+async function toggleBest(assignmentId: string, pathname: string, best: boolean) {
+  const res = await fetch(`/api/assignments/${assignmentId}/best`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pathname, best }),
+  });
+  return res.ok;
+}
+
 function relTime(iso: string) {
   const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (m < 1) return "방금";
@@ -39,6 +46,7 @@ export default function AssignmentDetail({ id, meId }: { id: string; meId: strin
   const [data, setData] = useState<Data | null>(null);
   const [loadErr, setLoadErr] = useState(false);
   const [view, setView] = useState<"people" | "wall">("people");
+  const [bestOnly, setBestOnly] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [review, setReview] = useState(false);
   const [lightbox, setLightbox] = useState<{ photos: (Photo & { who?: string })[]; index: number } | null>(null);
@@ -174,15 +182,23 @@ export default function AssignmentDetail({ id, meId }: { id: string; meId: strin
           ))}
         </div>
       ) : (
-        <div className="asg-wall">
-          {allPhotos.map((p, i) => (
-            <button key={p.pathname} className="asg-wall-item" onClick={() => setLightbox({ photos: allPhotos, index: i })}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photoUrl(p.pathname)} alt={p.caption || p.who} loading="lazy" />
-              <span className="asg-wall-who">{p.who}</span>
+        <>
+          {allPhotos.some((p) => p.best) && (
+            <button className={`chip chip-btn${bestOnly ? " sel" : ""}`} style={{ marginBottom: 10 }} onClick={() => setBestOnly((v) => !v)}>
+              ★ 베스트 컷만 ({allPhotos.filter((p) => p.best).length})
             </button>
-          ))}
-        </div>
+          )}
+          <div className="asg-wall">
+            {(bestOnly ? allPhotos.filter((p) => p.best) : allPhotos).map((p, i, arr) => (
+              <button key={p.pathname} className="asg-wall-item" onClick={() => setLightbox({ photos: arr, index: i })}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photoUrl(p.pathname)} alt={p.caption || p.who} loading="lazy" />
+                <span className="asg-wall-who">{p.who}</span>
+                {p.best && <span className="asg-best-badge">★ 베스트</span>}
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       {editOpen && a.team && (
@@ -277,7 +293,7 @@ function MySubmission({ assignmentId, mine, closed, onSaved }: {
         <>
           <p className="asg-mine-sum">사진 {mine.photos.length}장 · {relTime(mine.updatedAt)} 저장</p>
           {mine.feedback && (
-            <div className="asg-feedback"><b>💬 {mine.feedbackBy ?? "팀장"}</b> {mine.feedback}</div>
+            <div className="asg-feedback"><b>💬 {mine.feedbackBy ?? "과장"}</b> {mine.feedback}</div>
           )}
         </>
       )}
@@ -299,11 +315,21 @@ function SubmissionCard({ s, assignmentId, canManage, onOpen, onChanged }: {
       {s.note && <p className="asg-sub-note">{s.note}</p>}
       <div className="asg-sub-grid">
         {s.photos.map((p, i) => (
-          <button key={p.pathname} className="asg-sub-photo" onClick={() => onOpen(i)}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photoUrl(p.pathname)} alt={p.caption || `사진 ${i + 1}`} loading="lazy" />
-            {p.caption && <span className="asg-ref-cap">{p.caption}</span>}
-          </button>
+          <div className="asg-sub-photo-wrap" key={p.pathname}>
+            <button className="asg-sub-photo" onClick={() => onOpen(i)}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photoUrl(p.pathname)} alt={p.caption || `사진 ${i + 1}`} loading="lazy" />
+              {p.caption && <span className="asg-ref-cap">{p.caption}</span>}
+            </button>
+            {canManage ? (
+              <button
+                className={`asg-star${p.best ? " on" : ""}`}
+                aria-label={p.best ? "베스트 컷 해제" : "베스트 컷 선정"}
+                title={p.best ? "베스트 컷 해제" : "베스트 컷으로 선정"}
+                onClick={async () => { if (await toggleBest(assignmentId, p.pathname, !p.best)) onChanged(); }}
+              >★</button>
+            ) : p.best && <span className="asg-best-badge">★ 베스트</span>}
+          </div>
         ))}
       </div>
       <FeedbackBox s={s} assignmentId={assignmentId} canManage={canManage} onChanged={onChanged} />
@@ -343,7 +369,7 @@ function FeedbackBox({ s, assignmentId, canManage, onChanged, dark }: {
   if (s.feedback) {
     return (
       <div className={`asg-feedback${dark ? " dark" : ""}`}>
-        <b>💬 {s.feedbackBy ?? "팀장"}</b> {s.feedback}
+        <b>💬 {s.feedbackBy ?? "과장"}</b> {s.feedback}
         {canManage && <button className="asg-fb-btn" onClick={() => setEditing(true)}>수정</button>}
       </div>
     );
@@ -475,6 +501,12 @@ function ReviewMode({ assignment: a, submissions, canManage, onClose, onChanged 
             </>
           )}
           {cur.photo.caption && (<><div className="rv-label">이 사진</div><p className="rv-text">{cur.photo.caption}</p></>)}
+          {cur.kind === "sub" && (canManage ? (
+            <button
+              className={`rv-btn${cur.photo.best ? " on" : ""}`} style={{ width: "100%", marginTop: 4 }}
+              onClick={async () => { if (await toggleBest(a.id, cur.photo.pathname, !cur.photo.best)) onChanged(); }}
+            >★ {cur.photo.best ? "베스트 컷 (해제하려면 클릭)" : "이 사진을 베스트 컷으로"}</button>
+          ) : cur.photo.best && <p className="rv-text">★ 베스트 컷</p>)}
         </aside>
       </div>
 

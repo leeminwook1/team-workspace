@@ -5,6 +5,7 @@ import { requireActiveUser, json } from "@/lib/api";
 import { canMarkReturned } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
+import { parseReturnCheck, reportIssue } from "@/lib/returnCheck";
 
 // POST /api/reservations/return-bulk — 여러 예약 한 번에 반납 처리. body: { ids: string[] }
 // 건별로 단건 반납과 동일한 규칙(booked만·예약자/관리담당자/과장단) 적용, 권한 없는 건은 건너뜀.
@@ -15,6 +16,8 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const ids: string[] = Array.isArray(body?.ids) ? body.ids.filter((x: any) => typeof x === "string") : [];
   if (ids.length === 0 || ids.length > 30) return json({ error: "반납할 예약을 1~30건 지정해주세요." }, 400);
+  const check = parseReturnCheck(body?.check);
+  if (check && "error" in check) return json({ error: check.error }, 400);
 
   await connectDB();
   const now = new Date();
@@ -42,7 +45,7 @@ export async function POST(req: Request) {
     if (late) lateCount += 1;
     await Reservation.updateOne(
       { _id: r._id, status: "booked" },
-      { $set: { status: "returned", returnedAt: now, returnedBy: user.id } }
+      { $set: { status: "returned", returnedAt: now, returnedBy: user.id, ...(check ? { returnCheck: check } : {}) } }
     );
     returnedNames.push(name);
     for (const uid of [String(r.reservedBy), res?.managerId ? String(res.managerId) : ""]) {
@@ -52,6 +55,10 @@ export async function POST(req: Request) {
     }
   }
 
+  if (check && returnedNames.length > 0) {
+    const managers = resources.map((r) => (r.managerId ? String(r.managerId) : "")).filter(Boolean);
+    await reportIssue(returnedNames, check, user, managers);
+  }
   if (returnedNames.length > 0) {
     await logActivity({
       actorId: user.id, actorName: user.name, action: "status", targetType: "reservation",

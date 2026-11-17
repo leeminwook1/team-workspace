@@ -9,6 +9,7 @@ import { reservationSchema } from "@/lib/validations";
 import { postCreateGuard } from "@/lib/taskReservations";
 import { logActivity, reservationLabel } from "@/lib/activity";
 import { Resource } from "@/models/Resource";
+import { getDeptId } from "@/lib/dept";
 
 // GET /api/reservations?resource=&from=&to= — 예약 조회 (로그인)
 export async function GET(req: Request) {
@@ -70,8 +71,12 @@ export async function POST(req: Request) {
   if (!parsed.success) return json({ error: parsed.error.issues[0].message }, 400);
 
   const d = parsed.data;
-  if (!canReserve(user, d.teamId)) {
-    return json({ error: "예약 권한이 없습니다. (팀장·부팀장·과장·부과장)" }, 403);
+  // 사진과 전용 — 예약 소속은 항상 과
+  const deptId = await getDeptId();
+  if (!deptId) return json({ error: "과 설정이 아직 없습니다. 관리자에게 문의해주세요." }, 500);
+  d.teamId = deptId;
+  if (!canReserve(user, deptId)) {
+    return json({ error: "예약 권한이 없습니다." }, 403);
   }
 
   const startAt = new Date(d.startAt);
@@ -110,7 +115,7 @@ export async function POST(req: Request) {
 
   const r = await Reservation.create({
     resourceId: d.resourceId,
-    teamId: d.teamId,
+    teamId: deptId,
     reservedBy: user.id,
     startAt,
     endAt,

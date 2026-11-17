@@ -106,7 +106,7 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
         <div>
           <h1 className="page-title">TODO</h1>
           <p className="page-sub">
-            {canCreate ? "팀장에게 할 일(TODO)을 내려주고 진행 상황을 확인하세요." : "받은 TODO를 확인하고 팀원에게 분배하세요."}
+            {canCreate ? "과장에게 할 일(TODO)을 내려주고 진행 상황을 확인하세요." : "부장단이 내린 TODO를 확인하고 과원에게 배분하세요."}
           </p>
         </div>
         {canCreate && (
@@ -116,24 +116,15 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
         )}
       </div>
 
-      {canCreate && (
-        <div className="seg" role="tablist" aria-label="보기 전환" style={{ marginBottom: 14 }}>
-          <button className={view === "list" ? "on" : ""} onClick={() => setView("list")}>목록</button>
-          <button className={view === "report" ? "on" : ""} onClick={() => setView("report")}>팀별 리포트</button>
-        </div>
-      )}
-
       {loading ? (
         <p className="muted-note">불러오는 중…</p>
       ) : loadErr ? (
         <LoadError onRetry={() => { setLoading(true); load(); }} />
-      ) : view === "report" && canCreate ? (
-        <DirectiveReport items={items} />
       ) : items.length === 0 ? (
         <p className="muted-note">아직 TODO가 없습니다.</p>
       ) : (
         <>
-          {/* 상태·팀 필터 칩 */}
+          {/* 상태 필터 칩 */}
           <div className="dir-filters">
             <button className={`chip chip-btn${statusFilter === "all" ? " sel" : ""}`} onClick={() => setStatusFilter("all")}>
               전체 <b className="dir-chip-n">{items.length}</b>
@@ -147,12 +138,6 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
                 </button>
               );
             })}
-            {canCreate && filterTeams.length > 1 && (
-              <select className="dir-team-select" value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} aria-label="팀 필터">
-                <option value="all">전체 팀</option>
-                {filterTeams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            )}
           </div>
 
           {shown.length === 0 ? (
@@ -234,9 +219,6 @@ function DirectiveCard({
   return (
     <div className={`dir-card${dir.status === "done" ? " done" : ""}`}>
       <div className="dir-top">
-        {dir.team && (
-          <span className="chip"><span className="dot" style={{ background: dir.team.color }} />{dir.team.name}</span>
-        )}
         <span className="badge" style={{ background: `color-mix(in srgb, ${stColor} 14%, transparent)`, color: stColor }}>
           <span className="badge-dot" style={{ background: stColor }} />{stLabel}
         </span>
@@ -290,7 +272,7 @@ function DirectiveCard({
                 ))}
               </div>
               <button className="btn btn-line btn-sm" onClick={() => setAssignOpen(true)}>
-                <Icon name="userLine" size={14} /> 팀원 분배
+                <Icon name="userLine" size={14} /> 과원 배분
               </button>
               {dir.assignments.length === 0 && (
                 dir.converted ? (
@@ -379,7 +361,7 @@ function DirectiveReport({ items }: { items: Directive[] }) {
         );
       })}
       <p className="muted-note" style={{ marginTop: 4 }}>
-        읽음 = 해당 팀 팀장이 TODO 목록을 열람한 것 · 평균 처리 = TODO 하달부터 완료 처리까지
+        읽음 = 과장이 TODO 목록을 열람한 것 · 평균 처리 = TODO 하달부터 완료 처리까지
       </p>
     </div>
   );
@@ -397,7 +379,6 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
-    if (!teamId) { setErr("대상 팀을 선택하세요."); return; }
     setBusy(true);
     try {
       const res = await fetch("/api/directives", {
@@ -420,18 +401,7 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
         <ModalClose onClose={onClose} />
         <h2>TODO 내리기</h2>
         <form onSubmit={submit}>
-          <div className="field">
-            <label>대상 팀 · 이 팀의 팀장이 받습니다</label>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {teams.map((t) => (
-                <button type="button" key={t.id}
-                  className={`chip chip-btn${teamId === t.id ? " sel" : ""}`}
-                  onClick={() => setTeamId(t.id)}>
-                  <span className="dot" style={{ background: t.color }} />{t.name}
-                </button>
-              ))}
-            </div>
-          </div>
+          <p className="rsv-form-hint" style={{ marginTop: -6 }}>과장이 받아서 과원에게 배분해요.</p>
           <div className="field">
             <label>제목</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 홍보영상 콘티 초안 작성" required />
@@ -568,10 +538,10 @@ function AssignModal({
     <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <ModalClose onClose={onClose} />
-        <h2>팀원 분배</h2>
-        <p className="page-sub" style={{ marginTop: -4 }}>분배할 팀원을 고르고 담당 내용을 적어주세요.</p>
+        <h2>과원 배분</h2>
+        <p className="page-sub" style={{ marginTop: -4 }}>배분할 과원을 고르고 담당 내용을 적어주세요.</p>
         {members.length === 0 ? (
-          <p className="muted-note">이 팀에 등록된 팀원이 없습니다.</p>
+          <p className="muted-note">등록된 과원이 없습니다.</p>
         ) : (
           <div className="assign-rows">
             {members.map((m) => {

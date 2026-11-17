@@ -13,6 +13,13 @@ const ReservationSchema = new Schema(
     status: { type: String, enum: ["booked", "returned", "cancelled"], default: "booked" },
     returnedAt: { type: Date, default: null }, // 반납 처리 시각
     returnedBy: { type: Schema.Types.ObjectId, ref: "User", default: null }, // 반납 처리자
+    // 반납 체크리스트 — 배터리 충전·메모리 백업/포맷·외관/작동 이상 (이상 있으면 메모)
+    returnCheck: {
+      battery: { type: Boolean, default: null },
+      memory: { type: Boolean, default: null },
+      condition: { type: Boolean, default: null }, // true = 이상 없음
+      note: { type: String, default: "", maxlength: 300 },
+    },
   },
   { timestamps: true }
 );

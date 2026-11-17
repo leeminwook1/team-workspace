@@ -320,7 +320,30 @@ export async function GET(req: Request) {
     }
   }
 
+  // 촬영 진행 — 오늘 보고 마감 / 어제 마감인데 보고 안 됨 → 담당자(없으면 등록자)
+  const yStart = new Date(start.getTime() - 86_400_000);
+  const pl: any[] = await Task.find({
+    "pipeline.on": true, "pipeline.steps.report": null,
+    "pipeline.reportDue": { $gte: yStart, $lt: end },
+  }).select("title assignees createdBy pipeline").lean();
+  let reportNotified = 0;
+  for (const t of pl) {
+    const overdue = new Date(t.pipeline.reportDue) < start;
+    const to = (t.assignees?.length ? t.assignees : [t.createdBy]).filter(Boolean).map(String);
+    const nextLabel = (["shoot", "backup", "select", "retouch", "report"] as const)
+      .map((k) => [k, ({ shoot: "촬영", backup: "백업", select: "셀렉", retouch: "보정", report: "보고" } as const)[k]] as const)
+      .find(([k]) => !t.pipeline.steps?.[k])?.[1] ?? "보고";
+    await notify(to, {
+      type: overdue ? "late" : "due",
+      title: overdue ? "📸 보고 마감이 지났어요" : "📸 오늘 보고 마감인 촬영이 있어요",
+      body: `${t.title} — 다음 단계: ${nextLabel}`,
+      link: "/pipeline",
+    });
+    reportNotified += to.length;
+  }
+
   return json({
+    reportDue: pl.length, reportNotified,
     tasksDue: tasks.length, taskNotified, directivesDue: dirs.length, dirNotified,
     eventItemsDue: events.length, eventNotified,
     lateTasks: lateTasks.length, lateUserNotified, lateLeadNotified,

@@ -3,8 +3,8 @@ import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "CHQ — 문화과 업무일정",
-  description: "문화과 모든 팀의 업무 일정을 하나의 달력에서 관리합니다.",
+  title: "사진과 — 업무일정",
+  description: "사진과의 촬영 일정·장비·진행 상황을 한곳에서 관리합니다.",
   // PWA — 홈 화면에 추가하면 앱처럼(주소창 없이) 실행
   manifest: "/manifest.webmanifest",
   icons: {
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     ],
     apple: "/apple-touch-icon.png",
   },
-  appleWebApp: { capable: true, title: "CHQ", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "사진과", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

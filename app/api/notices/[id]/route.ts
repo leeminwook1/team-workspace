@@ -20,7 +20,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const notice: any = await Notice.findById(params.id);
   if (!notice) return json({ error: "공지를 찾을 수 없습니다." }, 404);
   if (!canEditNotice(user, String(notice.createdBy))) {
-    return json({ error: "공지 수정은 작성자 또는 최고관리자만 가능합니다." }, 403);
+    return json({ error: "공지 수정은 작성자 또는 시스템 관리자만 가능합니다." }, 403);
   }
 
   const d = parsed.data;
@@ -42,7 +42,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const notice: any = await Notice.findById(params.id).lean();
   if (!notice) return json({ error: "공지를 찾을 수 없습니다." }, 404);
   if (!canEditNotice(user, String(notice.createdBy))) {
-    return json({ error: "공지 삭제는 작성자 또는 최고관리자만 가능합니다." }, 403);
+    return json({ error: "공지 삭제는 작성자 또는 시스템 관리자만 가능합니다." }, 403);
   }
 
   await Notice.deleteOne({ _id: params.id });

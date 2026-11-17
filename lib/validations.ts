@@ -19,7 +19,7 @@ export const registerSchema = z.object({
   name: z.string().min(2, "이름은 2자 이상").max(30),
   email: z.string().email("올바른 이메일을 입력하세요"),
   password: z.string().min(8, "비밀번호는 8자 이상").max(100),
-  // 신청자가 희망 소속 팀·역할을 선택 (팀 역할만 — 전사 역할은 관리자가 승인 시 부여)
+  // 신청자가 희망 직급을 선택 (과장·부과장·과원만 — 부장단은 관리자가 승인 시 부여). 소속은 항상 사진과.
   teamId: z.string().min(1).nullable().optional().default(null),
   role: z.enum(["member", "vice_leader", "leader"]).optional().default("member"),
 });
@@ -27,7 +27,7 @@ export const registerSchema = z.object({
 export const taskCreateSchema = z.object({
   title: z.string().min(1, "제목을 입력하세요").max(120),
   description: z.string().max(2000).optional().default(""),
-  teamIds: z.array(objectId).min(1, "팀을 하나 이상 선택하세요"),
+  teamIds: z.array(objectId).optional().default([]), // 사진과 전용 — 서버가 과 id로 채움
   categoryId: objectId.nullable().optional(),
   assignees: z.array(objectId).optional().default([]),
   startDate: z.string().min(1), // ISO date 또는 datetime
@@ -42,6 +42,8 @@ export const taskCreateSchema = z.object({
   resourceIds: z.array(objectId).max(40, "장비는 최대 40개까지 선택할 수 있어요").optional().default([]),
   // 장비별 담당자 — resourceId → userId. 그 사람 이름으로 예약이 잡혀 반납 책임이 감 (미지정 = 등록자)
   resourceOwners: z.record(objectId, objectId).optional(),
+  // 촬영 진행 관리(촬영→백업→셀렉→보정→보고) — 생략 시 촬영 카테고리면 자동으로 켬
+  pipelineOn: z.boolean().optional(),
 });
 
 export const taskUpdateSchema = z.object({
@@ -66,7 +68,7 @@ export const taskUpdateSchema = z.object({
 export const eventCreateSchema = z.object({
   title: z.string().min(1, "행사명을 입력하세요").max(200),
   description: z.string().max(2000).optional().default(""),
-  teamIds: z.array(objectId).min(1, "참여 팀을 하나 이상 선택하세요"),
+  teamIds: z.array(objectId).optional().default([]), // 사진과 전용 — 서버가 과 id로 채움
   managerId: objectId.nullable().optional(),
   eventDate: z.string().nullable().optional(),
   location: z.string().max(120).optional().default(""),
@@ -98,7 +100,7 @@ export const eventUpdateSchema = z.object({
 export const directiveCreateSchema = z.object({
   title: z.string().min(1, "TODO 제목을 입력하세요").max(200),
   body: z.string().max(2000).optional().default(""),
-  teamId: z.string().min(1, "대상 팀을 선택하세요"),
+  teamId: z.string().optional(), // 사진과 전용 — 서버가 과 id로 채움
   dueDate: z.string().nullable().optional(), // ISO date 또는 null
   priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
 });
@@ -193,16 +195,11 @@ export const teamSchema = z.object({
 
 const roleEnum = z.enum(["admin", "manager", "deputy", "secretary", "leader", "vice_leader", "member"]);
 
-// 단일 역할 + 소속 팀(팀 역할일 때만). role이 팀 역할이면 teamId 필수.
-export const approveSchema = z
-  .object({
-    role: roleEnum,
-    teamId: z.string().nullable().optional(),
-  })
-  .refine(
-    (d) => !["leader", "vice_leader", "member"].includes(d.role) || !!d.teamId,
-    { message: "팀 역할은 소속 팀을 선택해야 합니다.", path: ["teamId"] }
-  );
+// 직급 지정 — 과장·부과장·과원이면 서버가 사진과로 소속을 채운다 (teamId는 하위 호환용)
+export const approveSchema = z.object({
+  role: roleEnum,
+  teamId: z.string().nullable().optional(),
+});
 
 export const userUpdateSchema = z.object({
   role: roleEnum.optional(),
@@ -245,7 +242,7 @@ export const categorySchema = z.object({
 
 export const reservationSchema = z.object({
   resourceId: z.string().min(1),
-  teamId: z.string().min(1),
+  teamId: z.string().optional(), // 사진과 전용 — 서버가 과 id로 채움
   startAt: z.string().min(1), // ISO datetime
   endAt: z.string().min(1),
   note: z.string().max(300).optional().default(""),

@@ -4,6 +4,7 @@ import { Team } from "@/models/Team";
 import { Category } from "@/models/Category";
 import { Task } from "@/models/Task";
 import { Resource } from "@/models/Resource";
+import { ResourceSet } from "@/models/ResourceSet";
 import { Reservation } from "@/models/Reservation";
 import { PersonalEvent } from "@/models/PersonalEvent";
 import {
@@ -17,6 +18,7 @@ import { notify } from "./notify";
 import { touchChanged } from "./changes";
 import { esc, answerCallback, editTelegramMessage, type TgButton } from "./telegram";
 import { findSimilarTasks } from "./similarTasks";
+import { getDeptId, DEPT_NAME } from "@/lib/dept";
 
 // 명령 응답 — 문자열(플레인) 또는 서식·버튼 포함 객체. warn = 등록 안 됨(중복 경고 등)
 export type TgReply = string | { text: string; html?: boolean; buttons?: TgButton[][]; warn?: boolean };
@@ -31,7 +33,7 @@ const HELP = `📖 사용법
 /일정 제목 날짜 [시간] [옵션] [담당:이름] [장비:이름]
   · 날짜: 7/20, 오늘, 내일, 모레, 금요일, 다음주 화요일, 7/20-7/22(기간)
   · 시간: 14-16, 14:00-16:00, 14시-16시 (없으면 종일)
-  · 옵션: @팀이름 #카테고리 !긴급 !높음 장소:내용
+  · 옵션: #카테고리 !긴급 !높음 장소:내용
   · 담당: 장비: 는 맨 뒤에 — 쉼표로 여러 명·여러 개
   · 줄을 바꿔 여러 개 적으면 한 번에 등록 (최대 10건)
   · 비슷한 일정이 이미 있으면 알려줘요 — 같은 일정이면 버튼으로 팀만 추가,
@@ -51,7 +53,7 @@ const HELP = `📖 사용법
 /검색 키워드 — 일정 제목 검색
 /예약현황 [날짜] — 장비 예약 현황
 /내예약 — 내 장비 예약 (반납·취소 버튼)
-/연동 123456 — 계정 연결 (코드는 CHQ 설정에서 발급)
+/연동 123456 — 계정 연결 (코드는 사진과 워크스페이스 설정에서 발급)
 /챗아이디 — 이 대화방 챗 ID (팀 그룹방 브리핑 등록용)`;
 
 // ── 파싱 유틸 ──
@@ -137,8 +139,19 @@ const fmtT = (dt: Date) =>
 // 장비 이름 매칭 (부분 일치, 대소문자 무시) — /일정 장비: 와 /예약 이 공유
 async function matchResources(names: string[]): Promise<{ picked: { id: string; name: string }[] } | { error: string }> {
   const all: any[] = await Resource.find({ isActive: true }).select("name").lean();
+  const sets: any[] = await ResourceSet.find().select("name resourceIds").lean();
   const picked: { id: string; name: string }[] = [];
-  for (const q of names) {
+  for (const raw of names) {
+    // 장비 세트 이름이면 구성 장비로 펼친다 ("세트 1번" 또는 "세트:세트 1번")
+    const q = raw.replace(/^세트[:：]\s*/, "");
+    const set = sets.find((x) => x.name.toLowerCase() === q.toLowerCase());
+    if (set) {
+      for (const rid of set.resourceIds ?? []) {
+        const r = all.find((x) => String(x._id) === String(rid));
+        if (r && !picked.some((p) => p.id === String(r._id))) picked.push({ id: String(r._id), name: r.name });
+      }
+      continue;
+    }
     const hits = all.filter((r) => r.name.toLowerCase().includes(q.toLowerCase()));
     if (hits.length === 0) return { error: `❌ "${q}" 와 일치하는 장비가 없어요.` };
     if (hits.length > 1) {
@@ -203,7 +216,7 @@ export async function handleTelegramCommand(chatId: string, text: string, fromId
     return linkAccount(chatId, rest[0] ?? "");
   }
   if (cmd === "/start") {
-    return "👋 CHQ 알림봇입니다.\n\nCHQ 설정(내 계정) → 텔레그램 알림에서 [연동 코드 발급] 후\n/연동 123456 형식으로 보내면 계정이 연결돼요.\n\n명령어 안내는 /도움말";
+    return "👋 사진과 알림봇입니다.\n\n사진과 워크스페이스 설정(내 계정) → 텔레그램 알림에서 [연동 코드 발급] 후\n/연동 123456 형식으로 보내면 계정이 연결돼요.\n\n명령어 안내는 /도움말";
   }
   if (cmd === "/도움말" || cmd === "/help") return HELP;
   if (cmd === "/챗아이디" || cmd === "/chatid") {
@@ -215,7 +228,7 @@ export async function handleTelegramCommand(chatId: string, text: string, fromId
   const personalId = fromId ?? chatId;
   const userDoc: any = await User.findOne({ telegramChatId: personalId, status: "active" }).sort({ updatedAt: -1 }).lean();
   if (!userDoc) {
-    return "❌ 아직 계정이 연결되지 않았어요.\nCHQ 설정 → 텔레그램 알림에서 [연동 코드 발급] 후 봇과의 1:1 대화방에서 /연동 123456 을 보내주세요.";
+    return "❌ 아직 계정이 연결되지 않았어요.\n사진과 워크스페이스 설정 → 텔레그램 알림에서 [연동 코드 발급] 후 봇과의 1:1 대화방에서 /연동 123456 을 보내주세요.";
   }
   const user = toSessionUser(userDoc);
 
@@ -243,7 +256,7 @@ export async function handleTelegramCommand(chatId: string, text: string, fromId
 
 // ── /연동 ──
 async function linkAccount(chatId: string, code: string): Promise<string> {
-  if (!/^\d{6}$/.test(code)) return "사용법: /연동 123456\n코드는 CHQ 설정 → 텔레그램 알림에서 발급해요.";
+  if (!/^\d{6}$/.test(code)) return "사용법: /연동 123456\n코드는 사진과 워크스페이스 설정 → 텔레그램 알림에서 발급해요.";
   // 무차별 대입 방어 — 같은 챗에서 10분 내 5회 초과 시 차단
   const rl = await rateLimit(`tglink:${chatId}`, 5, 10 * 60 * 1000);
   if (!rl.ok) return `❌ 시도 횟수를 초과했어요. ${Math.ceil(rl.retryAfterSec / 60)}분 후 다시 시도해주세요.`;
@@ -311,7 +324,6 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
 /일정 워크숍 7/20-7/22
 
 뒤에 붙이는 옵션 (모두 선택)
-· @팀이름 — 다른 팀 일정 (예: @사진)
 · #카테고리 · !긴급 · !높음 · 장소:2층
 · 담당:이름,이름2 — 담당자 지정 (알림도 감)
 · 장비:캐논 R6, 배터리 — 장비 예약도 함께
@@ -354,20 +366,12 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
   if (!date) return "❌ 날짜를 못 찾았어요. 7/20, 2026-07-20, 오늘, 내일 형식으로 써주세요.";
   if (time && time.eh * 60 + time.em <= time.sh * 60 + time.sm) return "❌ 종료 시각이 시작보다 빨라요.";
 
-  // 팀 결정 — @팀이름 또는 내 소속팀
-  let teamId = user.teamId;
-  let teamLabel = "";
-  if (teamName) {
-    const team: any = await Team.findOne({ name: teamName, isActive: true }).lean();
-    if (!team) return `❌ "${teamName}" 팀을 찾을 수 없어요.`;
-    teamId = String(team._id);
-    teamLabel = team.name;
-  } else if (teamId) {
-    const team: any = await Team.findById(teamId).select("name").lean();
-    teamLabel = team?.name ?? "";
-  }
-  if (!teamId) return "❌ 소속 팀이 없어요. @팀이름 으로 팀을 지정해주세요. 예) @사진";
-  if (!canCreateTaskInAll(user, [teamId])) return `❌ ${teamLabel || "그 팀"}에 일정을 등록할 권한이 없어요.`;
+  // 사진과 전용 — 소속은 항상 과 (@팀 옵션은 무시)
+  void teamName;
+  const teamId = await getDeptId();
+  const teamLabel = DEPT_NAME;
+  if (!teamId) return "❌ 과 설정이 아직 없어요. 관리자에게 문의해주세요.";
+  if (!canCreateTaskInAll(user, [teamId])) return "❌ 일정을 등록할 권한이 없어요.";
 
   // 카테고리
   let categoryId: string | null = null;
@@ -476,7 +480,7 @@ async function createPersonalEvent(user: SessionUser, args: string): Promise<TgR
 · 시간: 14-16, 14:00-16:00 (없으면 종일)
 · 장소:내용 (선택)
 · 줄을 바꿔 여러 개 적으면 한 번에 등록 (최대 10건)
-🔒 개인 일정은 내 캘린더에만 표시돼요 (같은 팀 팀장·관리자만 열람).`;
+🔒 개인 일정은 내 캘린더에만 표시돼요 (과장·관리자만 열람).`;
   }
   const now = new Date();
   const tokens = args.split(/\s+/);
@@ -519,16 +523,12 @@ async function createPersonalEvent(user: SessionUser, args: string): Promise<TgR
 
 // ── /예약 ──
 async function createReservation(user: SessionUser, args: string): Promise<TgReply> {
-  if (!args) return "사용법: /예약 장비명[, 장비명2] 날짜 [시간] [@팀]\n예) /예약 캐논 R6 내일 14-16";
+  if (!args) return "사용법: /예약 장비명[, 장비명2] 날짜 [시간]\n예) /예약 캐논 R6 내일 14-16";
   const now = new Date();
   let tokens = args.split(/\s+/);
 
-  // @팀이름 — 전사 역할(소속 팀 없음)용 팀 지정
-  let teamOverride = "";
-  tokens = tokens.filter((t) => {
-    if (t.startsWith("@")) { teamOverride = t.slice(1); return false; }
-    return true;
-  });
+  // 사진과 전용 — @팀 옵션은 무시
+  tokens = tokens.filter((t) => !t.startsWith("@"));
 
   // 첫 날짜 토큰을 경계로: 앞 = 장비명들, 뒤 = 시간
   let date: DateRange | null = null;
@@ -543,13 +543,8 @@ async function createReservation(user: SessionUser, args: string): Promise<TgRep
   const names = tokens.slice(0, dateIdx).join(" ").split(",").map((s) => s.trim()).filter(Boolean);
   if (names.length === 0) return "❌ 장비 이름이 없어요.";
 
-  let teamId = user.teamId;
-  if (teamOverride) {
-    const team: any = await Team.findOne({ name: teamOverride, isActive: true }).lean();
-    if (!team) return `❌ "${teamOverride}" 팀을 찾을 수 없어요.`;
-    teamId = String(team._id);
-  }
-  if (!teamId) return "❌ 소속 팀이 없어요. @팀이름 으로 팀을 지정해주세요. 예) /예약 캐논 R6 내일 14-16 @사진";
+  const teamId = await getDeptId();
+  if (!teamId) return "❌ 과 설정이 아직 없어요. 관리자에게 문의해주세요.";
   if (!canReserve(user, teamId)) return "❌ 예약 권한이 없어요.";
 
   const m = await matchResources(names);

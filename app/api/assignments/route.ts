@@ -8,6 +8,7 @@ import { sanitizePhotos } from "@/lib/assignmentPhotos";
 import { notify } from "@/lib/notify";
 import { touchChanged } from "@/lib/changes";
 import { logActivity } from "@/lib/activity";
+import { getDeptId } from "@/lib/dept";
 
 // GET /api/assignments?status=open|closed — 볼 수 있는 팀의 과제 목록 + 제출 현황
 export async function GET(req: Request) {
@@ -62,7 +63,7 @@ export async function GET(req: Request) {
   });
 }
 
-// POST /api/assignments — 과제 출제 (팀장·부팀장·admin)
+// POST /api/assignments — 과제 출제 (과장·부과장·admin)
 export async function POST(req: Request) {
   const { user, error } = await requireActiveUser();
   if (error) return error;
@@ -70,10 +71,10 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const title = typeof body?.title === "string" ? body.title.trim() : "";
   const concept = typeof body?.concept === "string" ? body.concept.trim().slice(0, 3000) : "";
-  const teamId = typeof body?.teamId === "string" && body.teamId ? body.teamId : user.teamId;
+  const teamId = await getDeptId(); // 사진과 전용 — 과제는 항상 과 대상
   if (!title || title.length > 120) return json({ error: "제목을 입력하세요 (120자 이내)." }, 400);
-  if (!teamId) return json({ error: "팀을 선택하세요." }, 400);
-  if (!canManageAssignments(user, teamId)) return json({ error: "이 팀에 과제를 낼 권한이 없습니다. (팀장·부팀장)" }, 403);
+  if (!teamId) return json({ error: "과 설정이 아직 없습니다." }, 500);
+  if (!canManageAssignments(user, teamId)) return json({ error: "과제를 낼 권한이 없습니다. (과장·부과장)" }, 403);
 
   const references = sanitizePhotos(body?.references ?? [], user.id);
   if (!references) return json({ error: "레퍼런스 사진 정보가 올바르지 않습니다." }, 400);

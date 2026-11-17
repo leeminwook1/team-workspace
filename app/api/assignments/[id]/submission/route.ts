@@ -25,14 +25,17 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   if (!photos) return json({ error: "사진 정보가 올바르지 않습니다." }, 400);
   if (photos.length === 0) return json({ error: "사진을 1장 이상 올려주세요." }, 400);
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 2000) : "";
+  // 다시 저장해도 이미 선정된 베스트 컷 표시는 유지
+  const bestSet = new Set((existing?.photos ?? []).filter((p: any) => p.best).map((p: any) => p.pathname));
+  const photosOut = photos.map((p) => ({ ...p, best: bestSet.has(p.pathname) }));
 
   const isFirst = !existing;
   if (existing) {
-    existing.photos = photos;
+    existing.photos = photosOut;
     existing.note = note;
     await existing.save();
   } else {
-    await Submission.create({ assignmentId: a._id, userId: user.id, photos, note });
+    await Submission.create({ assignmentId: a._id, userId: user.id, photos: photosOut, note });
   }
   await deletePhotos(removedPhotos(before, photos));
   await touchChanged("assignment");

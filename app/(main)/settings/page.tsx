@@ -20,7 +20,7 @@ export default async function SettingsPage() {
     <AccountSettings
       initialName={me.name}
       email={me.email}
-      roleLabel={ROLE_LABEL[(me.role ?? "member") as Role] ?? "팀원"}
+      roleLabel={ROLE_LABEL[(me.role ?? "member") as Role] ?? "과원"}
       teamName={me.teamId?.name ?? null}
       initialTelegramChatId={me.telegramChatId ?? ""}
       initialIcalToken={me.icalToken ?? ""}

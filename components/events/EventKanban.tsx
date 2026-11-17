@@ -226,7 +226,6 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
       <div className="page-head">
         <div>
           <div className="ev-detail-top">
-            {ev.teams.map((t) => <span className="chip" key={t.id}><span className="dot" style={{ background: t.color }} />{t.name}</span>)}
             {dday && <span className={`kb-dday ${dday.tone}`}>{dday.label}</span>}
           </div>
           <h1 className="page-title" style={{ margin: "8px 0 4px" }}>{ev.title}</h1>
@@ -307,18 +306,6 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
       {/* 필터 + 뷰 전환 */}
       <div className="ev-controls">
         <div className="filter-row" style={{ margin: 0 }}>
-          {ev.teams.length > 1 && (
-            <>
-              <span className="filter-label">팀</span>
-              <button className={`chip chip-btn${teamFilter === "all" ? " sel" : ""}`} onClick={() => setTeamFilter("all")}>전체</button>
-              {ev.teams.map((t) => (
-                <button key={t.id} className={`chip chip-btn${teamFilter === t.id ? " sel" : ""}`} onClick={() => setTeamFilter(t.id)}>
-                  <span className="dot" style={{ background: t.color }} />{t.name}
-                </button>
-              ))}
-              <span className="filter-divider" />
-            </>
-          )}
           <button className={`chip chip-btn${mineOnly ? " sel" : ""}`} onClick={() => setMineOnly((v) => !v)}>
             <Icon name="userLine" size={13} /> 내 담당만
           </button>
@@ -460,13 +447,6 @@ function ItemModal({
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 무대 조명 세팅" required autoFocus />
           </div>
           <div className="form-grid-2">
-            <div className="field">
-              <label>팀</label>
-              <select value={teamId} onChange={(e) => setTeamId(e.target.value)}>
-                <option value="">지정 안 함</option>
-                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
             <div className="field">
               <label>담당자</label>
               <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>

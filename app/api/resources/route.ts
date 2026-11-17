@@ -46,7 +46,6 @@ export async function POST(req: Request) {
 
   await connectDB();
   const d = parsed.data;
-  // 담당자는 관리 팀이 있어야 의미가 있음 — 팀 없이 담당자만 오면 무시
-  const r = await Resource.create({ ...d, managerId: d.ownerTeamId ? d.managerId : null });
+  const r = await Resource.create({ ...d, ownerTeamId: null }); // 사진과 전용 — 관리팀 없음, 담당자만
   return json({ id: String(r._id) }, 201);
 }

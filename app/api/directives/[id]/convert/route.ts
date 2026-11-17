@@ -18,7 +18,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const dir: any = await Directive.findById(params.id).lean();
   if (!dir) return json({ error: "TODO를 찾을 수 없습니다." }, 404);
   if (!canManageDirective(user, String(dir.teamId))) {
-    return json({ error: "일정 등록은 담당 팀장만 가능합니다." }, 403);
+    return json({ error: "일정 등록은 과장만 가능합니다." }, 403);
   }
 
   const body = await req.json().catch(() => ({}));

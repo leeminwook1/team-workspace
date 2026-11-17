@@ -98,9 +98,6 @@ export default function EventList({ teams, canManage }: { teams: Team[]; canMana
             return (
               <Link href={`/events/${ev.id}`} key={ev.id} className="ev-item">
                 <div className="ev-item-top">
-                  <div className="kb-teams">
-                    {ev.teams.map((t) => <span className="dot" key={t.id} style={{ background: t.color }} title={t.name} />)}
-                  </div>
                   {dday && <span className={`kb-dday ${dday.tone}`}>{dday.label}</span>}
                   {prio.show && (
                     <span className="badge" style={{ background: `color-mix(in srgb, ${prio.color} 14%, transparent)`, color: prio.color }}>{prio.label}</span>
@@ -171,7 +168,7 @@ export function EventFormModal({
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // 담당자 후보 = 전체 활성 사용자 (팀에 안 묶인 과장·부과장 등도 지정 가능)
+  // 담당자 후보 = 전체 활성 사용자 (부장단도 지정 가능)
   useEffect(() => {
     fetch("/api/users")
       .then((r) => (r.ok ? r.json() : { users: [] }))
@@ -182,7 +179,6 @@ export function EventFormModal({
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
-    if (teamIds.length === 0) { setErr("참여 팀을 하나 이상 선택하세요."); return; }
     setBusy(true);
     // 네트워크 오류·비정상(비-JSON) 응답에도 항상 로딩을 풀고 오류를 표시한다.
     try {
@@ -210,18 +206,6 @@ export function EventFormModal({
           <div className="field">
             <label>행사명</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 2026 봄 정기공연" required />
-          </div>
-          <div className="field">
-            <label>참여 팀 · 여러 팀 선택 가능</label>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {teams.map((t) => (
-                <button type="button" key={t.id}
-                  className={`chip chip-btn${teamIds.includes(t.id) ? " sel" : ""}`}
-                  onClick={() => setTeamIds((p) => (p.includes(t.id) ? p.filter((x) => x !== t.id) : [...p, t.id]))}>
-                  <span className="dot" style={{ background: t.color }} />{t.name}
-                </button>
-              ))}
-            </div>
           </div>
           <div className="form-grid-2">
             <div className="field">

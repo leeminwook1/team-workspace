@@ -413,46 +413,34 @@ export default function ReservationBoard({
     }
   }
 
+  // 반납 체크리스트 — 확인 모달을 띄우고, 제출하면 체크 결과를, 닫으면 null을 돌려준다
+  const [returnAsk, setReturnAsk] = useState<{ count: number; resolve: (c: ReturnCheckInput | null) => void } | null>(null);
+  const askReturnCheck = (count: number) => new Promise<ReturnCheckInput | null>((resolve) => setReturnAsk({ count, resolve }));
+
   async function markReturned(id: string) {
-    const confirmed = await confirm({
-      title: "반납 처리",
-      message: "이 장비를 반납 처리할까요? 반납하면 남은 시간에 다른 팀이 예약할 수 있어요.",
-      confirmText: "반납 완료", cancelText: "닫기",
-    });
-    if (!confirmed) return false;
-    try {
-      const res = await fetch(`/api/reservations/${id}/return`, { method: "POST" });
-      const data = await res.json().catch(() => ({} as any));
-      if (!res.ok) { setErr(data.error ?? "반납 처리 실패"); return false; }
-      setErr("");
-      refreshRef.current();
-      return true;
-    } catch {
-      setErr("네트워크 오류로 반납 처리하지 못했어요.");
-      return false;
-    }
+    return markReturnedBulk([id]);
   }
 
-  // 여러 건 한 번에 반납 (묶음 예약·타임라인 그룹)
+  // 한 건 또는 여러 건 반납 (묶음 예약·타임라인 그룹) — 체크리스트는 한 번만 작성
   async function markReturnedBulk(ids: string[]) {
     if (ids.length === 0) return false;
-    const confirmed = await confirm({
-      title: "일괄 반납",
-      message: `장비 ${ids.length}개를 모두 반납 처리할까요? 반납하면 남은 시간에 다른 팀이 예약할 수 있어요.`,
-      confirmText: `${ids.length}개 모두 반납`, cancelText: "닫기",
-    });
-    if (!confirmed) return false;
+    const check = await askReturnCheck(ids.length);
+    if (!check) return false;
     try {
-      const res = await fetch("/api/reservations/return-bulk", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }),
-      });
+      const res = ids.length === 1
+        ? await fetch(`/api/reservations/${ids[0]}/return`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ check }),
+          })
+        : await fetch("/api/reservations/return-bulk", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, check }),
+          });
       const data = await res.json().catch(() => ({} as any));
-      if (!res.ok) { setErr(data.error ?? "일괄 반납 실패"); return false; }
+      if (!res.ok) { setErr(data.error ?? "반납 처리 실패"); return false; }
       setErr(data.skipped?.length > 0 ? `일부는 처리하지 못했어요: ${data.skipped.map((s: any) => `${s.name}(${s.reason})`).join(", ")}` : "");
       refreshRef.current();
       return true;
     } catch {
-      setErr("네트워크 오류로 일괄 반납하지 못했어요.");
+      setErr("네트워크 오류로 반납 처리하지 못했어요.");
       return false;
     }
   }
@@ -686,7 +674,7 @@ export default function ReservationBoard({
                                 if (e0 <= dStart || s0 >= dEnd) return null;
                                 const top = (Math.max(s0, dStart) - dStart) / 86_400_000 * 100;
                                 const bottom = (Math.min(e0, dEnd) - dStart) / 86_400_000 * 100;
-                                const color = r.team?.color ?? "#8b95a1";
+                                const color = resources.find((x) => x.id === r.resource?.id)?.category?.color ?? "#8b95a1"; // 장비 분류 색
                                 const mine = r.reservedBy?.id === user?.id;
                                 const movable = !returned && (mine || user?.role === "admin");
                                 // 라벨 — 이 날에 걸친 구간만 (하루 전체면 '종일')
@@ -699,7 +687,7 @@ export default function ReservationBoard({
                                     key={r.id} type="button"
                                     className={`rtw-block${mine ? " mine" : ""}${returned ? " done" : ""}${movable ? " movable" : ""}${adj ? " moving" : ""}`}
                                     style={{ top: `${top}%`, height: `${Math.max(2.4, bottom - top)}%`, background: `color-mix(in srgb, ${color} ${returned ? 8 : 18}%, transparent)`, borderColor: returned ? `color-mix(in srgb, ${color} 45%, transparent)` : color, color }}
-                                    title={`${r.reservedBy?.name ?? "?"}${r.team ? ` (${r.team.name})` : ""}\n${fmtShort(r.startAt)} ~ ${fmtShort(r.endAt)}${returned ? "\n반납 완료" : ""}${r.note ? `\n${r.note}` : ""}${movable ? "\n위아래로 끌면 시간 이동" : ""}`}
+                                    title={`${r.reservedBy?.name ?? "?"}\n${fmtShort(r.startAt)} ~ ${fmtShort(r.endAt)}${returned ? "\n반납 완료" : ""}${r.note ? `\n${r.note}` : ""}${movable ? "\n위아래로 끌면 시간 이동" : ""}`}
                                     onMouseDown={(e) => {
                                       e.stopPropagation();
                                       if (e.button !== 0) return;
@@ -762,10 +750,6 @@ export default function ReservationBoard({
                 >
                   빈 장비만
                 </button>
-                <select className="rsv2-select" value={rtlTeam} onChange={(e) => setRtlTeam(e.target.value)} aria-label="팀 필터" title="예약 팀으로 거르기">
-                  <option value="all">전체 팀</option>
-                  {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
                 <div className="avb-nav">
                   <button className="avb-nav-btn" aria-label="이전 날" onClick={() => setRtlDate(addDays(rtlDate, -1))}>‹</button>
                   <button className="avb-nav-btn" onClick={() => setRtlDate(todayYmd)}>오늘</button>
@@ -861,7 +845,7 @@ export default function ReservationBoard({
                                     if (e <= winS || s >= winE) return null;
                                     const left = ((s - winS) / winSpan) * 100;
                                     const width = Math.min(100 - left, Math.max(2.2, ((e - s) / winSpan) * 100));
-                                    const color = r.team?.color ?? "#8b95a1";
+                                    const color = resources.find((x) => x.id === r.resource?.id)?.category?.color ?? "#8b95a1"; // 장비 분류 색
                                     const mine = r.reservedBy?.id === user?.id;
                                     const movable = !returned && (mine || user?.role === "admin");
                                     const contL = s0 < dayStart, contR = e0 > dayEnd;
@@ -870,7 +854,7 @@ export default function ReservationBoard({
                                         key={r.id} type="button"
                                         className={`rtl-bar${mine ? " mine" : ""}${returned ? " done" : ""}${contL ? " cl" : ""}${contR ? " cr" : ""}${movable ? " movable" : ""}${adj ? " moving" : ""}`}
                                         style={{ left: `${left}%`, width: `${width}%`, background: `color-mix(in srgb, ${color} ${returned ? 8 : 16}%, transparent)`, borderColor: returned ? `color-mix(in srgb, ${color} 45%, transparent)` : color, color }}
-                                        title={`${r.resource?.name ?? ""} · ${r.reservedBy?.name ?? "?"}${r.team ? ` (${r.team.name})` : ""}\n${fmtShort(r.startAt)} ~ ${fmtShort(r.endAt)}${returned ? "\n반납 완료" : ""}${r.note ? `\n${r.note}` : ""}${movable ? "\n좌우로 끌면 이동 · 끝을 잡으면 시간 조절" : ""}`}
+                                        title={`${r.resource?.name ?? ""} · ${r.reservedBy?.name ?? "?"}\n${fmtShort(r.startAt)} ~ ${fmtShort(r.endAt)}${returned ? "\n반납 완료" : ""}${r.note ? `\n${r.note}` : ""}${movable ? "\n좌우로 끌면 이동 · 끝을 잡으면 시간 조절" : ""}`}
                                         onMouseDown={(e) => {
                                           e.stopPropagation();
                                           if (e.button !== 0) return;
@@ -999,7 +983,7 @@ export default function ReservationBoard({
                 const single = items.length === 1;
                 const open = openGroups.has(key);
                 const days = Math.ceil((new Date(r.endAt).getTime() - new Date(r.startAt).getTime()) / 86400_000);
-                // 본인이 올린 예약 또는 최고관리자 — 삭제는 모든 상태, 수정은 진행 중(반납 전)만
+                // 본인이 올린 예약 또는 시스템 관리자 — 삭제는 모든 상태, 수정은 진행 중(반납 전)만
                 const isOwnerOrAdmin = r.reservedBy?.id === user?.id || user?.role === "admin";
                 const canDelete = isOwnerOrAdmin;
                 const canEdit = isOwnerOrAdmin && st !== "returned";
@@ -1027,7 +1011,6 @@ export default function ReservationBoard({
                       </div>
                       <div className="rsv2-item-period">{fmtShort(r.startAt)} ~ {fmtShort(r.endAt)}</div>
                       <div className="rsv2-item-meta">
-                        {r.team && <span className="chip"><span className="dot" style={{ background: r.team.color }} />{r.team.name}</span>}
                         <span className="rsv2-item-by">{r.reservedBy?.name}</span>
                         {r.note && <span className="rsv2-item-note">· {r.note}</span>}
                         {st === "returned" && r.returnedAt && <span className="rsv2-item-note">· 반납 {fmt(r.returnedAt)}{r.returnedByName ? ` (${r.returnedByName})` : ""}</span>}
@@ -1078,6 +1061,14 @@ export default function ReservationBoard({
         </>
       )}
 
+      {returnAsk && (
+        <ReturnCheckModal
+          count={returnAsk.count}
+          onClose={() => { returnAsk.resolve(null); setReturnAsk(null); }}
+          onSubmit={(c) => { returnAsk.resolve(c); setReturnAsk(null); }}
+        />
+      )}
+
       {/* 타임라인 묶음 상세 — 같은 시간·예약자의 장비 여러 개 */}
       {tlGroup && tlGroup.length > 0 && (
         <div className="modal-overlay" onClick={() => setTlGroup(null)}>
@@ -1086,7 +1077,7 @@ export default function ReservationBoard({
             <h2>{tlGroup.length > 1 ? `장비 ${tlGroup.length}개 예약` : tlGroup[0].resource?.name ?? "예약 상세"}</h2>
             <p className="rsv-form-hint" style={{ marginTop: -8 }}>
               <b>{tlGroup[0].reservedBy?.name ?? "?"}</b>
-              {tlGroup[0].team ? ` · ${tlGroup[0].team.name}` : ""} · {fmt(tlGroup[0].startAt)} ~ {fmt(tlGroup[0].endAt)}
+              · {fmt(tlGroup[0].startAt)} ~ {fmt(tlGroup[0].endAt)}
               {tlGroup[0].note ? ` · ${tlGroup[0].note}` : ""}
               {tlGroup[0].relatedTaskId && (
                 <>
@@ -1174,7 +1165,7 @@ export default function ReservationBoard({
   );
 }
 
-/* ── 예약 수정 모달 — 장비는 고정, 기간·팀·메모 수정 ── */
+/* ── 예약 수정 모달 — 장비는 고정, 기간·메모 수정 ── */
 function EditReservationModal({
   resv, teams, onClose, onSaved,
 }: {
@@ -1226,14 +1217,8 @@ function EditReservationModal({
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <ModalClose onClose={onClose} />
         <h2>예약 수정</h2>
-        <p className="rsv-form-hint" style={{ marginTop: -8 }}>장비 <b>{resv.resource?.name ?? "?"}</b> · 기간·팀·메모를 수정할 수 있어요 (장비 변경은 삭제 후 다시 예약).</p>
+        <p className="rsv-form-hint" style={{ marginTop: -8 }}>장비 <b>{resv.resource?.name ?? "?"}</b> · 기간·메모를 수정할 수 있어요 (장비 변경은 삭제 후 다시 예약).</p>
         <form onSubmit={submit}>
-          <div className="field">
-            <label>예약 팀</label>
-            <select value={form.teamId} onChange={(e) => setForm({ ...form, teamId: e.target.value })}>
-              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </div>
           <div className="rsv2-daterow">
             <div className="field">
               <label>시작일</label>
@@ -1298,6 +1283,15 @@ function ReserveModal({
   const [busy, setBusy] = useState(false);
   // 선택한 기간에 이미 예약 중인 장비 — resourceId → 예약자 이름
   const [busyMap, setBusyMap] = useState<Map<string, string>>(new Map());
+  // 장비 세트 — 고르면 구성 장비 중 지금 예약 가능한 것만 한 번에 선택
+  const [sets, setSets] = useState<{ id: string; name: string; resources: { id: string }[] }[]>([]);
+  useEffect(() => {
+    fetch("/api/resource-sets").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.sets) setSets(d.sets); }).catch(() => {});
+  }, []);
+  const setPickable = (st: { resources: { id: string }[] }) => st.resources.map((r) => r.id).filter((id) => {
+    const res = resources.find((x) => x.id === id);
+    return !!res && (!res.status || res.status === "available") && !busyMap.get(id);
+  });
 
   useEffect(() => {
     const { startDate, endDate, startTime, endTime } = form;
@@ -1410,6 +1404,25 @@ function ReserveModal({
                 ))}
               </div>
             )}
+            {sets.length > 0 && (
+              <div className="set-chips" style={{ border: 0, padding: "0 0 8px", background: "transparent" }} aria-label="장비 세트">
+                {sets.map((st) => {
+                  const ids = setPickable(st);
+                  const on = ids.length > 0 && ids.every((id) => resIds.has(id));
+                  return (
+                    <button type="button" key={st.id} className={`set-chip${on ? " on" : ""}`} disabled={ids.length === 0}
+                      title={ids.length < st.resources.length ? "일부 장비는 예약 중이거나 수리·고장이라 빠져요" : undefined}
+                      onClick={() => setResIds((prev) => {
+                        const next = new Set(prev);
+                        if (on) ids.forEach((id) => next.delete(id)); else ids.forEach((id) => next.add(id));
+                        return next;
+                      })}>
+                      📦 {st.name} <span>{ids.length}/{st.resources.length}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="rsv2-picker">
               <div className="rsv2-search in-modal">
                 <Icon name="search" size={15} />
@@ -1446,14 +1459,6 @@ function ReserveModal({
               </div>
             </div>
             <p className="rsv2-picker-hint">카메라·렌즈·배터리·메모리처럼 <b>여러 개를 한 번에</b> 골라 같은 기간으로 예약할 수 있어요.</p>
-          </div>
-
-          {/* 팀 */}
-          <div className="field">
-            <label>예약 팀</label>
-            <select value={form.teamId} onChange={(e) => setForm({ ...form, teamId: e.target.value })}>
-              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
           </div>
 
           {/* 기간 */}
@@ -1497,6 +1502,59 @@ function ReserveModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+/* ── 반납 체크리스트 ── */
+type ReturnCheckInput = { battery: boolean; memory: boolean; condition: boolean; note: string };
+
+function ReturnCheckModal({ count, onClose, onSubmit }: {
+  count: number; onClose: () => void; onSubmit: (c: ReturnCheckInput) => void;
+}) {
+  const [c, setC] = useState<ReturnCheckInput>({ battery: false, memory: false, condition: true, note: "" });
+  const [err, setErr] = useState("");
+  const items: { key: "battery" | "memory"; label: string; hint: string }[] = [
+    { key: "battery", label: "배터리 충전했어요", hint: "다음 사람이 바로 쓸 수 있게" },
+    { key: "memory", label: "메모리 백업 후 포맷했어요", hint: "사진은 백업 확인 후 지우기" },
+  ];
+  function submit() {
+    if (!c.condition && !c.note.trim()) { setErr("어떤 문제가 있는지 적어주세요."); return; }
+    onSubmit({ ...c, note: c.note.trim() });
+  }
+  return (
+    <div className="modal-overlay">
+      <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
+        <h2>{count > 1 ? `장비 ${count}개 반납` : "장비 반납"}</h2>
+        <p className="rsv-form-hint" style={{ marginTop: -6 }}>반납 전에 확인해주세요. 해당 없는 항목은 비워둬도 돼요.</p>
+        <div className="rc-list">
+          {items.map((it) => (
+            <button type="button" key={it.key} className={`rc-check${c[it.key] ? " on" : ""}`} onClick={() => setC({ ...c, [it.key]: !c[it.key] })}>
+              <span className="equip-check" aria-hidden>{c[it.key] ? "✓" : ""}</span>
+              <span><b>{it.label}</b><em>{it.hint}</em></span>
+            </button>
+          ))}
+          <div className="rc-cond">
+            <span>외관·작동 상태</span>
+            <div className="seg">
+              <button type="button" className={c.condition ? "on" : ""} onClick={() => setC({ ...c, condition: true })}>이상 없음</button>
+              <button type="button" className={!c.condition ? "on" : ""} onClick={() => setC({ ...c, condition: false })}>문제 있음</button>
+            </div>
+          </div>
+          {!c.condition && (
+            <textarea
+              value={c.note} onChange={(e) => setC({ ...c, note: e.target.value })} rows={3} maxLength={300} autoFocus
+              placeholder="예: 렌즈 줌링이 뻑뻑해요 / 배터리 1개 부풀었어요" className="rc-note"
+            />
+          )}
+        </div>
+        {!c.condition && <p className="rsv-form-hint">문제를 적으면 장비 담당자와 과장에게 바로 알림이 가요.</p>}
+        {err && <p className="err-msg">{err}</p>}
+        <div className="modal-actions">
+          <button className="btn btn-primary" onClick={submit}>반납 완료</button>
+        </div>
       </div>
     </div>
   );

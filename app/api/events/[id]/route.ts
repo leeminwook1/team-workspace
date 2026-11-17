@@ -9,6 +9,7 @@ import { eventUpdateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
 import { touchChanged } from "@/lib/changes";
+import { getDeptId } from "@/lib/dept";
 
 function serializeFull(e: any) {
   return {
@@ -85,7 +86,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
   if (d.title !== undefined) ev.title = d.title;
   if (d.description !== undefined) ev.description = d.description;
-  if (d.teamIds !== undefined) ev.teamIds = d.teamIds;
+  // 사진과 전용 — 참여 팀 변경 무시
   if (d.managerId !== undefined) ev.managerId = d.managerId || null;
   if (d.eventDate !== undefined) ev.eventDate = d.eventDate ? new Date(d.eventDate) : null;
   if (d.location !== undefined) ev.location = d.location;

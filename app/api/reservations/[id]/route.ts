@@ -20,7 +20,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   // 예약(booked) 상태만 수정 가능 — 반납 완료·취소 건은 수정 불가
   if (!r || r.status !== "booked") return json({ error: "수정할 수 없는 예약입니다. (진행 중인 예약만 수정 가능)" }, 404);
   if (String(r.reservedBy) !== user.id && user.role !== "admin") {
-    return json({ error: "본인이 등록한 예약 또는 최고관리자만 수정할 수 있습니다." }, 403);
+    return json({ error: "본인이 등록한 예약 또는 시스템 관리자만 수정할 수 있습니다." }, 403);
   }
 
   const startAt = new Date(body.startAt);
@@ -28,8 +28,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (isNaN(startAt.getTime()) || isNaN(endAt.getTime())) return json({ error: "날짜 형식이 잘못됐습니다." }, 400);
   if (endAt <= startAt) return json({ error: "종료 시각이 시작 시각보다 빠릅니다." }, 400);
 
-  const teamId = body.teamId ? String(body.teamId) : String(r.teamId);
-  if (!canReserve(user, teamId)) return json({ error: "그 팀으로 예약할 권한이 없습니다." }, 403);
+  const teamId = String(r.teamId); // 사진과 전용 — 소속 변경 불가
+  if (!canReserve(user, teamId)) return json({ error: "예약을 수정할 권한이 없습니다." }, 403);
 
   // 겹침 검사 — 같은 자원의 다른 booked 예약과 겹치면 거절 (자기 자신 제외)
   const conflict: any = await Reservation.findOne({
@@ -71,7 +71,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 
   // 본인이 올린 예약이면 삭제 가능, 최고관리자는 전체 삭제 가능
   if (String(r.reservedBy) !== user.id && user.role !== "admin") {
-    return json({ error: "본인이 등록한 예약 또는 최고관리자만 삭제할 수 있습니다." }, 403);
+    return json({ error: "본인이 등록한 예약 또는 시스템 관리자만 삭제할 수 있습니다." }, 403);
   }
 
   const wasReturned = r.status === "returned";

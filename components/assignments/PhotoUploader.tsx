@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { resizeImage, photoUrl } from "@/lib/imageResize";
 
-export type Photo = { pathname: string; caption: string };
+export type Photo = { pathname: string; caption: string; best?: boolean };
 
 const MAX = 12;
 

@@ -16,8 +16,8 @@ type Row = {
 };
 
 const ROLE_LABEL: Record<string, string> = {
-  admin: "최고관리자", manager: "과장", deputy: "부과장", secretary: "서기",
-  leader: "팀장", vice_leader: "부팀장", member: "팀원",
+  admin: "시스템 관리자", manager: "부장", secretary: "서무", deputy: "총교관",
+  leader: "과장", vice_leader: "부과장", member: "과원",
 };
 
 export default function TelegramManager() {

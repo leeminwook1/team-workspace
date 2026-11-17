@@ -25,7 +25,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const target: any = await User.findById(a.userId).select("name teamId").lean();
   const tid = target?.teamId ? String(target.teamId) : a.teamId ? String(a.teamId) : null;
   if (!canManageAbsence(user, { id: String(a.userId), teamId: tid })) {
-    return json({ error: "부재 수정 권한이 없습니다. (본인·팀장·과장단)" }, 403);
+    return json({ error: "부재 수정 권한이 없습니다. (본인·과장·부과장·부장단)" }, 403);
   }
 
   // 반차는 하루짜리로 고정
@@ -68,7 +68,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const target: any = await User.findById(a.userId).select("name teamId").lean();
   const tid = target?.teamId ? String(target.teamId) : a.teamId ? String(a.teamId) : null;
   if (!canManageAbsence(user, { id: String(a.userId), teamId: tid })) {
-    return json({ error: "부재 삭제 권한이 없습니다. (본인·팀장·과장단)" }, 403);
+    return json({ error: "부재 삭제 권한이 없습니다. (본인·과장·부과장·부장단)" }, 403);
   }
 
   await Absence.deleteOne({ _id: params.id });

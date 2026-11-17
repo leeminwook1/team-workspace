@@ -9,7 +9,6 @@ import { useAutoRefresh } from "@/components/useAutoRefresh";
 
 const PAGE_SIZE = 10;
 
-type TeamOpt = { id: string; name: string; color: string };
 type UserRow = {
   id: string;
   name: string;
@@ -20,26 +19,31 @@ type UserRow = {
 };
 
 const ROLE_LABEL: Record<string, string> = {
-  admin: "최고관리자", manager: "과장", deputy: "부과장", secretary: "서기",
-  leader: "팀장", vice_leader: "부팀장", member: "팀원",
+  admin: "시스템 관리자", manager: "부장", secretary: "서무", deputy: "총교관",
+  leader: "과장", vice_leader: "부과장", member: "과원",
 };
-const TEAM_ROLE_VALUES = ["leader", "vice_leader", "member"];
-const isTeamRole = (r: string) => TEAM_ROLE_VALUES.includes(r);
+// 직급 그룹 — 부장단(부장·서무·총교관) / 과(과장·부과장·과원)
+const BOARD = ["manager", "secretary", "deputy"];
 const ROLE_OPTIONS = [
-  { value: "member", label: "팀원" },
-  { value: "vice_leader", label: "부팀장" },
-  { value: "leader", label: "팀장" },
-  { value: "secretary", label: "서기" },
-  { value: "deputy", label: "부과장" },
-  { value: "manager", label: "과장" },
-  { value: "admin", label: "최고관리자" },
+  { value: "member", label: "과원" },
+  { value: "vice_leader", label: "부과장" },
+  { value: "leader", label: "과장" },
+  { value: "deputy", label: "총교관 (부장단)" },
+  { value: "secretary", label: "서무 (부장단)" },
+  { value: "manager", label: "부장 (부장단)" },
+  { value: "admin", label: "시스템 관리자" },
 ];
-// 역할순 정렬용 서열 (높은 역할 먼저)
+// 직급순 정렬용 서열 (높은 직급 먼저)
 const ROLE_RANK: Record<string, number> = {
-  admin: 0, manager: 1, deputy: 2, secretary: 3, leader: 4, vice_leader: 5, member: 6,
+  manager: 0, secretary: 1, deputy: 2, leader: 3, vice_leader: 4, member: 5, admin: 6,
 };
+const GROUP_FILTERS = [
+  { value: "", label: "전체" },
+  { value: "board", label: "부장단" },
+  { value: "dept", label: "과장·부과장·과원" },
+];
 
-export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]; currentUserId: string }) {
+export default function UserManager({ currentUserId }: { currentUserId: string }) {
   const confirm = useConfirm();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -47,8 +51,8 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
   const [err, setErr] = useState("");
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState(""); // 이름·이메일 검색
-  const [teamFilter, setTeamFilter] = useState(""); // "" 전체 | "none" 전사(팀 없음) | teamId
-  const [sort, setSort] = useState<"name" | "role" | "team">("name");
+  const [groupFilter, setGroupFilter] = useState(""); // "" 전체 | board 부장단 | dept 과
+  const [sort, setSort] = useState<"name" | "role">("role");
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/users");
@@ -75,22 +79,18 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
     }
   }
 
-  // 검색 → 팀 필터 → 정렬
+  // 검색 → 직급 그룹 → 정렬
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = users;
     if (q) list = list.filter((u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
-    if (teamFilter === "none") list = list.filter((u) => !u.team);
-    else if (teamFilter) list = list.filter((u) => u.team?.id === teamFilter);
+    if (groupFilter === "board") list = list.filter((u) => BOARD.includes(u.role));
+    else if (groupFilter === "dept") list = list.filter((u) => ["leader", "vice_leader", "member"].includes(u.role));
     return [...list].sort((a, b) => {
       if (sort === "role") return (ROLE_RANK[a.role] ?? 9) - (ROLE_RANK[b.role] ?? 9) || a.name.localeCompare(b.name, "ko");
-      if (sort === "team") {
-        const ta = a.team?.name ?? "￿", tb = b.team?.name ?? "￿"; // 팀 없음은 맨 뒤
-        return ta.localeCompare(tb, "ko") || (ROLE_RANK[a.role] ?? 9) - (ROLE_RANK[b.role] ?? 9) || a.name.localeCompare(b.name, "ko");
-      }
       return a.name.localeCompare(b.name, "ko");
     });
-  }, [users, query, teamFilter, sort]);
+  }, [users, query, groupFilter, sort]);
 
   if (!loaded) return <p style={{ color: "var(--ink-faint)" }}>불러오는 중…</p>;
 
@@ -98,13 +98,13 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const cur = Math.min(page, totalPages);
   const pageUsers = filtered.slice((cur - 1) * PAGE_SIZE, cur * PAGE_SIZE);
-  const filtering = !!query.trim() || !!teamFilter;
+  const filtering = !!query.trim() || !!groupFilter;
 
   return (
     <div style={{ maxWidth: 720 }}>
       {err && <p className="err-msg">{err}</p>}
 
-      {/* 검색 · 팀 필터 · 정렬 */}
+      {/* 검색 · 직급 그룹 · 정렬 */}
       <div className="um-toolbar">
         <div className="um-search">
           <Icon name="search" size={15} />
@@ -116,15 +116,12 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
           />
           {query && <button type="button" className="um-clear" aria-label="지우기" onClick={() => { setQuery(""); setPage(1); }}>×</button>}
         </div>
-        <select value={teamFilter} onChange={(e) => { setTeamFilter(e.target.value); setPage(1); }} aria-label="팀 필터">
-          <option value="">전체 팀</option>
-          {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          <option value="none">전사 (팀 없음)</option>
+        <select value={groupFilter} onChange={(e) => { setGroupFilter(e.target.value); setPage(1); }} aria-label="직급 그룹">
+          {GROUP_FILTERS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
         </select>
         <select value={sort} onChange={(e) => setSort(e.target.value as any)} aria-label="정렬">
+          <option value="role">직급순</option>
           <option value="name">이름순</option>
-          <option value="role">역할순</option>
-          <option value="team">팀순</option>
         </select>
       </div>
 
@@ -143,7 +140,6 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
                 <div className="admin-item-sub">{u.email}</div>
               </div>
               <span className="chip" style={{ marginLeft: 4 }}>{ROLE_LABEL[u.role] ?? u.role}</span>
-              {u.team && <span className="chip"><span className="dot" style={{ background: u.team.color }} />{u.team.name}</span>}
               {u.status !== "active" && <span className="status-pill pill-off">비활성</span>}
             </div>
             <div className="admin-item-actions">
@@ -165,7 +161,6 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
       {editing && (
         <EditModal
           user={editing}
-          teams={teams}
           isSelf={editing.id === currentUserId}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }}
@@ -176,13 +171,12 @@ export default function UserManager({ teams, currentUserId }: { teams: TeamOpt[]
 }
 
 function EditModal({
-  user, teams, isSelf, onClose, onSaved,
+  user, isSelf, onClose, onSaved,
 }: {
-  user: UserRow; teams: TeamOpt[]; isSelf: boolean; onClose: () => void; onSaved: () => void;
+  user: UserRow; isSelf: boolean; onClose: () => void; onSaved: () => void;
 }) {
   const confirm = useConfirm();
   const [role, setRole] = useState(user.role);
-  const [teamId, setTeamId] = useState(user.team?.id ?? teams[0]?.id ?? "");
   const [active, setActive] = useState(user.status === "active");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -217,7 +211,7 @@ function EditModal({
 
   async function save() {
     setBusy(true); setErr("");
-    const body: any = { role, teamId: isTeamRole(role) ? teamId : null };
+    const body: any = { role }; // 소속(사진과)은 서버가 직급에 맞춰 채움
     if (!isSelf) body.status = active ? "active" : "disabled";
     try {
       const res = await fetch(`/api/admin/users/${user.id}`, {
@@ -240,22 +234,15 @@ function EditModal({
         <h2>{user.name} — 편집</h2>
 
         <div className="field">
-          <label>역할</label>
+          <label>직급</label>
           <select value={role} onChange={(e) => setRole(e.target.value)}>
             {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </div>
 
-        {isTeamRole(role) ? (
-          <div className="field">
-            <label>소속 팀</label>
-            <select value={teamId} onChange={(e) => setTeamId(e.target.value)}>
-              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </div>
-        ) : (
+        {BOARD.includes(role) && (
           <p style={{ fontSize: 12.5, color: "var(--ink-faint)", margin: "0 0 8px" }}>
-            과장·부과장·서기·최고관리자는 <b>모든 팀</b>을 조회합니다. (소속 팀 없음)
+            부장단은 사진과 전체를 조회하고 TODO를 지시할 수 있어요.
           </p>
         )}
 

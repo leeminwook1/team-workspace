@@ -6,6 +6,7 @@ const PhotoSchema = new Schema(
   {
     pathname: { type: String, required: true },
     caption: { type: String, default: "", trim: true, maxlength: 300 },
+    best: { type: Boolean, default: false }, // 베스트 컷 (과장이 선정, 제출 사진에만 사용)
   },
   { _id: false }
 );
@@ -44,5 +45,6 @@ const SubmissionSchema = new Schema(
 
 SubmissionSchema.index({ assignmentId: 1, userId: 1 }, { unique: true });
 SubmissionSchema.index({ "photos.pathname": 1 });
+SubmissionSchema.index({ "photos.best": 1, updatedAt: -1 }); // 베스트 컷 아카이브
 
 export const Submission = models.Submission || model("Submission", SubmissionSchema);

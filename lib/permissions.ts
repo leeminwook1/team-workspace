@@ -1,10 +1,11 @@
-// 단일 역할 체계 (1인 1팀)
-// - admin(최고관리자): 시스템 관리·전체 삭제·전체 조회 (최상위)
-// - manager(과장)·deputy(부과장): 모든 팀 조회 + 전 팀 등록·수정 + 가입 승인 (삭제 ✕)
-// - secretary(서기): 모든 팀 조회 + 전 팀 등록·수정 (가입 승인·삭제 ✕)
-// - leader(팀장): 소속 팀 등록·수정·삭제
-// - vice_leader(부팀장): 소속 팀 등록·수정 (삭제 ✕)
-// - member(팀원): 소속 팀 조회·일정 등록·자원 예약 + 본인이 만든 일정 수정·삭제 + 본인 담당 업무 상태 변경
+// 사진과 직급 체계 — 부장단(부장·서무·총교관) → 과장·부과장 → 과원
+// 역할 키는 문화부 시절 값을 유지하고 표시명만 바꿨다 (DB 마이그레이션 없이 전환).
+// - admin(시스템 관리자): 계정·설정 관리, 전체 권한
+// - 부장단 = manager(부장)·secretary(서무)·deputy(총교관): 전체 조회·등록·수정, TODO 지시, 가입 승인 (삭제 ✕)
+// - leader(과장): 과 일정 등록·수정·삭제, 지시 수신·배분, 과원 개인일정 열람, 가입 승인
+// - vice_leader(부과장): 과 일정 등록·수정 (삭제 ✕)
+// - member(과원): 일정 등록·장비 예약 + 본인이 만든 일정 수정·삭제 + 본인 담당 업무 상태 변경
+// "팀"은 사진과 하나만 남아(lib/dept.ts) 아래의 inTeam 검사는 곧 "사진과 소속" 검사다.
 
 export type Role = "admin" | "manager" | "deputy" | "secretary" | "leader" | "vice_leader" | "member";
 
@@ -16,20 +17,26 @@ export type SessionUser = {
   status: "pending" | "active" | "disabled";
 };
 
-const ORG_ROLES: Role[] = ["admin", "manager", "deputy", "secretary"]; // 전체 팀 조회
-const ALL_TEAM_EDITORS: Role[] = ["admin", "manager", "deputy", "secretary"]; // 전 팀 등록·수정
-const APPROVERS: Role[] = ["admin", "manager", "deputy"]; // 가입 승인
+export const BOARD_ROLES: Role[] = ["manager", "secretary", "deputy"]; // 부장단
+const ORG_ROLES: Role[] = ["admin", ...BOARD_ROLES]; // 전체 조회
+const ALL_TEAM_EDITORS: Role[] = ["admin", ...BOARD_ROLES]; // 전체 등록·수정
+const APPROVERS: Role[] = ["admin", ...BOARD_ROLES, "leader"]; // 가입 승인 (과장 포함)
 const TEAM_EDITORS: Role[] = ["leader", "vice_leader"]; // 소속 팀 등록·수정
 
 export const ROLE_LABEL: Record<Role, string> = {
-  admin: "최고관리자",
-  manager: "과장",
-  deputy: "부과장",
-  secretary: "서기",
-  leader: "팀장",
-  vice_leader: "부팀장",
-  member: "팀원",
+  admin: "시스템 관리자",
+  manager: "부장",
+  secretary: "서무",
+  deputy: "총교관",
+  leader: "과장",
+  vice_leader: "부과장",
+  member: "과원",
 };
+// 직급 표시 순서 (선택 목록·정렬용)
+export const ROLE_ORDER: Role[] = ["manager", "secretary", "deputy", "leader", "vice_leader", "member", "admin"];
+export function isBoardRole(role: Role) {
+  return BOARD_ROLES.includes(role);
+}
 export function isTeamRole(role: Role) {
   return role === "leader" || role === "vice_leader" || role === "member";
 }
@@ -80,7 +87,7 @@ export function canManageEvents(u: SessionUser) {
 }
 export function canDeleteEvent(u: SessionUser, createdById: string) {
   if (!isActive(u)) return false;
-  if (APPROVERS.includes(u.role)) return true; // admin·과장·부과장
+  if (APPROVERS.includes(u.role)) return true; // admin·부장단·과장
   return String(u.id) === String(createdById); // 그 외엔 본인이 만든 것만
 }
 
@@ -130,13 +137,13 @@ export function canSubmitAssignment(u: SessionUser, teamId: string) {
 }
 
 // ── 개인 캘린더 ──
-// 본인 + 같은 팀 "팀장" + admin + (과장·부과장·서기는 "팀장" 것만) 열람. 수정은 본인만.
+// 본인 + 과장(과원 것) + admin + (부장단은 과장 것만) 열람. 수정은 본인만.
 export function canViewPersonalCalendar(viewer: SessionUser, target: { id: string; teamId: string | null; role?: Role }) {
   if (!isActive(viewer)) return false;
   if (String(viewer.id) === String(target.id)) return true;
   if (viewer.role === "admin") return true;
-  // 과장·부과장·서기 → 팀장 개인 캘린더만
-  if (["manager", "deputy", "secretary"].includes(viewer.role) && target.role === "leader") return true;
+  // 부장단 → 과장 개인 캘린더만
+  if (BOARD_ROLES.includes(viewer.role) && target.role === "leader") return true;
   return viewer.role === "leader" && viewer.teamId != null && target.teamId != null
     && String(viewer.teamId) === String(target.teamId);
 }
@@ -160,10 +167,10 @@ export function canEditFeedback(u: SessionUser, createdById: string) {
 }
 
 export function canApproveUsers(u: SessionUser) {
-  return isActive(u) && APPROVERS.includes(u.role); // admin·과장·부과장 (서기 ✕)
+  return isActive(u) && APPROVERS.includes(u.role); // admin·부장단·과장
 }
 
-// 부재·휴가 등록/삭제 — 본인 / 전사 편집자(admin·과장·부과장·서기) / 팀장·부팀장(자기 팀원)
+// 부재·휴가 등록/삭제 — 본인 / admin·부장단 / 과장·부과장
 export function canManageAbsence(u: SessionUser, target: { id: string; teamId: string | null }) {
   if (!isActive(u)) return false;
   if (String(u.id) === String(target.id)) return true;
@@ -173,12 +180,12 @@ export function canManageAbsence(u: SessionUser, target: { id: string; teamId: s
 }
 
 export function canManageTeams(u: SessionUser) {
-  return isActive(u) && u.role === "admin"; // 시스템 관리 = 최고관리자만
+  return isActive(u) && u.role === "admin"; // 시스템 관리 = 시스템 관리자만
 }
 export function canReserve(u: SessionUser, teamId: string) {
   return canCreateTask(u, teamId);
 }
-// 장비 반납 처리 — 예약자 본인, admin·과장·부과장, 또는 그 장비의 관리 담당자
+// 장비 반납 처리 — 예약자 본인, admin·부장단·과장, 또는 그 장비 담당자
 export function canMarkReturned(u: SessionUser, reservedById: string, resourceManagerId?: string | null) {
   if (!isActive(u)) return false;
   if (APPROVERS.includes(u.role)) return true;

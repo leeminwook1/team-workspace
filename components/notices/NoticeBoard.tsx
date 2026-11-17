@@ -66,7 +66,7 @@ export default function NoticeBoard({ canCreate }: { canCreate: boolean }) {
       <div className="page-head">
         <div>
           <h1 className="page-title">공지사항</h1>
-          <p className="page-sub">문화과 전체에 알리는 소식이에요. 새 공지가 올라오면 알림이 가요.</p>
+          <p className="page-sub">사진과 전체에 알리는 소식이에요. 새 공지가 올라오면 알림이 가요.</p>
         </div>
         {canCreate && (
           <button className="btn btn-primary btn-sm" onClick={() => setCreateOpen(true)}>

@@ -62,17 +62,19 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     { href: "/home", label: "홈", icon: "home" },
     { href: "/calendar", label: "달력", icon: "calendar" },
     { href: "/personal", label: "내 캘린더", icon: "userLine" },
-    ...(showTeamBoard ? [{ href: "/team", label: "팀 현황", icon: "users" as const }] : []),
+    { href: "/pipeline", label: "촬영 진행", icon: "check" },
+    ...(showTeamBoard ? [{ href: "/team", label: "과원 현황", icon: "users" as const }] : []),
     { href: "/resources", label: "자원 예약", icon: "resources" },
     { href: "/events", label: "행사 관리", icon: "board" },
     { href: "/assignments", label: "과제", icon: "camera" },
+    ...(showTeamBoard ? [{ href: "/stats", label: "통계", icon: "chart" as const }] : []),
     ...(canUseDirectives(user) ? [{ href: "/directives", label: "TODO", icon: "inbox" as const, badge: todoBadge }] : []),
     { href: "/notices", label: "공지사항", icon: "megaphone", badge: noticeBadge },
     { href: "/feedback", label: "피드백", icon: "chat" },
     ...(showAdmin ? [{ href: "/admin", label: "관리자", icon: "admin" as const }] : []),
   ];
 
-  const roleLabel = ROLE_LABEL[user.role] ?? "팀원";
+  const roleLabel = ROLE_LABEL[user.role] ?? "과원";
 
   return (
     <div className="shell">
@@ -80,9 +82,8 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       <aside className="side">
         <div className="side-brand-row">
           <Link href="/home" className="brand" aria-label="홈으로">
-            <span className="glyph">C</span>
-            <span className="word">C<b>HQ</b></span>
-            <span className="brand-tag">문화과</span>
+            <span className="glyph">사</span>
+            <span className="word">사진<b>과</b></span>
           </Link>
           <div className="side-brand-actions">
             <ThemeToggle />
@@ -112,9 +113,8 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       {/* ── 모바일 상단바 ── */}
       <header className="topbar-m">
         <Link href="/home" className="brand" aria-label="홈으로">
-          <span className="glyph">C</span>
-          <span className="word">C<b>HQ</b></span>
-          <span className="brand-tag">문화과</span>
+          <span className="glyph">사</span>
+          <span className="word">사진<b>과</b></span>
         </Link>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <GlobalSearch compact />

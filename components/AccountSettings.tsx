@@ -9,7 +9,7 @@ const PREF_ITEMS: { key: keyof NotifyPrefs; label: string; desc: string }[] = [
   { key: "assign", label: "담당 배정", desc: "업무·행사 담당자로 지정될 때" },
   { key: "due", label: "마감 리마인더", desc: "오늘 마감 업무 아침 알림" },
   { key: "late", label: "지연 리마인더", desc: "마감이 지난 업무 아침 알림" },
-  { key: "directive", label: "지시(TODO)", desc: "우리 팀에 지시가 내려올 때 (팀장·부팀장)" },
+  { key: "directive", label: "지시(TODO)", desc: "부장단 TODO가 내려올 때 (과장·부과장)" },
   { key: "equip", label: "장비 예약·반납", desc: "장비 예약·반납·미반납·수령 예정 알림" },
 ];
 

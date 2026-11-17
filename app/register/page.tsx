@@ -6,9 +6,9 @@ import { Icon } from "@/components/icons";
 
 type TeamOpt = { id: string; name: string; color: string };
 const ROLE_OPTS = [
-  { value: "member", label: "팀원" },
-  { value: "vice_leader", label: "부팀장" },
-  { value: "leader", label: "팀장" },
+  { value: "member", label: "과원" },
+  { value: "vice_leader", label: "부과장" },
+  { value: "leader", label: "과장" },
 ];
 
 export default function RegisterPage() {
@@ -58,7 +58,7 @@ export default function RegisterPage() {
           <div className="icon-badge ok"><Icon name="check" size={30} strokeWidth={2.4} /></div>
           <h1>가입 신청 완료</h1>
           <p className="sub">
-            선택하신 팀·역할로 문화과 관리자가 승인하면
+            선택하신 직급으로 사진과 관리자가 승인하면
             <br />
             로그인 후 이용할 수 있습니다.
           </p>
@@ -72,12 +72,11 @@ export default function RegisterPage() {
     <div className="auth-wrap">
       <div className="card auth-card">
         <div className="brand" style={{ marginBottom: 22 }}>
-          <span className="glyph">C</span>
-          <span className="word">C<b>HQ</b></span>
-          <span className="brand-tag">문화과</span>
+          <span className="glyph">사</span>
+          <span className="word">사진<b>과</b></span>
         </div>
         <h1>가입 신청</h1>
-        <p className="sub">문화과 구성원이라면 누구나 — 승인 후 이용할 수 있어요.</p>
+        <p className="sub">사진과 구성원이라면 누구나 — 승인 후 이용할 수 있어요.</p>
         <form onSubmit={onSubmit}>
           <div className="field">
             <label htmlFor="name">이름</label>
@@ -100,22 +99,12 @@ export default function RegisterPage() {
               onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8}
             />
           </div>
-          {teams.length > 0 && (
-            <div className="form-grid-2">
-              <div className="field">
-                <label htmlFor="team">소속 팀</label>
-                <select id="team" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
-                  {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="role">역할</label>
-                <select id="role" value={role} onChange={(e) => setRole(e.target.value)}>
-                  {ROLE_OPTS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
-            </div>
-          )}
+          <div className="field">
+            <label htmlFor="role">직급 (부장단은 승인 시 관리자가 지정해요)</label>
+            <select id="role" value={role} onChange={(e) => setRole(e.target.value)}>
+              {ROLE_OPTS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          </div>
           {err && <p className="err-msg">{err}</p>}
           <button className="btn btn-primary btn-lg" disabled={loading}>
             {loading ? "신청 중…" : "가입 신청하기"}

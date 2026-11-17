@@ -1,15 +1,14 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
-import { connectDB } from "@/lib/mongodb";
-import { Team } from "@/models/Team";
+import { getDept } from "@/lib/dept";
 import { canViewAllTeams, type SessionUser } from "@/lib/permissions";
 import { LazyTeamBoard as TeamBoard } from "@/components/LazyLoad";
 import AutoRefresh from "@/components/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
-// 팀 현황 — 팀장·부팀장: 자기 팀 / admin·과장·부과장·서기: 팀 선택. 팀원 개인일정 겹쳐보기.
+// 과원 현황 — 과장·부과장·부장단·admin. 과원 개인일정 겹쳐보기·부재 관리 (사진과 하나만)
 export default async function TeamPage({ searchParams }: { searchParams: { team?: string } }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -19,24 +18,19 @@ export default async function TeamPage({ searchParams }: { searchParams: { team?
   const isLead = user.role === "leader" || user.role === "vice_leader";
   if (!isOrg && !isLead) redirect("/home");
 
-  await connectDB();
-  const teams: any[] = await Team.find({ isActive: true }).sort({ createdAt: 1 }).lean();
-
-  let teamId: string | null = null;
-  if (isOrg) teamId = searchParams.team || (teams[0] ? String(teams[0]._id) : null);
-  else teamId = user.teamId;
-  if (!teamId) redirect("/home");
-
-  const team = teams.find((t) => String(t._id) === teamId);
+  void searchParams;
+  const dept = await getDept();
+  if (!dept) redirect("/home");
+  const teamId = dept.id;
 
   return (
     <>
       <AutoRefresh />
       <TeamBoard
-        teamName={team?.name ?? ""}
-        teamColor={team?.color ?? "#3182f6"}
+        teamName={dept.name}
+        teamColor={dept.color}
         teamId={teamId}
-        teams={isOrg ? teams.map((t) => ({ id: String(t._id), name: t.name, color: t.color })) : []}
+        teams={[]}
       />
     </>
   );

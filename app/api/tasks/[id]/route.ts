@@ -13,6 +13,7 @@ import { notify } from "@/lib/notify";
 import { filterValidAssignees } from "@/lib/assignees";
 import { Reservation } from "@/models/Reservation";
 import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, cancelTaskReservations, returnTaskReservations, findUnavailableResources, unavailableMessage } from "@/lib/taskReservations";
+import { serializePipeline } from "@/lib/pipeline";
 
 // 변경 알림 본문용 KST 포맷
 const fmtDateTime = (dt: Date | string) =>
@@ -69,6 +70,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       location: t.location,
       recurrenceId: t.recurrenceId ? String(t.recurrenceId) : null,
       program: (t.program ?? []).map((p: any) => ({ id: String(p._id), time: p.time ?? "", title: p.title, note: p.note ?? "" })),
+      pipeline: serializePipeline(t.pipeline),
       // 반복 시리즈 전체 회차 수 — 전체 삭제 확인 문구용
       seriesCount: t.recurrenceId ? await Task.countDocuments({ recurrenceId: t.recurrenceId }) : 0,
     },
@@ -111,10 +113,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return json({ error: "이 업무를 수정할 권한이 없습니다." }, 403);
   }
 
-  // 팀을 변경하는 경우, 새 팀 전부에 등록 권한이 있어야 함 (접근 불가 팀 태깅 방지)
-  if (d.teamIds !== undefined && !canCreateTaskInAll(user, d.teamIds)) {
-    return json({ error: "선택한 팀 중 권한이 없는 팀이 있습니다." }, 403);
-  }
+  // 사진과 전용 — 소속 팀은 바꿀 수 없다 (클라이언트 값 무시)
+  delete (d as any).teamIds;
 
   if (d.title !== undefined) task.title = d.title;
   if (d.description !== undefined) task.description = d.description;
@@ -287,7 +287,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
   const teamIds = (task.teamIds ?? []).map((t: any) => String(t));
   if (!canDeleteTaskDoc(user, teamIds, task.createdBy ? String(task.createdBy) : null)) {
-    return json({ error: "삭제는 팀장·최고관리자 또는 본인이 만든 일정만 가능합니다." }, 403);
+    return json({ error: "삭제는 과장·시스템 관리자 또는 본인이 만든 일정만 가능합니다." }, 403);
   }
 
   // 소프트 삭제 — 30일 내 휴지통에서 복구 가능, 이후 크론이 완전 삭제

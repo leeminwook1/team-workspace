@@ -74,7 +74,7 @@ export async function POST(req: Request) {
   const target: any = await User.findById(d.userId).select("name teamId status").lean();
   if (!target || target.status !== "active") return json({ error: "대상을 찾을 수 없습니다." }, 404);
   if (!canManageAbsence(user, { id: String(target._id), teamId: target.teamId ? String(target.teamId) : null })) {
-    return json({ error: "부재 등록 권한이 없습니다. (본인·팀장·과장단)" }, 403);
+    return json({ error: "부재 등록 권한이 없습니다. (본인·과장·부과장·부장단)" }, 403);
   }
 
   // 반차는 하루짜리로 고정
