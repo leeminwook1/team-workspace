@@ -78,9 +78,9 @@ export default function RsvpPanel({ taskId, initialOn, canEdit, onChanged }: {
   const needReason = sum.mine === "no" || sum.mine === "maybe";
 
   return (
-    <div className="rv">
+    <div className="rsvp-panel">
       <div className="ps-head">
-        <div className="detail-status-label" style={{ margin: 0 }}>참석 확인{!sum.on && <span className="rv-closed">마감됨</span>}</div>
+        <div className="detail-status-label" style={{ margin: 0 }}>참석 확인{!sum.on && <span className="rsvp-closed">마감됨</span>}</div>
         {canEdit && (sum.on ? (
           <button type="button" className="rsv-linkbtn" disabled={busy}
             onClick={async () => {
@@ -93,21 +93,21 @@ export default function RsvpPanel({ taskId, initialOn, canEdit, onChanged }: {
         ))}
       </div>
 
-      {sum.allYes && <p className="rv-allyes">🎉 전원 참석 ({sum.total}명)</p>}
+      {sum.allYes && <p className="rsvp-allyes">🎉 전원 참석 ({sum.total}명)</p>}
 
       {sum.on && sum.isTarget && (
-        <div className="rv-mine">
-          <div className="seg rv-seg" role="radiogroup" aria-label="내 응답">
+        <div className="rsvp-mine">
+          <div className="seg rsvp-seg" role="radiogroup" aria-label="내 응답">
             {(["yes", "no", "maybe"] as Status[]).map((s) => (
               <button key={s} type="button" role="radio" aria-checked={sum.mine === s} disabled={busy}
-                className={`${sum.mine === s ? "on" : ""} rv-opt-${s}`} onClick={() => call("POST", { status: s, reason })}>
+                className={`${sum.mine === s ? "on" : ""} rsvp-opt-${s}`} onClick={() => call("POST", { status: s, reason })}>
                 {EMOJI[s]} {LABEL[s]}
               </button>
             ))}
           </div>
-          {!sum.mine && <p className="rv-hint">아직 응답하지 않았어요.</p>}
+          {!sum.mine && <p className="rsvp-hint">아직 응답하지 않았어요.</p>}
           {needReason && (
-            <div className="rv-reason">
+            <div className="rsvp-reason">
               <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200}
                 placeholder={sum.mine === "no" ? "불참 사유 (선택)" : "메모 (선택) — 예: 늦게 도착"} />
               <button type="button" className="btn btn-line btn-sm" disabled={busy}
@@ -117,29 +117,29 @@ export default function RsvpPanel({ taskId, initialOn, canEdit, onChanged }: {
         </div>
       )}
 
-      <div className="rv-bar" role="img" aria-label={`참석 ${sum.yes}, 불참 ${sum.no}, 미정 ${sum.maybe}, 미응답 ${sum.none}`}>
-        {sum.yes > 0 && <span className="rv-yes" style={{ width: pct(sum.yes) }} />}
-        {sum.no > 0 && <span className="rv-no" style={{ width: pct(sum.no) }} />}
-        {sum.maybe > 0 && <span className="rv-maybe" style={{ width: pct(sum.maybe) }} />}
+      <div className="rsvp-bar" role="img" aria-label={`참석 ${sum.yes}, 불참 ${sum.no}, 미정 ${sum.maybe}, 미응답 ${sum.none}`}>
+        {sum.yes > 0 && <span className="rsvp-yes" style={{ width: pct(sum.yes) }} />}
+        {sum.no > 0 && <span className="rsvp-no" style={{ width: pct(sum.no) }} />}
+        {sum.maybe > 0 && <span className="rsvp-maybe" style={{ width: pct(sum.maybe) }} />}
       </div>
-      <div className="rv-counts">
-        <span><i className="rv-dot rv-yes" />참석 <b>{sum.yes}</b></span>
-        <span><i className="rv-dot rv-no" />불참 <b>{sum.no}</b></span>
-        <span><i className="rv-dot rv-maybe" />미정 <b>{sum.maybe}</b></span>
-        <span><i className="rv-dot rv-none" />미응답 <b>{sum.none}</b></span>
-        <span className="rv-total">/ {sum.total}명</span>
+      <div className="rsvp-counts">
+        <span><i className="rsvp-dot rsvp-yes" />참석 <b>{sum.yes}</b></span>
+        <span><i className="rsvp-dot rsvp-no" />불참 <b>{sum.no}</b></span>
+        <span><i className="rsvp-dot rsvp-maybe" />미정 <b>{sum.maybe}</b></span>
+        <span><i className="rsvp-dot rsvp-none" />미응답 <b>{sum.none}</b></span>
+        <span className="rsvp-total">/ {sum.total}명</span>
       </div>
 
-      <div className="rv-groups">
+      <div className="rsvp-groups">
         {groups.map(([s, label]) => {
           const list = people.filter((p) => p.status === s);
           if (list.length === 0) return null;
           return (
-            <div className="rv-group" key={label}>
-              <div className="rv-group-label">{label} {list.length}</div>
-              <div className="rv-names">
+            <div className="rsvp-group" key={label}>
+              <div className="rsvp-group-label">{label} {list.length}</div>
+              <div className="rsvp-names">
                 {list.map((p) => (
-                  <span key={p.id} className={`rv-name${s ? ` rv-name-${s}` : ""}`} title={p.reason || undefined}>
+                  <span key={p.id} className={`rsvp-name${s ? ` rsvp-name-${s}` : ""}`} title={p.reason || undefined}>
                     {p.name}{p.reason && <em> · {p.reason}</em>}
                   </span>
                 ))}
@@ -156,13 +156,13 @@ export default function RsvpPanel({ taskId, initialOn, canEdit, onChanged }: {
             onChange={(v) => call("PATCH", { deadline: v ? new Date(`${v}T23:59:00+09:00`).toISOString() : null })} />
         ) : <b>{sum.deadline ? kstDay(sum.deadline).slice(5).replace("-", "/") : "없음"}</b>}
         {canEdit && sum.none > 0 && (
-          <button type="button" className="btn btn-line btn-sm rv-remind" disabled={busy}
+          <button type="button" className="btn btn-line btn-sm rsvp-remind" disabled={busy}
             onClick={async () => { const d = await call("PATCH", { remind: true }); if (d) setMsg(`${d.sent}명에게 다시 알렸어요.`); }}>
             미응답 {sum.none}명에게 다시 알림
           </button>
         )}
       </div>}
-      {msg && <p className="rv-msg">{msg}</p>}
+      {msg && <p className="rsvp-msg">{msg}</p>}
       {err && <p className="err-msg" style={{ marginTop: 6 }}>{err}</p>}
     </div>
   );
