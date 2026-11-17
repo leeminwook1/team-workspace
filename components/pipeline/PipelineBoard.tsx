@@ -19,16 +19,18 @@ const DAY = 86_400_000;
 const md = (iso: string | Date) => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
 
-// 카드 경고 — 보고 마감 지남 / 임박, 촬영 끝났는데 백업 안 함
+const daysLeft = (iso: string | Date) => { const d = new Date(iso); d.setHours(0, 0, 0, 0); return Math.round((d.getTime() - startOfToday()) / DAY); };
+const kstDay = (v: string | Date | null) => (v ? new Date(new Date(v).getTime() + 9 * 3600_000).toISOString().slice(0, 10) : "");
+
+// 카드 경고 — 보고·셀렉 마감 지남 / 임박, 촬영 끝났는데 백업 안 함 (지연 > 임박, 보고 > 셀렉 순)
 function alertOf(it: Item): { text: string; tone: "late" | "soon" } | null {
   if (!it.next) return null;
-  const today = startOfToday();
-  if (it.pipeline.reportDue) {
-    const due = new Date(it.pipeline.reportDue); due.setHours(0, 0, 0, 0);
-    const days = Math.round((due.getTime() - today) / DAY);
-    if (days < 0) return { text: `보고 ${-days}일 지연`, tone: "late" };
-    if (days <= 2) return { text: days === 0 ? "오늘 보고 마감" : `보고 D-${days}`, tone: "soon" };
-  }
+  const rep = it.pipeline.reportDue ? daysLeft(it.pipeline.reportDue) : null;
+  const sel = it.pipeline.selectDue && !it.pipeline.steps.select ? daysLeft(it.pipeline.selectDue) : null;
+  if (rep !== null && rep < 0) return { text: `보고 ${-rep}일 지연`, tone: "late" };
+  if (sel !== null && sel < 0) return { text: `셀렉 ${-sel}일 지연`, tone: "late" };
+  if (rep !== null && rep <= 2) return { text: rep === 0 ? "오늘 보고 마감" : `보고 D-${rep}`, tone: "soon" };
+  if (sel !== null && sel <= 1) return { text: sel === 0 ? "오늘 셀렉 마감" : `셀렉 D-${sel}`, tone: "soon" };
   if (it.next === "backup" && Date.now() - new Date(it.endDate).getTime() > 2 * DAY) {
     return { text: "백업 대기 중", tone: "soon" };
   }
@@ -74,6 +76,21 @@ export default function PipelineBoard() {
     }
   }
 
+  async function setSelectDue(it: Item, day: string) {
+    setBusy(it.id); setErr("");
+    try {
+      const res = await fetch(`/api/tasks/${it.id}/pipeline`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectDue: day ? new Date(`${day}T23:59:00+09:00`).toISOString() : null }),
+      });
+      const d = await res.json().catch(() => ({} as any));
+      if (!res.ok) { setErr(d.error ?? "처리하지 못했어요."); return; }
+      load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const shown = useMemo(
     () => (mineOnly ? items.filter((it) => it.assignees.some((a) => a.id === me)) : items),
     [items, mineOnly, me]
@@ -89,7 +106,7 @@ export default function PipelineBoard() {
       <div className="page-head">
         <div>
           <h1 className="page-title">촬영 진행</h1>
-          <p className="page-sub">촬영 → 백업 → 셀렉 → 보정 → 보고. 다음 단계 버튼을 눌러 진행 상황을 함께 맞춰요.</p>
+          <p className="page-sub">촬영 → 백업 → 셀렉 → 보정 → 보고. 다음 단계 버튼을 눌러 진행 상황을 함께 맞춰요. 셀렉을 바로 못 하면 카드의 <b>+ 셀렉 마감</b>에 날짜를 적어두세요.</p>
         </div>
         <button className={`chip chip-btn${mineOnly ? " sel" : ""}`} onClick={() => setMineOnly((v) => !v)}>
           <Icon name="userLine" size={13} /> 내 담당만
@@ -131,6 +148,20 @@ export default function PipelineBoard() {
                         ))}
                       </div>
                       {alert && <span className={`asg-due asg-due-${alert.tone}`}>{alert.text}</span>}
+                      {/* 셀렉 마감 — 셀렉 전까지 표시. 바로 못 할 때 담당자가 날짜를 적어둔다 */}
+                      {it.next && !it.pipeline.steps.select && (it.canStep || it.pipeline.selectDue) && (
+                        <label className={`pl-seldue${it.pipeline.selectDue ? " set" : ""}`}>
+                          <span>{it.pipeline.selectDue ? `셀렉 마감 ${md(it.pipeline.selectDue)}` : "+ 셀렉 마감"}</span>
+                          {it.canStep && (
+                            <input
+                              type="date" value={kstDay(it.pipeline.selectDue)} disabled={busy === it.id}
+                              aria-label="셀렉 마감일"
+                              onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* 일부 브라우저 미지원 */ } }}
+                              onChange={(e) => setSelectDue(it, e.target.value)}
+                            />
+                          )}
+                        </label>
+                      )}
                       {it.canStep && (
                         <div className="pl-card-actions">
                           {it.next ? (

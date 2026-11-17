@@ -16,6 +16,7 @@ export type PipelineState = {
   on: boolean;
   steps: Partial<Record<StepKey, string | Date | null>>; // 완료 시각 (null = 미완료)
   reportDue: string | Date | null; // 보고 마감
+  selectDue: string | Date | null; // 셀렉 마감 (선택)
 };
 
 /** 다음에 할 단계 (전부 끝났으면 null) */
@@ -47,5 +48,6 @@ export function serializePipeline(p: any): PipelineState | null {
     on: true,
     steps: Object.fromEntries(STEP_KEYS.map((k) => [k, p.steps?.[k] ?? null])),
     reportDue: p.reportDue ?? null,
+    selectDue: p.selectDue ?? null,
   };
 }

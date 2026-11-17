@@ -342,7 +342,26 @@ export async function GET(req: Request) {
     reportNotified += to.length;
   }
 
+  // 셀렉 마감 — 오늘 마감 / 어제 마감인데 셀렉 안 됨 → 담당자(없으면 등록자)
+  const sel: any[] = await Task.find({
+    "pipeline.on": true, "pipeline.steps.select": null,
+    "pipeline.selectDue": { $gte: yStart, $lt: end },
+  }).select("title assignees createdBy pipeline").lean();
+  let selectNotified = 0;
+  for (const t of sel) {
+    const overdue = new Date(t.pipeline.selectDue) < start;
+    const to = (t.assignees?.length ? t.assignees : [t.createdBy]).filter(Boolean).map(String);
+    await notify(to, {
+      type: overdue ? "late" : "due",
+      title: overdue ? "🗂 셀렉 마감이 지났어요" : "🗂 오늘 셀렉 마감인 촬영이 있어요",
+      body: t.title,
+      link: "/pipeline",
+    });
+    selectNotified += to.length;
+  }
+
   return json({
+    selectDue: sel.length, selectNotified,
     reportDue: pl.length, reportNotified,
     tasksDue: tasks.length, taskNotified, directivesDue: dirs.length, dirNotified,
     eventItemsDue: events.length, eventNotified,

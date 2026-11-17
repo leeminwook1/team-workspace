@@ -11,10 +11,14 @@ const PersonalEventSchema = new Schema(
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
     allDay: { type: Boolean, default: true },
+    // 반복 — 생성 시 종료일까지 회차를 모두 만들어 둔다 (최대 1년). 같은 시리즈는 recurrenceId로 묶음
+    recurrenceId: { type: Schema.Types.ObjectId, default: null },
+    repeatFreq: { type: String, enum: ["daily", "weekly", "biweekly", "monthly", null], default: null },
   },
   { timestamps: true }
 );
 
 PersonalEventSchema.index({ userId: 1, startDate: 1 });
+PersonalEventSchema.index({ recurrenceId: 1, startDate: 1 });
 
 export const PersonalEvent = models.PersonalEvent || model("PersonalEvent", PersonalEventSchema);

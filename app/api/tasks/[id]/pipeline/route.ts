@@ -10,6 +10,7 @@ import { STEP_KEYS, STEP_LABEL, serializePipeline, defaultReportDue, type StepKe
 // PATCH /api/tasks/:id/pipeline — 촬영 진행 관리
 //  { step, done }      단계 체크/해제 — 담당자·등록자·과장·부과장·부장단
 //  { on, reportDue }   진행 관리 켜기/끄기·보고 마감 변경 — 일정 수정 권한자
+//  { selectDue }       셀렉 마감 지정/해제 — 단계 체크 권한자(담당자 포함)
 // "보고"까지 끝나면 일정을 완료 처리하고 연동 장비를 자동 반납한다.
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   { const bad = badId(params.id); if (bad) return bad; }
@@ -40,6 +41,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       if (d && isNaN(d.getTime())) return json({ error: "날짜 형식이 잘못됐습니다." }, 400);
       task.pipeline.reportDue = d;
     }
+  }
+
+  // 셀렉 마감 — 바로 셀렉을 못 할 때 담당자가 기한을 적어둔다
+  if (body.selectDue !== undefined) {
+    if (!canStep) return json({ error: "셀렉 마감을 정할 권한이 없습니다. (담당자·과장)" }, 403);
+    if (!task.pipeline?.on) return json({ error: "진행 관리가 꺼져 있어요." }, 409);
+    const d = body.selectDue ? new Date(body.selectDue) : null;
+    if (d && isNaN(d.getTime())) return json({ error: "날짜 형식이 잘못됐습니다." }, 400);
+    task.pipeline.selectDue = d;
   }
 
   // 단계 체크

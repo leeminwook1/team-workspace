@@ -1959,7 +1959,10 @@ function PipelineStepper({ taskId, initial, canStep, canEdit, onChanged }: {
 
   const next = nextStep(p);
   const fmt = (v: any) => { const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()}`; };
-  const dueStr = p.reportDue ? new Date(p.reportDue).toISOString().slice(0, 10) : "";
+  // 날짜 입력값은 KST 기준 YYYY-MM-DD
+  const kstDay = (v: any) => (v ? new Date(new Date(v).getTime() + 9 * 3600_000).toISOString().slice(0, 10) : "");
+  const dueStr = kstDay(p.reportDue);
+  const selStr = kstDay(p.selectDue);
   return (
     <div className="ps">
       <div className="ps-head">
@@ -1984,6 +1987,15 @@ function PipelineStepper({ taskId, initial, canStep, canEdit, onChanged }: {
           );
         })}
       </div>
+      {!p.steps.select && (
+        <div className="ps-due">
+          셀렉 마감
+          {canStep ? (
+            <input type="date" value={selStr} disabled={busy} aria-label="셀렉 마감" onChange={(e) => send({ selectDue: e.target.value ? new Date(`${e.target.value}T23:59:00+09:00`).toISOString() : null })} />
+          ) : <b>{selStr ? fmt(p.selectDue) : "없음"}</b>}
+          {canStep && !selStr && <em className="ps-due-hint">바로 못 하면 날짜를 적어두세요</em>}
+        </div>
+      )}
       <div className="ps-due">
         보고 마감
         {canEdit ? (

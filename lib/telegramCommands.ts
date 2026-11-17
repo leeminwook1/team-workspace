@@ -35,13 +35,13 @@ const HELP = `📖 사용법
   · 시간: 14-16, 14:00-16:00, 14시-16시 (없으면 종일)
   · 옵션: #카테고리 !긴급 !높음 장소:내용
   · 담당: 장비: 는 맨 뒤에 — 쉼표로 여러 명·여러 개
-  · 줄을 바꿔 여러 개 적으면 한 번에 등록 (최대 10건)
+  · 줄을 바꿔 여러 개 적으면 한 번에 등록 (최대 30건)
   · 비슷한 일정이 이미 있으면 알려줘요 — 같은 일정이면 버튼으로 팀만 추가,
     다른 일정이면 제목 앞에 ! 를 붙여 등록 (예: /일정 !국화축제 …)
   예) /일정 노방활동 금요일 14-16 #촬영 담당:이민욱 장비:캐논 R6(7-1)
 
 /개인 제목 날짜 [시간] [장소:내용] — 내 캘린더에만 표시
-  · 줄을 바꿔 여러 개 적으면 한 번에 등록 (최대 10건)
+  · 줄을 바꿔 여러 개 적으면 한 번에 등록 (최대 30건)
   예) /개인 병원 예약 내일 15-16
 
 /예약 장비명[, 장비명2] 날짜 [시간]
@@ -272,7 +272,8 @@ async function linkAccount(chatId: string, code: string): Promise<string> {
 }
 
 // ── 여러 줄 일괄 등록 — /일정·/개인 을 줄마다 한 건씩 처리 ──
-const BATCH_MAX = 10;
+const BATCH_MAX = 30;
+const TG_TEXT_MAX = 3900; // 텔레그램 메시지 4096자 제한 (여유)
 async function createBatch(args: string, one: (line: string) => Promise<TgReply>): Promise<TgReply> {
   // 줄 앞에 명령어를 다시 붙여 보내도 허용 (여러 명령을 통째로 붙여넣는 경우)
   const lines = args.split("\n")
@@ -311,7 +312,20 @@ async function createBatch(args: string, one: (line: string) => Promise<TgReply>
     : `📦 <b>${lines.length}건 중 ${ok}건 등록</b> — 실패한 줄만 고쳐서 다시 보내면 돼요.${
         warns > 0 ? "\n중복 경고(⚠️)는 같은 일정이면 버튼으로 참여, 다른 일정이면 제목 앞에 ! 를 붙여 주세요." : ""
       }`;
-  return { text: `${head}\n\n${parts.join("\n\n")}`, html: true, buttons: buttons.length > 0 ? buttons : undefined };
+  // 건수가 많으면 4096자 제한에 걸리지 않게 줄인다 — 먼저 각 항목을 첫 줄만, 그래도 길면 뒤를 생략 (항목 경계에서만 자름: HTML 태그 보존)
+  let body = parts.join("\n\n");
+  if (head.length + body.length > TG_TEXT_MAX) body = parts.map((p) => p.split("\n")[0]).join("\n");
+  if (head.length + body.length > TG_TEXT_MAX) {
+    const short = parts.map((p) => p.split("\n")[0]);
+    const kept: string[] = [];
+    let len = head.length + 40;
+    for (const line of short) {
+      if (len + line.length + 1 > TG_TEXT_MAX) break;
+      kept.push(line); len += line.length + 1;
+    }
+    body = `${kept.join("\n")}\n… 외 ${short.length - kept.length}건 (웹 달력에서 확인)`;
+  }
+  return { text: `${head}\n\n${body}`, html: true, buttons: buttons.length > 0 ? buttons : undefined };
 }
 
 // ── /일정 ──
@@ -328,7 +342,7 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
 · 담당:이름,이름2 — 담당자 지정 (알림도 감)
 · 장비:캐논 R6, 배터리 — 장비 예약도 함께
 
-여러 개를 한 번에 (줄바꿈, 최대 10건)
+여러 개를 한 번에 (줄바꿈, 최대 30건)
 /일정 주간회의 내일 14-16
 회식 금요일 18-21 장소:역전할머니
 워크숍 7/20-7/22`;
@@ -479,7 +493,7 @@ async function createPersonalEvent(user: SessionUser, args: string): Promise<TgR
 · 날짜: 7/20, 오늘, 내일, 모레, 금요일, 다음주 화요일, 7/20-7/22(기간)
 · 시간: 14-16, 14:00-16:00 (없으면 종일)
 · 장소:내용 (선택)
-· 줄을 바꿔 여러 개 적으면 한 번에 등록 (최대 10건)
+· 줄을 바꿔 여러 개 적으면 한 번에 등록 (최대 30건)
 🔒 개인 일정은 내 캘린더에만 표시돼요 (과장·관리자만 열람).`;
   }
   const now = new Date();

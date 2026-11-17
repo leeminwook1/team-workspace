@@ -2843,3 +2843,16 @@ a { color: inherit; text-decoration: none; }
   .st-util { grid-template-columns: 1fr; }
   .vb { gap: 4px; }
 }
+
+/* 개인 일정 반복 */
+.pe-repeat-until { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--ink-soft); }
+.pe-repeat-until label { margin: 0; font-weight: 700; }
+.pe-repeat-until input { width: auto; flex: 0 1 170px; }
+
+/* 셀렉 마감 */
+.ps-due-hint { font-style: normal; font-size: 11.5px; color: var(--ink-faint); }
+.pl-seldue { position: relative; display: inline-flex; align-items: center; margin-top: 6px; padding: 3px 9px; border: 1px dashed var(--line-strong); border-radius: 999px; font-size: 11.5px; font-weight: 700; color: var(--ink-faint); cursor: pointer; }
+.pl-seldue:hover { border-color: var(--primary); color: var(--primary); }
+.pl-seldue.set { border-style: solid; color: var(--ink-soft); background: var(--surface-2); }
+/* 날짜 입력은 칩 전체를 덮는 투명 레이어 — 칩을 누르면 바로 달력이 열린다 */
+.pl-seldue input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; padding: 0; }

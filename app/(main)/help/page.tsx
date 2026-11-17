@@ -88,6 +88,7 @@ export default function HelpPage() {
       <Sec id="personal" icon="userLine" tint="#8b5cf6" title="내 캘린더">
         <div className="help-rows">
           <Row k="개인 일정">병원·경조사처럼 나만 보면 되는 일정을 따로 관리해요. 텔레그램 <code>/개인 병원 내일 15-16</code>으로도 등록돼요.</Row>
+          <Row k="반복">등록할 때 매일·매주·격주·매월 <b>반복</b>을 고르면 종료일(최대 1년)까지 한 번에 들어가요. 수정·삭제할 때 이 일정만 / 이후 모두 / 전체 중에 골라요.</Row>
           <Row k="공개 범위">본인, 과장(과원 것), 시스템 관리자까지만 볼 수 있어요. 부장단은 과장의 캘린더만 볼 수 있어요.</Row>
         </div>
       </Sec>
@@ -96,6 +97,7 @@ export default function HelpPage() {
         <div className="help-rows">
           <Row k="단계">촬영 → 백업 → 셀렉 → 보정 → 보고 순서로 체크해요. 뒤 단계를 체크하면 앞 단계도 함께 체크돼요.</Row>
           <Row k="켜기">분류가 <b>촬영</b>인 일정은 자동으로 켜지고, 다른 일정은 등록할 때 "촬영 진행 관리"를 켜면 돼요. 일정 상세 창에서도 바로 체크할 수 있어요.</Row>
+          <Row k="셀렉 마감">셀렉을 바로 못 하면 카드의 <b>+ 셀렉 마감</b>(또는 일정 상세)에 날짜를 적어두세요. 마감 당일·지연 시 담당자에게 알림이 가요.</Row>
           <Row k="보고 마감">기본은 촬영 끝난 뒤 7일이에요. 마감일·지연되면 담당자에게 알림이 가고, 보고를 체크하면 일정이 완료되고 연동 장비도 반납돼요.</Row>
         </div>
       </Sec>
@@ -168,7 +170,7 @@ export default function HelpPage() {
           <table className="help-tbl">
             <thead><tr><th>명령</th><th>하는 일</th></tr></thead>
             <tbody>
-              <tr><td><code>/일정 제목 날짜 시간</code></td><td>과 일정 등록 — <code>담당:이름</code> <code>장비:이름</code> 옵션, 줄바꿈으로 여러 건 한 번에. 비슷한 일정이 있으면 버튼으로 참여, 제목 앞 <code>!</code>는 강제 등록</td></tr>
+              <tr><td><code>/일정 제목 날짜 시간</code></td><td>과 일정 등록 — <code>담당:이름</code> <code>장비:이름</code> 옵션, 줄바꿈으로 최대 30건 한 번에. 비슷한 일정이 있으면 버튼으로 참여, 제목 앞 <code>!</code>는 강제 등록</td></tr>
               <tr><td><code>/개인 제목 날짜 시간</code></td><td>내 캘린더에 개인 일정 등록 — 줄바꿈으로 여러 건 한 번에</td></tr>
               <tr><td><code>/예약 장비명 날짜 시간</code></td><td>장비 예약 — 쉼표로 여러 개, 세트 이름을 쓰면 세트째</td></tr>
               <tr><td><code>/오늘 · /내일 · /이번주</code></td><td>일정 조회</td></tr>

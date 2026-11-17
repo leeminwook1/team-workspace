@@ -178,6 +178,9 @@ export const personalEventSchema = z.object({
   allDay: z.boolean().optional().default(true),
   memo: z.string().max(1000).optional().default(""),
   location: z.string().max(120).optional().default(""),
+  // 반복 — 등록할 때만 사용 (최대 1년)
+  repeat: z.enum(["none", "daily", "weekly", "biweekly", "monthly"]).optional(),
+  repeatUntil: z.string().optional(),
 });
 
 export const teamSchema = z.object({

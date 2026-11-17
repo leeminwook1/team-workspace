@@ -57,6 +57,7 @@ const TaskSchema = new Schema(
         report: { type: Schema.Types.ObjectId, ref: "User", default: null },
       },
       reportDue: { type: Date, default: null },
+      selectDue: { type: Date, default: null }, // 셀렉 마감 — 바로 못 할 때 담당자가 정해두는 기한 (선택)
     },
 
     deletedAt: { type: Date, default: null }, // 소프트 삭제 — 30일 내 복구 가능, 이후 크론이 완전 삭제

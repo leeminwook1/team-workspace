@@ -1,4 +1,6 @@
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongodb";
+import { addInterval } from "@/lib/recurrence";
 import { PersonalEvent } from "@/models/PersonalEvent";
 import { User } from "@/models/User";
 import { requireActiveUser, json } from "@/lib/api";
@@ -15,6 +17,8 @@ function serialize(e: any) {
     startDate: e.startDate,
     endDate: e.endDate,
     allDay: e.allDay,
+    recurrenceId: e.recurrenceId ? String(e.recurrenceId) : null,
+    repeatFreq: e.repeatFreq ?? null,
   };
 }
 
@@ -62,8 +66,29 @@ export async function POST(req: Request) {
   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return json({ error: "날짜 형식이 잘못됐습니다." }, 400);
   if (endDate < startDate) return json({ error: "종료가 시작보다 빠를 수 없습니다." }, 400);
 
+  const { repeat, repeatUntil, ...fields } = d;
   await connectDB();
-  const e = await PersonalEvent.create({ ...d, userId: user.id, startDate, endDate });
+  if (!repeat || repeat === "none") {
+    const e = await PersonalEvent.create({ ...fields, userId: user.id, startDate, endDate });
+    await touchChanged("personal");
+    return json({ id: String(e._id) }, 201);
+  }
+
+  // 반복 — 종료일(기본 3개월, 최대 1년)까지 회차를 한 번에 생성
+  const maxUntil = addInterval(startDate, "monthly", 12);
+  const until = repeatUntil ? new Date(repeatUntil) : addInterval(startDate, "monthly", 3);
+  if (isNaN(until.getTime()) || until < new Date(startDate.getTime() - 86_400_000)) return json({ error: "반복 종료일이 시작일보다 빠를 수 없습니다." }, 400);
+  if (until > maxUntil) return json({ error: "반복은 최대 1년까지 설정할 수 있어요." }, 400);
+  const untilEnd = new Date(until.getTime() + 86_400_000); // 종료일 그날 포함
+  const duration = endDate.getTime() - startDate.getTime();
+  const recurrenceId = new mongoose.Types.ObjectId();
+  const docs: any[] = [];
+  for (let i = 0; i < 400; i++) {
+    const s = addInterval(startDate, repeat, i);
+    if (s >= untilEnd) break;
+    docs.push({ ...fields, userId: user.id, recurrenceId, repeatFreq: repeat, startDate: s, endDate: new Date(s.getTime() + duration) });
+  }
+  const created = await PersonalEvent.insertMany(docs);
   await touchChanged("personal");
-  return json({ id: String(e._id) }, 201);
+  return json({ id: String(created[0]._id), count: created.length }, 201);
 }

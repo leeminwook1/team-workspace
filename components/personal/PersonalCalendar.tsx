@@ -15,7 +15,9 @@ import { parseQuickEntry, type QuickParsed } from "@/lib/quickEntry";
 type PEvent = {
   id: string; title: string; memo: string; location: string;
   startDate: string; endDate: string; allDay: boolean;
+  recurrenceId?: string | null; repeatFreq?: string | null;
 };
+const REPEAT_LABEL: Record<string, string> = { daily: "매일", weekly: "매주", biweekly: "격주", monthly: "매월" };
 // 담당 업무 (팀 달력의 일정 중 이 캘린더 주인이 담당자인 것 — 읽기 전용 오버레이)
 type ATask = {
   id: string; title: string; startDate: string; endDate: string; allDay: boolean;
@@ -34,6 +36,15 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 // 로컬 날짜 YYYY-MM-DD (toISOString은 UTC라 새벽 시간대에 하루 밀림)
 const ymd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const addDays = (day: string, n: number) => { const d = new Date(`${day}T00:00`); d.setDate(d.getDate() + n); return ymd(d); };
+// n개월 뒤 같은 날 (말일 클램프)
+const addMonths = (day: string, n: number) => {
+  if (!day) return "";
+  const d = new Date(`${day}T00:00`);
+  const target = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  const last = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(d.getDate(), last));
+  return ymd(target);
+};
 
 // 로컬 시각 HH:mm — 달력 셀·상세에서 시간 표기용
 function hhmm(iso: string) {
@@ -145,7 +156,7 @@ export default function PersonalCalendar({ meId, meName, viewables }: { meId: st
       const sameDay = new Date(e.startDate).toDateString() === new Date(e.endDate).toDateString();
       const timeText = e.allDay ? "" : sameDay ? `${hhmm(e.startDate)}–${hhmm(e.endDate)}` : `${hhmm(e.startDate)}~`;
       return {
-        id: e.id, title: timeText ? `${e.title} (${timeText})` : e.title, start: e.startDate, end, allDay: e.allDay,
+        id: e.id, title: `${e.recurrenceId ? "🔁 " : ""}${timeText ? `${e.title} (${timeText})` : e.title}`, start: e.startDate, end, allDay: e.allDay,
         backgroundColor: PERSONAL_COLOR + "26", borderColor: PERSONAL_COLOR, textColor: PERSONAL_COLOR,
         extendedProps: { timeText, mainText: e.title },
       };
@@ -586,6 +597,11 @@ function PersonalEventModal({ event, defaultDate, defaultEndDate, prefill, onClo
   const [location, setLocation] = useState(event?.location ?? prefill?.location ?? "");
   const [memo, setMemo] = useState(event?.memo ?? "");
   const [showExtra, setShowExtra] = useState(!!(event?.location || event?.memo || prefill?.location)); // 장소·메모 펼침
+  // 반복 — 새 일정: 주기·종료일 / 반복 일정 수정: 적용 범위
+  const [repeat, setRepeat] = useState<"none" | "daily" | "weekly" | "biweekly" | "monthly">("none");
+  const [repeatUntil, setRepeatUntil] = useState("");
+  const isSeries = !!event?.recurrenceId;
+  const [scope, setScope] = useState<"one" | "following" | "all">("one");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -632,6 +648,11 @@ function PersonalEventModal({ event, defaultDate, defaultEndDate, prefill, onClo
     if (!title.trim()) { setErr("제목을 입력하세요."); titleRef.current?.focus(); return; }
     if (allDay && endDate < startDate) { setErr("종료일이 시작일보다 빠를 수 없어요."); return; }
     if (!allDay && endTime <= startTime) { setErr("종료 시각이 시작 시각보다 빨라요."); return; }
+    const rUntil = repeatUntil || addMonths(startDate, 3);
+    if (!isEdit && repeat !== "none") {
+      if (rUntil < startDate) { setErr("반복 종료일이 시작일보다 빨라요."); return; }
+      if (rUntil > addMonths(startDate, 12)) { setErr("반복은 최대 1년까지 설정할 수 있어요."); return; }
+    }
     setBusy(true);
     const when = allDay
       ? { startDate, endDate, allDay: true }
@@ -641,10 +662,13 @@ function PersonalEventModal({ event, defaultDate, defaultEndDate, prefill, onClo
           allDay: false,
         };
     try {
-      const res = await fetch(isEdit ? `/api/personal-events/${event!.id}` : "/api/personal-events", {
+      const res = await fetch(isEdit ? `/api/personal-events/${event!.id}${isSeries ? `?scope=${scope}` : ""}` : "/api/personal-events", {
         method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), location, memo, ...when }),
+        body: JSON.stringify({
+          title: title.trim(), location, memo, ...when,
+          ...(!isEdit && repeat !== "none" ? { repeat, repeatUntil: rUntil } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({} as any));
       if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
@@ -657,11 +681,12 @@ function PersonalEventModal({ event, defaultDate, defaultEndDate, prefill, onClo
   }
 
   async function remove() {
-    const ok = await confirm({ title: "개인 일정 삭제", message: "이 일정을 삭제할까요?", confirmText: "삭제", danger: true });
+    const scopeText = !isSeries || scope === "one" ? "이 일정을" : scope === "following" ? "이 일정과 이후 반복 일정을 모두" : "이 반복 일정 전체를";
+    const ok = await confirm({ title: "개인 일정 삭제", message: `${scopeText} 삭제할까요?`, confirmText: "삭제", danger: true });
     if (!ok) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/personal-events/${event!.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/personal-events/${event!.id}${isSeries ? `?scope=${scope}` : ""}`, { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({} as any));
         setErr(data.error ?? "삭제하지 못했어요.");
@@ -740,6 +765,38 @@ function PersonalEventModal({ event, defaultDate, defaultEndDate, prefill, onClo
             </>
           ) : (
             <button type="button" className="pe-more" onClick={() => setShowExtra(true)}>+ 장소·메모 추가</button>
+          )}
+
+          {!isEdit && (
+            <div className="field">
+              <label>반복</label>
+              <div className="seg pe-seg" role="radiogroup" aria-label="반복">
+                {([["none", "안 함"], ["daily", "매일"], ["weekly", "매주"], ["biweekly", "격주"], ["monthly", "매월"]] as const).map(([k, l]) => (
+                  <button key={k} type="button" role="radio" aria-checked={repeat === k} className={repeat === k ? "on" : ""} onClick={() => setRepeat(k)}>{l}</button>
+                ))}
+              </div>
+              {repeat !== "none" && (
+                <div className="pe-repeat-until">
+                  <label htmlFor="pe-ru">반복 종료일</label>
+                  <input
+                    id="pe-ru" type="date" value={repeatUntil || addMonths(startDate, 3)}
+                    min={startDate} max={addMonths(startDate, 12)}
+                    onChange={(e) => setRepeatUntil(e.target.value)}
+                  />
+                  <span className="pe-hint">최대 1년</span>
+                </div>
+              )}
+            </div>
+          )}
+          {isSeries && (
+            <div className="field">
+              <label>🔁 {REPEAT_LABEL[event!.repeatFreq ?? ""] ?? ""} 반복 일정 — 적용 범위</label>
+              <div className="seg pe-seg" role="radiogroup" aria-label="적용 범위">
+                {([["one", "이 일정만"], ["following", "이후 모두"], ["all", "전체"]] as const).map(([k, l]) => (
+                  <button key={k} type="button" role="radio" aria-checked={scope === k} className={scope === k ? "on" : ""} onClick={() => setScope(k)}>{l}</button>
+                ))}
+              </div>
+            </div>
           )}
 
           {err && <p className="err-msg">{err}</p>}
