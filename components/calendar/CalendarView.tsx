@@ -52,6 +52,9 @@ const STATUS_LABEL: Record<string, [string, string]> = {
 const PRIORITY_LABEL: Record<string, string> = {
   low: "낮음", normal: "보통", high: "높음", urgent: "긴급",
 };
+const REPEAT_LABEL: Record<string, string> = {
+  none: "반복 없음", daily: "매일", weekly: "매주", biweekly: "격주", monthly: "매월",
+};
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const ymdStr = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -400,7 +403,17 @@ export default function CalendarView({ teams, categories }: { teams: TeamInfo[];
         />
       )}
 
-      <div className="card cal-card" style={{ padding: 14, marginTop: 14, display: isMobile && view === "dayGridMonth" ? "none" : undefined }}>
+      {/* 모바일 주간: 7칸 시간표는 너무 좁아 요일별 목록으로 */}
+      {isMobile && view === "timeGridWeek" && curStart && (
+        <MobileWeekList
+          weekStart={curStart}
+          tasks={filteredTasks}
+          onTaskClick={setDetail}
+          onAddAt={editableTeams.length > 0 ? (day) => { setCreateDate(day); setCreateOpen(true); } : undefined}
+        />
+      )}
+
+      <div className="card cal-card" style={{ padding: 14, marginTop: 14, display: isMobile && (view === "dayGridMonth" || view === "timeGridWeek") ? "none" : undefined }}>
         <FullCalendar
           ref={calRef}
           plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
@@ -593,16 +606,9 @@ function MobileMonthCal({ monthDate, tasks, selected, onSelect, onTaskClick, onA
 
   // 업무가 해당 날짜에 걸치는지 (allDay end는 inclusive)
   const covers = (t: TaskItem, day: string) => ymdStr(new Date(t.startDate)) <= day && day <= ymdStr(new Date(t.endDate));
-  const dotsFor = (day: string) => {
-    const colors: string[] = [];
-    for (const t of tasks) {
-      if (!covers(t, day)) continue;
-      const c = taskColor(t);
-      if (!colors.includes(c)) colors.push(c);
-      if (colors.length >= 3) break;
-    }
-    return colors;
-  };
+  // 칸에 제목 막대로 보여줄 일정 (종일 먼저 → 시작 시각순)
+  const tasksOn = (day: string) => tasks.filter((t) => covers(t, day))
+    .sort((a, b) => (a.allDay === b.allDay ? a.startDate.localeCompare(b.startDate) : a.allDay ? -1 : 1));
 
   const fmtT = (iso: string) => new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
   const dayTasks = tasks.filter((t) => covers(t, selected))
@@ -619,19 +625,24 @@ function MobileMonthCal({ monthDate, tasks, selected, onSelect, onTaskClick, onA
       </div>
       <div className="mc-grid">
         {cells.map((c) => {
-          const dots = c.inMonth ? dotsFor(c.day) : [];
+          const list = c.inMonth ? tasksOn(c.day) : [];
           const isToday = c.day === today;
           const isSel = c.day === selected;
           return (
             <button
               key={c.day}
-              className={`mc-day${c.inMonth ? "" : " out"}${isToday ? " today" : isSel ? " sel" : ""}`}
+              className={`mc-day rich${c.inMonth ? "" : " out"}${isToday ? " today" : isSel ? " sel" : ""}`}
               onClick={() => onSelect(c.day)}
+              aria-label={`${c.num}일${list.length ? ` 일정 ${list.length}개` : ""}`}
             >
               <span className={`mc-num${c.wd === 0 ? " sun" : c.wd === 6 ? " sat" : ""}`}>{c.num}</span>
-              <span className="mc-dots">
-                {dots.map((color) => <i key={color} style={{ background: color }} />)}
-              </span>
+              {/* 제목 막대 최대 2개 + 나머지 개수 — 날짜를 안 눌러도 무슨 일정인지 보이게 */}
+              {list.slice(0, 2).map((t) => (
+                <span key={t.id} className={`mc-evbar${t.status === "done" ? " done" : ""}`} style={{ background: taskColor(t) + "24", color: taskColor(t), borderLeftColor: taskColor(t) }}>
+                  {t.title}
+                </span>
+              ))}
+              {list.length > 2 && <span className="mc-evmore">+{list.length - 2}</span>}
             </button>
           );
         })}
@@ -666,6 +677,61 @@ function MobileMonthCal({ monthDate, tasks, selected, onSelect, onTaskClick, onA
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* ── 모바일 주간 — 7칸 시간표 대신 요일별 목록 (오늘 강조, 빈 날은 한 줄로) ── */
+function MobileWeekList({ weekStart, tasks, onTaskClick, onAddAt }: {
+  weekStart: Date; tasks: TaskItem[]; onTaskClick: (t: TaskItem) => void; onAddAt?: (day: string) => void;
+}) {
+  const today = ymdStr(new Date());
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i);
+    return { day: ymdStr(d), d };
+  });
+  const covers = (t: TaskItem, day: string) => ymdStr(new Date(t.startDate)) <= day && day <= ymdStr(new Date(t.endDate));
+  const fmtT = (iso: string) => new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+  return (
+    <div className="card mweek-card">
+      {days.map(({ day, d }) => {
+        const list = tasks.filter((t) => covers(t, day))
+          .sort((a, b) => (a.allDay === b.allDay ? a.startDate.localeCompare(b.startDate) : a.allDay ? -1 : 1));
+        const wd = d.getDay();
+        return (
+          <section key={day} className={`mweek-day${day === today ? " today" : ""}${list.length === 0 ? " empty" : ""}`}>
+            <div className="mweek-head">
+              <span className={`mweek-date${wd === 0 ? " sun" : wd === 6 ? " sat" : ""}`}>
+                <b>{d.getDate()}</b> {WEEKDAYS_KO[wd]}
+              </span>
+              {day === today && <span className="mweek-today">오늘</span>}
+              {list.length === 0 && <span className="mweek-none">일정 없음</span>}
+              {onAddAt && <button type="button" className="mweek-add" aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일 일정 추가`} onClick={() => onAddAt(day)}>+</button>}
+            </div>
+            {list.map((t) => {
+              const [stLabel] = STATUS_LABEL[t.status] ?? STATUS_LABEL.todo;
+              return (
+                <button key={t.id} className={`mc-item mc-item-btn${t.status === "done" ? " done" : ""}`} onClick={() => onTaskClick(t)}>
+                  <span className="mc-bar" style={{ background: taskColor(t) }} />
+                  <span className="mc-item-body">
+                    <span className="mc-item-title">
+                      {t.title}
+                      {t.priority === "urgent" && t.status !== "done" && <b className="ev1c-urgent" style={{ marginLeft: 5 }}>긴급</b>}
+                    </span>
+                    <span className="mc-item-sub">
+                      {t.allDay ? "하루 종일" : `${fmtT(t.startDate)}–${fmtT(t.endDate)}`}
+                      {t.location && ` · ${t.location}`}
+                      {t.assignees.length > 0 && ` · ${t.assignees.map((a) => a.name).join(", ")}`}
+                    </span>
+                  </span>
+                  <span className={`wbadge${t.status === "in_progress" ? " prog" : t.status === "done" ? " done" : ""}`}>{stLabel}</span>
+                </button>
+              );
+            })}
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -754,7 +820,8 @@ function TaskFormModal({
     fetch("/api/resources")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d?.resources) setAllResources(d.resources); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setResLoaded(true));
     fetch("/api/resource-sets")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d?.sets) setEquipSets(d.sets); })
@@ -852,7 +919,7 @@ function TaskFormModal({
   }, [startDate, endDate, startTime, endTime, allDay, task]);
 
   // 장비 세트 — 구성 장비(예약 가능한 것만)를 한 번에 선택/해제
-  const [equipSets, setEquipSets] = useState<{ id: string; name: string; resources: { id: string }[] }[]>([]);
+  const [equipSets, setEquipSets] = useState<{ id: string; name: string; resources: { id: string; name: string }[] }[]>([]);
   function setResourceIdsOf(set: { resources: { id: string }[] }) {
     const avail = new Set(allResources.filter((r) => (r.status ?? "available") === "available").map((r) => r.id));
     return set.resources.map((r) => r.id).filter((id) => avail.has(id));
@@ -877,15 +944,52 @@ function TaskFormModal({
   }
   const [description, setDescription] = useState(task?.description ?? "");
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
+  // 담당자·장비는 비동기로 늦게 와서 폼이 밀려 내려가므로, 오기 전엔 자리만 잡아둔다
+  const [membersLoaded, setMembersLoaded] = useState(false);
+  const [resLoaded, setResLoaded] = useState(false);
   const [assignees, setAssignees] = useState<Set<string>>(new Set(task ? task.assignees.map((a) => a.id) : []));
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   // 반복 일정 수정 범위 — 이 회차만 / 이후 전체 / 전체
   const [seriesScope, setSeriesScope] = useState<"this" | "following" | "all">("this");
+  // 장비 전체 목록 펼침 — 세트가 있으면 기본은 접고 세트·선택한 장비만 보여줌
+  const [equipOpen, setEquipOpen] = useState(false);
+  // 추가 옵션(반복·우선순위) 펼침 — 수정 시 기본값이 아니면 펼친 채로
+  const [moreOpen, setMoreOpen] = useState(!!task && (task.priority ?? "normal") !== "normal");
+
+  // 시간 편의 — 시작 시각을 바꾸면 길이 유지, 길이 버튼(1~4시간), 날짜 버튼(오늘·내일·모레)
+  const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const fromMin = (m: number) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+  const durationMin = toMin(endTime) - toMin(startTime);
+  function changeStartTime(v: string) {
+    if (!v) { setStartTime(v); return; }
+    const dur = durationMin > 0 ? durationMin : 60;
+    setStartTime(v);
+    setEndTime(fromMin(Math.min(toMin(v) + dur, 23 * 60 + 59)));
+  }
+  function setDuration(hours: number) {
+    setEndTime(fromMin(Math.min(toMin(startTime) + hours * 60, 23 * 60 + 59)));
+  }
+  const shiftDay = (day: string, n: number) => { const d = new Date(`${day}T00:00`); d.setDate(d.getDate() + n); return ymdStr(d); };
+  function changeStartDate(v: string) {
+    if (!v) { setStartDate(v); return; }
+    // 기간 일정이면 길이 유지한 채 종료일도 이동
+    const span = startDate && endDate && endDate >= startDate
+      ? Math.round((new Date(`${endDate}T00:00`).getTime() - new Date(`${startDate}T00:00`).getTime()) / 86_400_000)
+      : 0;
+    setStartDate(v);
+    setEndDate(shiftDay(v, span));
+  }
+  const todayStr = ymdStr(new Date());
+  const quickDays = [
+    { label: "오늘", day: todayStr },
+    { label: "내일", day: shiftDay(todayStr, 1) },
+    { label: "모레", day: shiftDay(todayStr, 2) },
+  ];
 
   // 선택된 팀들의 담당 후보(멤버) union 로드
   const loadMembers = useCallback(async (ids: string[]) => {
-    if (ids.length === 0) { setMembers([]); return; }
+    if (ids.length === 0) { setMembers([]); setMembersLoaded(true); return; }
     const results = await Promise.all(
       ids.map((id) =>
         fetch(`/api/users?team=${id}`).then((r) => (r.ok ? r.json() : { users: [] })).catch(() => ({ users: [] }))
@@ -894,6 +998,7 @@ function TaskFormModal({
     const map = new Map<string, { id: string; name: string }>();
     results.forEach((r) => (r.users ?? []).forEach((u: any) => map.set(u.id, { id: u.id, name: u.name })));
     setMembers(Array.from(map.values()));
+    setMembersLoaded(true);
   }, []);
 
   useEffect(() => { loadMembers(teamIds); }, [teamIds, loadMembers]);
@@ -986,7 +1091,7 @@ function TaskFormModal({
 
   return (
     <div className="modal-overlay">
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal tf-modal" onClick={(e) => e.stopPropagation()}>
         <ModalClose onClose={onClose} />
         <h2>{isEdit ? "업무 수정" : "업무 추가"}</h2>
         <form onSubmit={onSubmit}>
@@ -1014,7 +1119,25 @@ function TaskFormModal({
             )}
           </div>
 
-          <div className="field">
+          {categories.length > 0 && (
+            <div className="field">
+              <label>카테고리</label>
+              <div className="tf-chips" role="radiogroup" aria-label="카테고리">
+                <button type="button" role="radio" aria-checked={categoryId === ""} className={`chip chip-btn${categoryId === "" ? " sel" : ""}`} onClick={() => setCategoryId("")}>없음</button>
+                {categories.map((c) => (
+                  <button
+                    type="button" role="radio" key={c.id} aria-checked={categoryId === c.id}
+                    className={`chip chip-btn${categoryId === c.id ? " sel" : ""}`}
+                    onClick={() => setCategoryId(c.id)}
+                  >
+                    <span className="dot" style={{ background: c.color }} />{c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="tf-when">
             <div className="switch-row">
               <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink-soft)" }}>하루 종일</span>
               <button
@@ -1028,38 +1151,55 @@ function TaskFormModal({
                 <span className="toggle-knob" />
               </button>
             </div>
-          </div>
 
-          {allDay ? (
-            <div className="form-grid-2">
-              <div className="field">
-                <label>시작일</label>
-                <input type="date" value={startDate} required
-                  onChange={(e) => { const v = e.target.value; setStartDate(v); setEndDate((d) => (d < v ? v : d)); }} />
-              </div>
-              <div className="field">
-                <label>종료일</label>
-                <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} required />
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="field">
-                <label>날짜</label>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
-              </div>
+            {allDay ? (
               <div className="form-grid-2">
                 <div className="field">
-                  <label>시작 시각</label>
-                  <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+                  <label>시작일</label>
+                  <input type="date" value={startDate} required onChange={(e) => changeStartDate(e.target.value)} />
                 </div>
                 <div className="field">
-                  <label>종료 시각</label>
-                  <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
+                  <label>종료일</label>
+                  <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} required />
                 </div>
               </div>
-            </>
-          )}
+            ) : (
+              <>
+                <div className="field">
+                  <label>날짜</label>
+                  <input type="date" value={startDate} onChange={(e) => changeStartDate(e.target.value)} required />
+                </div>
+                <div className="form-grid-2">
+                  <div className="field">
+                    <label>시작 시각</label>
+                    <input type="time" value={startTime} onChange={(e) => changeStartTime(e.target.value)} required />
+                  </div>
+                  <div className="field">
+                    <label>종료 시각</label>
+                    <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="tf-quick">
+              {quickDays.map((q) => (
+                <button
+                  type="button" key={q.label}
+                  className={`chip chip-btn${startDate === q.day ? " sel" : ""}`}
+                  onClick={() => changeStartDate(q.day)}
+                >{q.label}</button>
+              ))}
+              {!allDay && <span className="tf-sep" aria-hidden />}
+              {!allDay && [1, 2, 3, 4].map((h) => (
+                <button
+                  type="button" key={h}
+                  className={`chip chip-btn${durationMin === h * 60 ? " sel" : ""}`}
+                  onClick={() => setDuration(h)}
+                >{h}시간</button>
+              ))}
+            </div>
+          </div>
 
           {isEdit && task?.recurrenceId && (
             <div className="field">
@@ -1077,47 +1217,6 @@ function TaskFormModal({
             </div>
           )}
 
-          {!isEdit && (
-            <div className="form-grid-2">
-              <div className="field">
-                <label>반복</label>
-                <select value={repeat} onChange={(e) => setRepeat(e.target.value)}>
-                  <option value="none">반복 없음</option>
-                  <option value="daily">매일</option>
-                  <option value="weekly">매주</option>
-                  <option value="biweekly">격주</option>
-                  <option value="monthly">매월</option>
-                </select>
-              </div>
-              {repeat !== "none" && (
-                <div className="field">
-                  <label>반복 종료일 (기본 3개월)</label>
-                  <input type="date" value={repeatUntil} min={startDate} onChange={(e) => setRepeatUntil(e.target.value)} />
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="form-grid-2">
-            <div className="field">
-              <label>우선순위</label>
-              <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-                <option value="low">낮음</option>
-                <option value="normal">보통</option>
-                <option value="high">높음</option>
-                <option value="urgent">긴급</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>카테고리</label>
-              <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                <option value="">없음</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
 
           {!isEdit && repeat === "none" && (
             <div className="field">
@@ -1136,7 +1235,13 @@ function TaskFormModal({
             </div>
           )}
 
-          {members.length > 0 && (
+          {!membersLoaded && (
+            <div className="field">
+              <label>담당자</label>
+              <div className="tf-loading">불러오는 중…</div>
+            </div>
+          )}
+          {membersLoaded && members.length > 0 && (
             <div className="field">
               <label>담당자</label>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -1176,6 +1281,12 @@ function TaskFormModal({
             </div>
           )}
 
+          {!resLoaded && (
+            <div className="field">
+              <label>대여 장비 (선택)</label>
+              <div className="tf-loading tall">장비 목록 불러오는 중…</div>
+            </div>
+          )}
           {allResources.length > 0 && (
             <div className="field">
               <label>대여 장비 (선택) · 선택하면 이 시간에 자원 예약이 함께 잡혀요</label>
@@ -1249,12 +1360,13 @@ function TaskFormModal({
                   })()}
                   {equipSets.length > 0 && (
                     <div className="set-chips" aria-label="장비 세트">
+                      <span className="set-chips-label">세트</span>
                       {equipSets.map((st) => {
                         const ids = setResourceIdsOf(st);
                         const on = ids.length > 0 && ids.every((id) => resourceIds.includes(id));
                         return (
                           <button type="button" key={st.id} className={`set-chip${on ? " on" : ""}`} disabled={ids.length === 0}
-                            title={ids.length < st.resources.length ? "일부 장비는 수리·고장 중이라 빠져요" : undefined}
+                            title={`${st.resources.map((r) => r.name).join(", ")}${ids.length < st.resources.length ? " (일부는 수리·고장 중이라 빠져요)" : ""}`}
                             onClick={() => toggleSet(st)}>
                             📦 {st.name} <span>{ids.length}</span>
                           </button>
@@ -1262,6 +1374,12 @@ function TaskFormModal({
                       })}
                     </div>
                   )}
+                  {equipSets.length > 0 && (
+                    <button type="button" className="equip-toggle" aria-expanded={equipOpen} onClick={() => setEquipOpen((v) => !v)}>
+                      {equipOpen ? "장비 목록 접기 ▲" : "장비 하나씩 고르기 ▼"}
+                    </button>
+                  )}
+                  {(equipOpen || equipSets.length === 0) && (<>
                   <div className="equip-search">
                     <Icon name="search" size={15} />
                     <input
@@ -1329,6 +1447,7 @@ function TaskFormModal({
                       </div>
                     ))}
                   </div>
+                  </>)}
                 </div>
               )}
             </div>
@@ -1342,9 +1461,59 @@ function TaskFormModal({
             <label>상세 내용 (선택)</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
+
+          {/* 추가 옵션 — 자주 안 쓰는 반복·우선순위는 접어둠 */}
+          <button type="button" className="tf-more" aria-expanded={moreOpen} onClick={() => setMoreOpen((v) => !v)}>
+            <span>추가 옵션</span>
+            <span className="tf-more-sum">
+              {!isEdit && `${REPEAT_LABEL[repeat] ?? "반복 없음"} · `}우선순위 {PRIORITY_LABEL[priority] ?? "보통"}
+            </span>
+            <span aria-hidden>{moreOpen ? "▲" : "▼"}</span>
+          </button>
+          {moreOpen && (
+            <div className="tf-more-body">
+              <div className="field">
+                <label>우선순위</label>
+                <div className="seg tf-seg" role="radiogroup" aria-label="우선순위">
+                  {(["low", "normal", "high", "urgent"] as const).map((p) => (
+                    <button key={p} type="button" role="radio" aria-checked={priority === p}
+                      className={`${priority === p ? "on" : ""}${p === "urgent" ? " urgent" : ""}`}
+                      onClick={() => setPriority(p)}>{PRIORITY_LABEL[p]}</button>
+                  ))}
+                </div>
+              </div>
+              {!isEdit && (
+                <div className="form-grid-2">
+                  <div className="field">
+                    <label>반복</label>
+                    <select value={repeat} onChange={(e) => setRepeat(e.target.value)}>
+                      {Object.entries(REPEAT_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                    </select>
+                  </div>
+                  {repeat !== "none" && (
+                    <div className="field">
+                      <label>반복 종료일 (기본 3개월)</label>
+                      <input type="date" value={repeatUntil} min={startDate} onChange={(e) => setRepeatUntil(e.target.value)} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {err && <p className="err-msg">{err}</p>}
-          <div className="modal-actions">
-            <button className="btn btn-primary" disabled={loading}>
+          <div className="modal-actions tf-actions">
+            <span className="tf-summary">
+              {(() => {
+                const md = (s: string) => { const d = new Date(`${s}T00:00`); return `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAYS_KO[d.getDay()]})`; };
+                const when = allDay
+                  ? (startDate === endDate ? md(startDate) : `${md(startDate)}~${md(endDate)}`)
+                  : `${md(startDate)} ${startTime}–${endTime}`;
+                const extra = [assignees.size ? `담당 ${assignees.size}명` : "", resourceIds.length && repeat === "none" ? `장비 ${resourceIds.length}개` : ""].filter(Boolean).join(" · ");
+                return startDate ? <>{when}{extra && <em> · {extra}</em>}</> : null;
+              })()}
+            </span>
+            <button className="btn btn-primary tf-submit" disabled={loading}>
               {loading ? "저장 중…" : isEdit ? "저장" : "등록"}
             </button>
           </div>

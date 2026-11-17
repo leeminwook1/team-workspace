@@ -1631,6 +1631,161 @@ a { color: inherit; text-decoration: none; }
 .pc-legend { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .pc-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
 .pc-legend-hint { font-size: 12px; color: var(--ink-faint); }
+.pc-empty-hint { display: block; margin-top: 4px; font-size: 11.5px; color: var(--ink-faint); opacity: 0.85; }
+
+/* 업무(일정) 등록 폼 — 카테고리 칩·날짜/길이 빠른 버튼·추가 옵션 접기·하단 요약 */
+.modal.tf-modal { max-width: 560px; }
+.tf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tf-chips .chip { padding: 7px 13px; }
+.tf-when {
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 12px 14px 12px; margin-bottom: 14px;
+}
+.tf-when .switch-row { margin-bottom: 10px; }
+.tf-when .field { margin-bottom: 10px; }
+.tf-when .field input { background: var(--surface); }
+.tf-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tf-quick .chip { padding: 5px 11px; font-size: 12px; }
+.tf-sep { width: 1px; height: 18px; background: var(--line-strong); margin: 0 2px; }
+.tf-more {
+  display: flex; align-items: center; gap: 8px; width: 100%; margin: 2px 0 10px; padding: 11px 14px;
+  border: 1px dashed var(--line-strong); border-radius: var(--r-md); background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 13.5px; font-weight: 700; color: var(--ink-soft); text-align: left;
+}
+.tf-more:hover { border-color: var(--primary); color: var(--primary); }
+.tf-more-sum { flex: 1; font-size: 12.5px; font-weight: 500; color: var(--ink-faint); }
+.tf-more-body { padding: 2px 2px 0; }
+.tf-seg { display: flex; width: 100%; }
+.tf-seg button { flex: 1; cursor: pointer; font-family: inherit; }
+.tf-seg button.urgent.on { color: var(--danger); }
+.equip-toggle {
+  display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: var(--surface);
+  padding: 9px 12px; cursor: pointer; font-family: inherit; font-size: 12.5px; font-weight: 700;
+  color: var(--ink-soft); text-align: center;
+}
+.equip-toggle:hover { color: var(--primary); }
+.tf-loading {
+  height: 36px; display: flex; align-items: center; padding: 0 12px; border-radius: var(--r-md);
+  background: var(--surface-2); color: var(--ink-faint); font-size: 12.5px;
+  animation: tf-pulse 1.2s ease-in-out infinite;
+}
+.tf-loading.tall { height: 120px; justify-content: center; }
+@keyframes tf-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .tf-loading { animation: none; } }
+.tf-actions { align-items: center; }
+.tf-summary { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-summary em { font-style: normal; font-weight: 500; color: var(--ink-faint); }
+.tf-submit { min-width: 96px; }
+/* 날짜·시각 두 칸은 폰에서도 나란히 (세로로 쌓이면 폼이 너무 길어짐) — 전역 480px 1열 규칙보다 우선 */
+@media (max-width: 480px) {
+  .tf-when .form-grid-2, .pe-modal .form-grid-2.pe-dates { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tf-when .field input[type="date"], .tf-when .field input[type="time"],
+  .pe-modal .pe-dates input[type="date"], .pe-modal .pe-dates input[type="time"] { padding: 12px 10px; min-width: 0; }
+}
+@media (max-width: 640px) {
+  .tf-modal .field input, .tf-modal .field textarea, .tf-modal .field select { font-size: 16px; } /* iOS 확대 방지 */
+  .tf-actions {
+    position: sticky; bottom: calc(-24px - env(safe-area-inset-bottom)); z-index: 2;
+    margin: 18px -20px calc(-24px - env(safe-area-inset-bottom));
+    padding: 10px 20px calc(10px + env(safe-area-inset-bottom)); background: var(--surface);
+    border-top: 1px solid var(--line);
+  }
+  .tf-actions .tf-submit { height: 48px; font-size: 15px; min-width: 110px; }
+}
+
+/* 개인 일정 한 줄 빠른 입력 */
+.qa-wrap { margin-top: 12px; }
+.qa-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px; color: var(--ink-faint);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.qa-row:focus-within { border-color: var(--primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 14%, transparent); }
+.qa-input {
+  flex: 1; min-width: 0; border: 0; background: transparent; outline: none;
+  font-family: inherit; font-size: 15px; color: var(--ink); padding: 6px 0;
+}
+.qa-input::placeholder { color: var(--ink-faint); }
+.qa-btn {
+  flex: none; height: 36px; padding: 0 16px; border-radius: 999px; border: 0; cursor: pointer;
+  background: var(--primary); color: #fff; font-family: inherit; font-size: 13.5px; font-weight: 700;
+}
+.qa-btn:disabled { opacity: 0.4; cursor: default; }
+.qa-preview {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 8px 6px 0;
+  font-size: 13px; color: var(--ink-soft);
+}
+.qa-when { font-weight: 700; color: var(--primary); }
+.qa-title { font-weight: 700; color: var(--ink); }
+.qa-title i { font-style: normal; color: var(--danger); font-weight: 600; }
+.qa-loc { color: var(--ink-soft); }
+.qa-note { font-size: 12px; color: var(--ink-faint); }
+.qa-detail {
+  margin-left: auto; border: 0; background: transparent; cursor: pointer; font-family: inherit;
+  font-size: 12.5px; font-weight: 700; color: var(--ink-faint); padding: 2px 4px;
+}
+.qa-detail:hover { color: var(--primary); }
+/* 입력 방법(?) 버튼 + 안내 패널 */
+.qa-help-btn {
+  flex: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft);
+  font-family: inherit; font-size: 14px; font-weight: 800; line-height: 1;
+}
+.qa-help-btn:hover, .qa-help-btn.on { border-color: var(--primary); color: var(--primary); background: var(--accent-soft); }
+.qa-manual {
+  margin-top: 8px; padding: 14px 16px; border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
+  font-size: 13px; color: var(--ink-soft); line-height: 1.55;
+}
+.qa-manual-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.qa-manual-head b { font-size: 14px; color: var(--ink); }
+.qa-manual-x { border: 0; background: transparent; cursor: pointer; color: var(--ink-faint); font-size: 13px; padding: 4px 6px; }
+.qa-manual p { margin: 0 0 10px; }
+.qa-examples { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.qa-examples button {
+  border: 1px dashed var(--line-strong); background: var(--surface-2); color: var(--ink); cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 11px; border-radius: 999px;
+}
+.qa-examples button:hover { border-color: var(--primary); color: var(--primary); }
+.qa-rules { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.qa-rules > div { display: flex; gap: 10px; }
+.qa-rules dt { flex: none; width: 34px; font-weight: 700; color: var(--ink-faint); }
+.qa-rules dd { margin: 0; }
+.qa-msg { margin: 7px 8px 0; }
+.qa-done { margin: 7px 8px 0; font-size: 13px; color: var(--ink-soft); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.qa-undo {
+  border: 0; background: transparent; cursor: pointer; font-family: inherit;
+  font-size: 12.5px; font-weight: 700; color: var(--primary); text-decoration: underline; padding: 0;
+}
+@media (max-width: 640px) {
+  .qa-input { font-size: 16px; } /* iOS 확대 방지 */
+}
+
+/* 개인 일정 등록 폼 — 빠른 선택 칩·시간 세그먼트 */
+.pe-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.pe-chips .chip { padding: 6px 12px; }
+.pe-days { margin: -4px 0 14px; }
+.pe-seg { display: flex; width: 100%; }
+.pe-seg button { flex: 1; padding: 9px 4px; white-space: nowrap; cursor: pointer; font-family: inherit; }
+.pe-hint { margin: 6px 2px 0; font-size: 12px; color: var(--ink-faint); }
+.pe-more {
+  display: block; border: 0; background: transparent; cursor: pointer; font-family: inherit;
+  font-size: 13px; font-weight: 700; color: var(--primary); padding: 4px 2px; margin-bottom: 4px;
+}
+.pe-actions .pe-save { margin-left: auto; min-width: 96px; }
+@media (max-width: 640px) {
+  /* iOS는 16px 미만 입력칸에 포커스하면 화면을 확대함 → 16px */
+  .pe-modal .field input, .pe-modal .field textarea { font-size: 16px; }
+  .pe-chips .chip { padding: 8px 13px; font-size: 13px; }
+  /* 저장 버튼은 시트 하단에 고정 — 스크롤해도 항상 보임 */
+  .pe-actions {
+    position: sticky; bottom: calc(-24px - env(safe-area-inset-bottom)); margin: 18px -20px calc(-24px - env(safe-area-inset-bottom));
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); background: var(--surface);
+    border-top: 1px solid var(--line);
+  }
+  .pe-actions .btn { height: 48px; font-size: 15px; }
+  .pe-actions .pe-save { flex: 1; }
+}
 
 /* 텔레그램 연동 코드 박스 */
 .tg-link-box { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px; margin-bottom: 14px; }
@@ -2087,6 +2242,45 @@ a { color: inherit; text-decoration: none; }
 .mcal-card .mc-day { height: 52px; }
 .mc-item-btn { border: 0; width: 100%; text-align: left; cursor: pointer; font-family: inherit; }
 .mc-empty { text-align: center; font-size: 13px; color: var(--ink-faint); padding: 18px 0 14px; }
+/* 모바일 달력 칸 — 도트 대신 제목 막대(최대 2개) + 나머지 개수 */
+.mcal-card .mc-day.rich {
+  height: auto; min-height: 64px; padding: 3px 1px 4px; gap: 2px; justify-content: flex-start;
+  align-items: stretch; border-radius: 8px; overflow: hidden;
+}
+.mc-day.rich .mc-num { align-self: center; width: 22px; height: 22px; font-size: 12px; flex: none; }
+.mc-evbar {
+  display: block; font-size: 9.5px; font-weight: 700; line-height: 1.3; letter-spacing: -0.03em;
+  padding: 1px 2px 1px 3px; border-left: 2px solid; border-radius: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: clip; text-align: left;
+}
+.mc-evbar.done { opacity: 0.45; text-decoration: line-through; }
+.mc-evmore { font-size: 9.5px; font-weight: 700; color: var(--ink-faint); line-height: 1.2; text-align: center; }
+.mc-grid:not(.mc-week) .mc-day.rich { border-bottom: 1px solid var(--line); border-radius: 0; }
+/* 다른 달 칸은 내용만 숨기고 칸(구분선)은 유지 — 마지막 줄 선이 30일에서 끊기지 않게 */
+.mc-day.rich.out { visibility: visible; pointer-events: none; }
+.mc-day.rich.out > * { visibility: hidden; }
+.mc-day.rich.sel { background: var(--accent-soft); }
+
+/* 모바일 주간 — 요일별 목록 */
+.mweek-card { padding: 6px 12px; margin-top: 14px; }
+.mweek-day { padding: 10px 0 4px; border-bottom: 1px solid var(--line); }
+.mweek-day:last-child { border-bottom: 0; }
+.mweek-day.empty { padding: 9px 0; }
+.mweek-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.mweek-day.empty .mweek-head { margin-bottom: 0; }
+.mweek-date { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.mweek-date b { font-size: 17px; font-weight: 800; color: var(--ink); margin-right: 1px; }
+.mweek-date.sun, .mweek-date.sun b { color: #e5484d; }
+.mweek-date.sat, .mweek-date.sat b { color: #4c8dff; }
+.mweek-today { font-size: 11px; font-weight: 800; color: #fff; background: var(--primary); border-radius: 999px; padding: 2px 8px; }
+.mweek-day.today .mweek-date b { color: var(--primary); }
+.mweek-none { font-size: 12px; color: var(--ink-faint); }
+.mweek-add {
+  margin-left: auto; width: 28px; height: 28px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--surface-2); color: var(--ink-soft); font-size: 17px; font-weight: 700; line-height: 1; font-family: inherit;
+}
+.mweek-add:hover { color: var(--primary); }
+.mweek-day .mc-item { background: var(--surface-2); box-shadow: none; }
 
 /* ── 다가오는 일정 위젯 (날짜 박스) ── */
 .up-list { display: flex; flex-direction: column; gap: 4px; padding-bottom: 6px; }
@@ -2494,7 +2688,7 @@ a { color: inherit; text-decoration: none; }
    촬영 진행 보드 — 촬영 → 백업 → 셀렉 → 보정 → 보고
    ══════════════════════════════════════════════════════════ */
 .pl-alert { margin: 0 0 12px; padding: 10px 14px; border-radius: var(--r-sm); background: var(--danger-soft); color: var(--danger); font-size: 13.5px; }
-.pl-board { display: grid; grid-template-columns: repeat(6, minmax(190px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.pl-board { display: grid; grid-template-columns: repeat(6, minmax(158px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 6px; }
 .pl-col { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px; min-height: 120px; display: flex; flex-direction: column; gap: 8px; }
 .pl-col.done { opacity: 0.8; }
 .pl-col-head { font-size: 12.5px; font-weight: 800; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; padding: 2px 2px 4px; }
@@ -2540,6 +2734,8 @@ a { color: inherit; text-decoration: none; }
 .set-chip:hover { border-color: var(--primary); color: var(--primary); }
 .set-chip.on { border-style: solid; border-color: var(--primary); background: var(--accent-soft); color: var(--primary); }
 .set-chip span { font-weight: 600; opacity: 0.7; }
+.set-chips { align-items: center; }
+.set-chips-label { font-size: 11.5px; font-weight: 800; color: var(--ink-faint); margin-right: 2px; }
 
 /* 반납 체크리스트 */
 .rc-list { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
@@ -2597,6 +2793,16 @@ a { color: inherit; text-decoration: none; }
 }
 .vb-col:hover .vb-tip, .vb-col:focus-visible .vb-tip { opacity: 1; }
 .vb-label { text-align: center; font-size: 12px; font-weight: 600; color: var(--ink-faint); padding: 6px 0 0; transform: translateY(100%); margin-top: -1px; }
+/* 라벨이 translate로 기준선 아래에 걸쳐 있어 흐름상 높이가 없음 → 아래 '표로 보기'와 겹치지 않게 자리 확보 */
+.vb { margin-bottom: 26px; }
+/* 제목이 "장비 가동 / 률"처럼 글자 단위로 끊기지 않게 단어 단위 줄바꿈 */
+.st-title { flex-wrap: wrap; row-gap: 2px; word-break: keep-all; }
+/* 기간 선택 — 좁은 화면에서 "최/근/3/개/월" 세로 깨짐 방지 */
+.st-page .page-head .seg { flex: none; }
+.seg-link { white-space: nowrap; }
+@media (max-width: 640px) {
+  .st-page .page-head { flex-wrap: wrap; }
+}
 @media (max-width: 760px) {
   .st-tiles { grid-template-columns: 1fr 1fr; }
   .st-util { grid-template-columns: 1fr; }
