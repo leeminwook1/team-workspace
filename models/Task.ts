@@ -6,6 +6,7 @@ const TaskProgramSchema = new Schema(
     time: { type: String, default: "", maxlength: 40 },
     title: { type: String, required: true, maxlength: 200 },
     note: { type: String, default: "", maxlength: 200 },
+    must: { type: Boolean, default: false }, // ⭐ 필수 컷
   },
   { _id: true }
 );

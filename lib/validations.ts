@@ -11,6 +11,7 @@ export const programRowSchema = z.object({
   time: z.string().max(40).optional().default(""),
   title: z.string().min(1, "순서 내용을 입력하세요").max(200),
   note: z.string().max(200).optional().default(""),
+  must: z.boolean().optional().default(false), // ⭐ 필수 컷
 });
 
 // 설계 2장 — 폼/검증: Zod 스키마를 프론트·백엔드에서 공유
@@ -66,14 +67,31 @@ export const taskUpdateSchema = z.object({
 });
 
 // 행사 관리 — 행사(컨테이너) + 그 안의 투두(items) 칸반
+// 행사 — 알아야 할 내용(brief)·집합·포지션
+const eventBriefSchema = z.object({
+  dress: z.string().max(300).optional().default(""),
+  caution: z.string().max(1000).optional().default(""),
+  delivery: z.string().max(500).optional().default(""),
+  contact: z.string().max(300).optional().default(""),
+});
+const eventPositionSchema = z.object({
+  id: z.string().optional(), // 기존 항목이면 _id 유지
+  name: z.string().trim().min(1, "포지션 이름을 입력하세요").max(30),
+  userIds: z.array(objectId).max(10).optional().default([]),
+  note: z.string().max(200).optional().default(""),
+});
+const hhmm = z.string().regex(/^(\d{2}:\d{2})?$/, "집합 시간 형식이 잘못됐어요");
 export const eventCreateSchema = z.object({
   title: z.string().min(1, "행사명을 입력하세요").max(200),
-  description: z.string().max(2000).optional().default(""),
+  description: z.string().max(2000).optional().default(""), // 자유 메모
   teamIds: z.array(objectId).optional().default([]), // 사진과 전용 — 서버가 과 id로 채움
-  managerId: objectId.nullable().optional(),
+  managerId: objectId.nullable().optional(), // (사용 안 함)
   eventDate: z.string().nullable().optional(),
   location: z.string().max(120).optional().default(""),
-  priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
+  priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"), // (사용 안 함)
+  meetTime: hhmm.optional().default(""),
+  meetPlace: z.string().max(120).optional().default(""),
+  brief: eventBriefSchema.optional(),
 });
 const eventItemSchema = z.object({
   id: z.string().optional(), // 기존 항목이면 _id 유지
@@ -92,6 +110,10 @@ export const eventUpdateSchema = z.object({
   eventDate: z.string().nullable().optional(),
   location: z.string().max(120).optional(),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  meetTime: hhmm.optional(),
+  meetPlace: z.string().max(120).optional(),
+  brief: eventBriefSchema.optional(),
+  positions: z.array(eventPositionSchema).max(30, "포지션은 30개까지예요").optional(),
   items: z.array(eventItemSchema).max(200, "할 일은 200개까지예요").optional(),
   program: z.array(programRowSchema).max(100, "식순은 100줄까지예요").optional(),
   closed: z.boolean().optional(), // 행사 종료(보관)/재개

@@ -17,16 +17,25 @@ function serializeFull(e: any) {
     title: e.title,
     description: e.description,
     teams: (e.teamIds ?? []).filter(Boolean).map((tm: any) => ({ id: String(tm._id ?? tm), name: tm.name ?? "", color: tm.color ?? "#8b95a1" })),
-    manager: e.managerId?.name ? { id: String(e.managerId._id ?? e.managerId), name: e.managerId.name } : null,
     eventDate: e.eventDate,
     location: e.location,
-    priority: e.priority,
+    meetTime: e.meetTime ?? "",
+    meetPlace: e.meetPlace ?? "",
+    brief: {
+      dress: e.brief?.dress ?? "", caution: e.brief?.caution ?? "",
+      delivery: e.brief?.delivery ?? "", contact: e.brief?.contact ?? "",
+    },
+    positions: (e.positions ?? []).map((p: any) => ({
+      id: String(p._id),
+      name: p.name,
+      note: p.note ?? "",
+      people: (p.userIds ?? []).filter((u: any) => u?.name).map((u: any) => ({ id: String(u._id), name: u.name })),
+    })),
     createdBy: e.createdBy ? String(e.createdBy._id ?? e.createdBy) : null,
     items: (e.items ?? []).map((it: any) => ({
       id: String(it._id),
       title: it.title,
       status: it.status,
-      team: it.teamId?.name ? { id: String(it.teamId._id ?? it.teamId), name: it.teamId.name, color: it.teamId.color ?? "#8b95a1" } : null,
       assignee: it.assigneeId?.name ? { id: String(it.assigneeId._id ?? it.assigneeId), name: it.assigneeId.name } : null,
       dueDate: it.dueDate ?? null,
       note: it.note ?? "",
@@ -36,6 +45,7 @@ function serializeFull(e: any) {
       time: p.time ?? "",
       title: p.title,
       note: p.note ?? "",
+      must: !!p.must,
     })),
     createdAt: e.createdAt,
     closedAt: e.closedAt ?? null,
@@ -51,9 +61,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   await connectDB();
   const ev: any = await Event.findById(params.id)
     .populate("teamIds", "name color")
-    .populate("managerId", "name")
     .populate("items.assigneeId", "name")
-    .populate("items.teamId", "name color")
+    .populate("positions.userIds", "name")
     .lean();
   if (!ev || ev.deletedAt) return json({ error: "행사를 찾을 수 없습니다." }, 404);
   return json({ event: serializeFull(ev) });
@@ -75,7 +84,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!ev || ev.deletedAt) return json({ error: "행사를 찾을 수 없습니다." }, 404);
 
   const d = parsed.data;
-  const prevManager = ev.managerId ? String(ev.managerId) : "";
   // 행사 종료(보관) / 재개
   if (d.closed !== undefined) {
     ev.closedAt = d.closed ? new Date() : null;
@@ -87,10 +95,32 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (d.title !== undefined) ev.title = d.title;
   if (d.description !== undefined) ev.description = d.description;
   // 사진과 전용 — 참여 팀 변경 무시
-  if (d.managerId !== undefined) ev.managerId = d.managerId || null;
+  // 사진과 전용 — 행사 담당자·우선순위는 쓰지 않음 (할 일에만 담당자)
   if (d.eventDate !== undefined) ev.eventDate = d.eventDate ? new Date(d.eventDate) : null;
   if (d.location !== undefined) ev.location = d.location;
-  if (d.priority !== undefined) ev.priority = d.priority;
+  if (d.meetTime !== undefined) ev.meetTime = d.meetTime;
+  if (d.meetPlace !== undefined) ev.meetPlace = d.meetPlace;
+  if (d.brief !== undefined) ev.brief = d.brief;
+
+  // 포지션 — 새로 배정된 사람에게 알림 (본인 제외)
+  const newlyPlaced = new Map<string, string[]>();
+  if (d.positions !== undefined) {
+    const before = new Set<string>();
+    for (const p of ev.positions ?? []) for (const u of p.userIds ?? []) before.add(`${String(p._id)}:${String(u)}`);
+    ev.positions = d.positions.map((p) => ({
+      ...(p.id && mongoose.isValidObjectId(p.id) ? { _id: p.id } : {}),
+      name: p.name,
+      userIds: Array.from(new Set(p.userIds ?? [])),
+      note: p.note ?? "",
+    }));
+    for (const p of d.positions) {
+      for (const u of Array.from(new Set(p.userIds ?? []))) {
+        if (u === user.id || (p.id && before.has(`${p.id}:${u}`))) continue;
+        if (!newlyPlaced.has(u)) newlyPlaced.set(u, []);
+        newlyPlaced.get(u)!.push(p.name);
+      }
+    }
+  }
 
   // 할 일 담당자가 새로 지정된 사람 수집 (본인 제외) — 저장 후 알림
   const newlyAssigned = new Map<string, string[]>();
@@ -105,7 +135,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       ...(it.id && mongoose.isValidObjectId(it.id) ? { _id: it.id } : {}),
       title: it.title,
       status: it.status ?? "todo",
-      teamId: it.teamId || null,
+      teamId: null,
       assigneeId: it.assigneeId || null,
       dueDate: it.dueDate ? new Date(it.dueDate) : null,
       note: it.note ?? "",
@@ -128,15 +158,20 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       time: p.time ?? "",
       title: p.title,
       note: p.note ?? "",
+      must: !!p.must,
     }));
   }
 
   await ev.save();
 
-  // 알림 — 행사 담당자 변경 + 할 일 담당자 신규 지정
-  if (d.managerId !== undefined && ev.managerId && String(ev.managerId) !== prevManager && String(ev.managerId) !== user.id) {
-    await notify([String(ev.managerId)], {
-      type: "event_assigned", title: "행사 담당자로 지정됐어요", body: ev.title, link: `/events/${String(ev._id)}`,
+  // 알림 — 포지션 배정 + 할 일 담당자 신규 지정
+  const dateLabel = ev.eventDate ? (() => { const k = new Date(new Date(ev.eventDate).getTime() + 9 * 3600_000); return ` (${k.getUTCMonth() + 1}/${k.getUTCDate()})`; })() : "";
+  for (const [uid, names] of Array.from(newlyPlaced.entries())) {
+    await notify([uid], {
+      type: "event_assigned",
+      title: `🎯 행사 포지션이 정해졌어요 — ${names.join(", ")}`,
+      body: `${ev.title}${dateLabel}`,
+      link: `/events/${String(ev._id)}`,
     });
   }
   for (const [uid, titles] of Array.from(newlyAssigned.entries())) {
@@ -150,7 +185,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   // 행사 필드 수정만 로그 (투두·식순 편집만 있는 경우는 로그 스팸 방지)
   const keys = Object.keys(d);
-  const itemsOnly = keys.length >= 1 && keys.every((k) => k === "items" || k === "program");
+  const itemsOnly = keys.length >= 1 && keys.every((k) => k === "items" || k === "program" || k === "positions");
   if (!itemsOnly) {
     await logActivity({ actorId: user.id, actorName: user.name, action: "update", targetType: "event", targetTitle: ev.title });
   } else {

@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity";
 
 // POST /api/events/:id/duplicate — 행사 복제 (템플릿 재사용)
 // 필드·투두 목록을 복사하되, 투두 상태는 '할 일'로 초기화하고 담당자·마감·행사일은 비운다.
+// 포지션은 자리·메모는 그대로, 사람만 비운다 (같은 장소 행사의 배치 재사용).
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   { const bad = badId(params.id); if (bad) return bad; }
   const { user, error } = await requireActiveUser();
@@ -20,24 +21,27 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   const items = (src.items ?? []).map((it: any) => ({
     title: it.title,
     status: "todo", // 진행 상태 초기화
-    teamId: it.teamId ?? null, // 팀 태깅은 유지(템플릿 가치)
+    teamId: null,
     assigneeId: null, // 담당자 비움
     dueDate: null, // 마감 비움
     note: it.note ?? "",
   }));
   // 식순은 템플릿 가치가 커서 그대로 복사 (시간·순서·비고 유지)
-  const program = (src.program ?? []).map((p: any) => ({ time: p.time ?? "", title: p.title, note: p.note ?? "" }));
+  const program = (src.program ?? []).map((p: any) => ({ time: p.time ?? "", title: p.title, note: p.note ?? "", must: !!p.must }));
+  const positions = (src.positions ?? []).map((p: any) => ({ name: p.name, note: p.note ?? "", userIds: [] }));
 
   const created = await Event.create({
     title,
     description: src.description ?? "",
     teamIds: src.teamIds ?? [],
-    managerId: src.managerId ?? null,
     eventDate: null, // 새 행사일은 사용자가 지정
     location: src.location ?? "",
-    priority: src.priority ?? "normal",
+    meetTime: src.meetTime ?? "",
+    meetPlace: src.meetPlace ?? "",
+    brief: src.brief ?? {},
     items,
     program,
+    positions,
     createdBy: user.id, // 복제한 사람이 소유자
   });
 

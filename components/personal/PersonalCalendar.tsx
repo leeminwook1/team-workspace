@@ -26,7 +26,9 @@ type ATask = {
   teams: { id: string; name: string; color: string }[];
   category?: { name: string; color: string } | null;
   assignees: { id: string; name: string }[];
+  href?: string; // 행사 오버레이 — 누르면 행사 페이지로
 };
+const EVENT_COLOR = "#7c5cff"; // 행사(포지션·할 일) 오버레이 색
 type Viewable = { id: string; name: string; teamName: string };
 
 const PERSONAL_COLOR = "#7d5ef7"; // 개인 일정 색 (보라)
@@ -129,7 +131,20 @@ export default function PersonalCalendar({ meId, meName, viewables }: { meId: st
       const res = await fetch(`/api/tasks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
       if (!res.ok) throw new Error(String(res.status));
       const all: ATask[] = (await res.json()).tasks ?? [];
-      setAssigned(all.filter((t) => (t.assignees ?? []).some((a) => a.id === owner)));
+      const mine = all.filter((t) => (t.assignees ?? []).some((a) => a.id === owner));
+      // 행사 — 포지션 배정일·행사 할 일 마감일
+      let evItems: ATask[] = [];
+      try {
+        const q = new URLSearchParams({ from, to });
+        if (user) q.set("user", user);
+        const r2 = await fetch(`/api/events/mine?${q}`);
+        if (r2.ok) {
+          evItems = ((await r2.json()).items ?? []).map((x: any) => ({
+            ...x, teams: [], assignees: [], category: { name: x.kind === "position" ? "행사 포지션" : "행사 할 일", color: EVENT_COLOR },
+          }));
+        }
+      } catch { /* 행사 오버레이 실패는 무시 */ }
+      setAssigned([...mine, ...evItems]);
     } catch {
       setAssigned([]);
     }
@@ -138,7 +153,7 @@ export default function PersonalCalendar({ meId, meName, viewables }: { meId: st
   const refetch = useCallback(() => {
     if (range) fetchEvents(range.from, range.to, target);
   }, [range, target, fetchEvents]);
-  useAutoRefresh(refetch, ["personal"]); // 자동 반영
+  useAutoRefresh(refetch, ["personal", "event", "task"]); // 자동 반영 (행사 포지션·담당 업무 변경 포함)
 
   function changeTarget(id: string) {
     setTarget(id);
@@ -177,7 +192,7 @@ export default function PersonalCalendar({ meId, meName, viewables }: { meId: st
         id: `task:${t.id}`, title: t.title, start: t.startDate, end, allDay: t.allDay,
         backgroundColor: color + "26", borderColor: color, textColor: color,
         classNames: t.status === "done" ? ["ev-done"] : [],
-        extendedProps: { timeText, mainText: `👤 ${t.title}`, taskId: t.id },
+        extendedProps: { timeText, mainText: t.href ? t.title : `👤 ${t.title}`, taskId: t.id, href: t.href },
       };
     }) : []),
   ];
@@ -229,10 +244,10 @@ export default function PersonalCalendar({ meId, meName, viewables }: { meId: st
           className={`chip chip-btn${showTasks ? " sel" : ""}`}
           onClick={() => setShowTasks((v) => !v)}
         >
-          <Icon name="userLine" size={12} /> 담당 업무 {assigned.length > 0 ? `(${assigned.length})` : ""}
+          <Icon name="userLine" size={12} /> 담당 업무·행사 {assigned.length > 0 ? `(${assigned.length})` : ""}
         </button>
         {showTasks && assigned.length > 0 && (
-          <span className="pc-legend-hint">담당 업무는 팀 색으로 표시 — 클릭하면 팀 달력 상세로 이동</span>
+          <span className="pc-legend-hint"><span className="dot" style={{ background: EVENT_COLOR }} /> 행사(🎯 포지션 · ✅ 할 일) — 클릭하면 상세로 이동</span>
         )}
       </div>
       {!readOnly && (
@@ -257,7 +272,7 @@ export default function PersonalCalendar({ meId, meName, viewables }: { meId: st
           selected={mSel}
           onSelect={setMSel}
           onEventClick={(e) => (readOnly ? setViewing(e) : setEditing(e))}
-          onTaskClick={(t) => router.push(`/calendar?task=${t.id}`)}
+          onTaskClick={(t) => router.push(t.href ?? `/calendar?task=${t.id}`)}
           onAddAt={readOnly ? undefined : (day) => openCreate(day)}
         />
       )}
@@ -301,7 +316,8 @@ export default function PersonalCalendar({ meId, meName, viewables }: { meId: st
           }}
           eventClick={(arg) => {
             // 담당 업무 → 팀 달력의 상세로 이동
-            const taskId = (arg.event.extendedProps as { taskId?: string }).taskId;
+            const { taskId, href } = arg.event.extendedProps as { taskId?: string; href?: string };
+            if (href) { router.push(href); return; }
             if (taskId) { router.push(`/calendar?task=${taskId}`); return; }
             const e = events.find((x) => x.id === arg.event.id);
             if (!e) return;

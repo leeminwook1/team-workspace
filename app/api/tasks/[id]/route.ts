@@ -70,7 +70,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       priority: t.priority,
       location: t.location,
       recurrenceId: t.recurrenceId ? String(t.recurrenceId) : null,
-      program: (t.program ?? []).map((p: any) => ({ id: String(p._id), time: p.time ?? "", title: p.title, note: p.note ?? "" })),
+      program: (t.program ?? []).map((p: any) => ({ id: String(p._id), time: p.time ?? "", title: p.title, note: p.note ?? "", must: !!p.must })),
       pipeline: serializePipeline(t.pipeline),
       rsvp: rsvpSummary(t.rsvp, user.id),
       // 반복 시리즈 전체 회차 수 — 전체 삭제 확인 문구용
@@ -140,7 +140,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (d.program !== undefined) {
     task.program = d.program.map((p) => ({
       ...(p.id && mongoose.isValidObjectId(p.id) ? { _id: p.id } : {}),
-      time: p.time ?? "", title: p.title, note: p.note ?? "",
+      time: p.time ?? "", title: p.title, note: p.note ?? "", must: !!p.must,
     }));
   }
 

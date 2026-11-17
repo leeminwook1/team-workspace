@@ -13,21 +13,16 @@ type EventSummary = {
   id: string;
   title: string;
   teams: Team[];
-  manager: { id: string; name: string } | null;
   eventDate: string | null;
   location: string;
-  priority: string;
+  meetTime: string;
+  positionsTotal: number;
+  myPositions: string[];
   itemsTotal: number;
   itemsDone: number;
   closedAt: string | null;
 };
 
-const PRIO: Record<string, { label: string; color: string; show: boolean }> = {
-  low: { label: "낮음", color: "var(--ink-faint)", show: false },
-  normal: { label: "보통", color: "var(--ink-faint)", show: false },
-  high: { label: "높음", color: "var(--st-prog)", show: true },
-  urgent: { label: "긴급", color: "var(--danger)", show: true },
-};
 function ddayOf(iso: string | null) {
   if (!iso) return null;
   const t = new Date(); t.setHours(0, 0, 0, 0);
@@ -67,7 +62,7 @@ export default function EventList({ teams, canManage }: { teams: Team[]; canMana
       <div className="page-head">
         <div>
           <h1 className="page-title">행사 관리</h1>
-          <p className="page-sub">행사를 클릭하면 그 행사의 할 일(투두) 보드가 열립니다.</p>
+          <p className="page-sub">행사를 누르면 알아야 할 내용·포지션·식순·할 일을 한 화면에서 봐요.</p>
         </div>
         {canManage && (
           <button className="btn btn-primary btn-sm" onClick={() => setCreateOpen(true)}>
@@ -93,22 +88,20 @@ export default function EventList({ teams, canManage }: { teams: Team[]; canMana
           const past = active.filter(isPast);
           const renderCard = (ev: EventSummary) => {
             const dday = ddayOf(ev.eventDate);
-            const prio = PRIO[ev.priority] ?? PRIO.normal;
             const pct = ev.itemsTotal ? Math.round((ev.itemsDone / ev.itemsTotal) * 100) : 0;
             const allDone = ev.itemsTotal > 0 && ev.itemsDone === ev.itemsTotal;
             return (
               <Link href={`/events/${ev.id}`} key={ev.id} className="ev-item">
                 <div className="ev-item-top">
                   {dday && <span className={`kb-dday ${dday.tone}`}>{dday.label}</span>}
-                  {prio.show && (
-                    <span className="badge" style={{ background: `color-mix(in srgb, ${prio.color} 14%, transparent)`, color: prio.color }}>{prio.label}</span>
-                  )}
+                  {ev.myPositions.length > 0 && <span className="ev-mypos">🎯 내 포지션 · {ev.myPositions.join(", ")}</span>}
                 </div>
                 <div className="ev-item-title">{ev.title}</div>
                 <div className="ev-item-meta">
                   {ev.eventDate && <span>{fmtDate(ev.eventDate)}</span>}
-                  {ev.manager && <span>· {ev.manager.name}</span>}
+                  {ev.meetTime && <span>· 집합 {ev.meetTime}</span>}
                   {ev.location && <span>· {ev.location}</span>}
+                  {ev.positionsTotal > 0 && <span>· 포지션 {ev.positionsTotal}</span>}
                 </div>
                 <div className="ev-item-foot">
                   <div className="kb-check-bar"><span style={{ width: `${pct}%` }} /></div>
@@ -157,25 +150,20 @@ export function EventFormModal({
   teams: Team[]; ev?: any; onClose: () => void; onSaved: () => void;
 }) {
   const isEdit = !!ev;
-  const toDate = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 10) : "");
+  const toDate = (iso: string | null) => (iso ? new Date(new Date(iso).getTime() + 9 * 3600_000).toISOString().slice(0, 10) : "");
   const [title, setTitle] = useState(ev?.title ?? "");
-  const [teamIds, setTeamIds] = useState<string[]>(ev ? ev.teams.map((t: Team) => t.id) : (teams[0] ? [teams[0].id] : []));
-  const [managerId, setManagerId] = useState(ev?.manager?.id ?? "");
   const [eventDate, setEventDate] = useState(toDate(ev?.eventDate ?? null));
   const [location, setLocation] = useState(ev?.location ?? "");
-  const [priority, setPriority] = useState(ev?.priority ?? "normal");
+  const [meetTime, setMeetTime] = useState(ev?.meetTime ?? "");
+  const [meetPlace, setMeetPlace] = useState(ev?.meetPlace ?? "");
+  const [dress, setDress] = useState(ev?.brief?.dress ?? "");
+  const [caution, setCaution] = useState(ev?.brief?.caution ?? "");
+  const [delivery, setDelivery] = useState(ev?.brief?.delivery ?? "");
+  const [contact, setContact] = useState(ev?.brief?.contact ?? "");
   const [description, setDescription] = useState(ev?.description ?? "");
-  const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-
-  // 담당자 후보 = 전체 활성 사용자 (부장단도 지정 가능)
-  useEffect(() => {
-    fetch("/api/users")
-      .then((r) => (r.ok ? r.json() : { users: [] }))
-      .then((d) => setMembers((d.users ?? []).map((u: any) => ({ id: u.id, name: u.name }))))
-      .catch(() => setMembers([]));
-  }, []);
+  void teams;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -186,7 +174,10 @@ export function EventFormModal({
       const res = await fetch(isEdit ? `/api/events/${ev.id}` : "/api/events", {
         method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, teamIds, managerId: managerId || null, eventDate: eventDate || null, location, priority, description }),
+        body: JSON.stringify({
+          title, eventDate: eventDate || null, location, meetTime, meetPlace, description,
+          brief: { dress, caution, delivery, contact },
+        }),
       });
       const data = await res.json().catch(() => ({} as any));
       if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
@@ -206,38 +197,52 @@ export function EventFormModal({
         <form onSubmit={save}>
           <div className="field">
             <label>행사명</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 2026 봄 정기공연" required />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 2026 연말 행사" required />
           </div>
           <div className="form-grid-2">
             <div className="field">
-              <label>행사일 (선택)</label>
+              <label>행사일</label>
               <DateField value={eventDate} onChange={(v) => setEventDate(v)} clearable placeholder="날짜 미정" />
             </div>
             <div className="field">
-              <label>담당자 (선택)</label>
-              <select value={managerId} onChange={(e) => setManagerId(e.target.value)}>
-                <option value="">없음</option>
-                {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                {ev?.manager && !members.some((m) => m.id === ev.manager.id) && <option value={ev.manager.id}>{ev.manager.name}</option>}
-              </select>
+              <label>장소</label>
+              <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="예: 6층 대강당" />
             </div>
           </div>
           <div className="form-grid-2">
             <div className="field">
-              <label>우선순위</label>
-              <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-                <option value="low">낮음</option><option value="normal">보통</option>
-                <option value="high">높음</option><option value="urgent">긴급</option>
-              </select>
+              <label>집합 시간</label>
+              <TimeField value={meetTime} onChange={(v) => setMeetTime(v)} placeholder="정하지 않음" />
             </div>
             <div className="field">
-              <label>장소 (선택)</label>
-              <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="예: 대극장" />
+              <label>집합 장소</label>
+              <input value={meetPlace} onChange={(e) => setMeetPlace(e.target.value)} placeholder="예: 6층 로비" maxLength={120} />
+            </div>
+          </div>
+
+          <div className="evf-section">📌 알아야 할 내용 <em>비워둔 항목은 표시되지 않아요</em></div>
+          <div className="field">
+            <label>촬영 주의</label>
+            <textarea value={caution} onChange={(e) => setCaution(e.target.value)} maxLength={1000} rows={2}
+              placeholder="예: 예배 중 플래시 금지 / 강단 위 진입 불가 / 2부 시작 전 셔터음 무음" />
+          </div>
+          <div className="form-grid-2">
+            <div className="field">
+              <label>복장</label>
+              <input value={dress} onChange={(e) => setDress(e.target.value)} maxLength={300} placeholder="예: 검정 상하의, 운동화 금지" />
+            </div>
+            <div className="field">
+              <label>현장 연락처</label>
+              <input value={contact} onChange={(e) => setContact(e.target.value)} maxLength={300} placeholder="예: 진행팀 홍길동 010-0000-0000" />
             </div>
           </div>
           <div className="field">
-            <label>설명 (선택)</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+            <label>납품</label>
+            <input value={delivery} onChange={(e) => setDelivery(e.target.value)} maxLength={500} placeholder="예: 12/22까지 · 셀렉 50컷 · JPG 장변 3000px" />
+          </div>
+          <div className="field">
+            <label>자유 메모</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} placeholder="그 밖에 알아둘 것" />
           </div>
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">

@@ -1585,7 +1585,7 @@ function TaskDetailModal({
     await fetch(`/api/tasks/${task.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ program: rows.map((p) => ({ id: p.id, time: p.time, title: p.title, note: p.note })) }),
+      body: JSON.stringify({ program: rows.map((p) => ({ id: p.id, time: p.time, title: p.title, note: p.note, must: !!p.must })) }),
     });
   }, [task.id]);
 
@@ -1826,9 +1826,10 @@ function TaskDetailModal({
             </div>
             <ol className="ev-prog-list task-prog-preview">
               {program.slice(0, 3).map((p) => (
-                <li className="ev-prog-row" key={p.id}>
+                <li className={`ev-prog-row${p.must ? " must" : ""}`} key={p.id}>
                   <span className="ev-prog-time">{p.time || "—"}</span>
                   <span className="ev-prog-title">{p.title}</span>
+                  {p.must && <span className="ev-prog-must">⭐ 필수 컷</span>}
                   {p.note && <span className="ev-prog-note">{p.note}</span>}
                 </li>
               ))}
@@ -1945,7 +1946,7 @@ function TaskDetailModal({
                 <span className="cuesheet-num">{i + 1}</span>
                 <span className="cuesheet-time">{p.time || "—"}</span>
                 <span className="cuesheet-body">
-                  <span className="cuesheet-name">{p.title}</span>
+                  <span className="cuesheet-name">{p.must && "⭐ "}{p.title}</span>
                   {p.note && <span className="cuesheet-note">{p.note}</span>}
                 </span>
               </li>

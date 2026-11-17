@@ -4,7 +4,7 @@ import { ModalClose } from "@/components/ModalClose";
 import { Icon } from "@/components/icons";
 
 // 식순·타임테이블 한 줄 — 행사·촬영 업무가 공유
-export type ProgramRow = { id: string; time: string; title: string; note: string };
+export type ProgramRow = { id: string; time: string; title: string; note: string; must?: boolean }; // must = ⭐ 필수 컷
 
 export const uid = () =>
   typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `tmp-${Math.random().toString(36).slice(2)}`;
@@ -37,7 +37,7 @@ export function ProgramModal({
     // 완전히 빈 줄은 버리고, 시간·비고만 있고 순서명이 없는 줄은 막는다
     const nonEmpty = rows.filter((r) => r.time.trim() || r.title.trim() || r.note.trim());
     if (nonEmpty.some((r) => !r.title.trim())) { setErr("시간·비고가 있는 줄은 순서 내용도 입력해주세요."); return; }
-    onSave(nonEmpty.map((r) => ({ id: r.id, time: r.time.trim(), title: r.title.trim(), note: r.note.trim() })));
+    onSave(nonEmpty.map((r) => ({ id: r.id, time: r.time.trim(), title: r.title.trim(), note: r.note.trim(), must: !!r.must })));
   }
 
   return (
@@ -45,7 +45,7 @@ export function ProgramModal({
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <ModalClose onClose={onClose} />
         <h2>{title}</h2>
-        <p className="page-sub" style={{ marginTop: -4 }}>시간은 자유롭게 적어요 (예: 14:00 또는 14:00–14:10). 위/아래로 순서를 조정하세요.</p>
+        <p className="page-sub" style={{ marginTop: -4 }}>시간은 자유롭게 적어요 (예: 14:00 또는 14:00–14:10). ⭐를 누르면 꼭 찍어야 하는 <b>필수 컷</b>으로 표시돼요.</p>
         <form onSubmit={submit}>
           <div className="prog-edit">
             {rows.map((r, i) => (
@@ -55,6 +55,11 @@ export function ProgramModal({
                   <span className="prog-edit-num">{i + 1}</span>
                   <button type="button" className="kb-move-btn" disabled={i === rows.length - 1} onClick={() => moveRow(i, 1)} aria-label="아래로"><Icon name="chevronR" size={15} /></button>
                 </div>
+                <button
+                  type="button" className={`prog-edit-must${r.must ? " on" : ""}`} aria-pressed={!!r.must}
+                  aria-label={r.must ? "필수 컷 해제" : "필수 컷으로 표시"} title={r.must ? "필수 컷 해제" : "필수 컷으로 표시"}
+                  onClick={() => upd(r.id, { must: !r.must })}
+                >★</button>
                 <input className="prog-edit-time" value={r.time} onChange={(e) => upd(r.id, { time: e.target.value })} placeholder="14:00" maxLength={40} />
                 <input className="prog-edit-title" value={r.title} onChange={(e) => upd(r.id, { title: e.target.value })} placeholder="순서 내용 (예: 개회 선언)" maxLength={200} />
                 <input className="prog-edit-note" value={r.note} onChange={(e) => upd(r.id, { note: e.target.value })} placeholder="담당·비고 (선택)" maxLength={200} />

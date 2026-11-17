@@ -15,6 +15,7 @@ import { Absence } from "@/models/Absence";
 import { ABSENCE_LABEL, type AbsenceType } from "@/lib/absenceTypes";
 import { isRetiredDeployment } from "@/lib/deployment";
 import { sendShootBriefs } from "@/lib/shootBrief";
+import { sendEventDayBriefs } from "@/lib/eventBrief";
 import { rsvpSummary, sendRsvpRequest } from "@/lib/rsvp";
 
 // 여러 팀의 팀장·부팀장을 한 번의 쿼리로 조회 → teamId별 사용자 id 목록 (N+1 방지)
@@ -55,6 +56,8 @@ export async function GET(req: Request) {
   // 0) 촬영 당일 아침 — 오늘 시작하는 촬영의 담당자에게 시간·장소·장비 안내
   const shoot = await sendShootBriefs(start, end);
   const shootSent = new Set(shoot.tasks);
+  // 0-1) 행사 당일 아침 — 포지션 배정자에게 내 포지션·집합·촬영 주의
+  const eventDay = await sendEventDayBriefs(start, end);
 
   // 1) 오늘 마감(종료)인 미완료 업무 → 담당자에게 (텔레그램에는 [완료] 버튼)
   //    오늘 촬영 알림을 이미 받은 일정은 제외 (하루짜리 촬영이 두 번 오지 않게)
@@ -387,6 +390,7 @@ export async function GET(req: Request) {
 
   return json({
     shootTasks: shoot.tasks.length, shootNotified: shoot.notified, rsvpReminded,
+    eventDayEvents: eventDay.events, eventDayNotified: eventDay.notified,
     selectDue: sel.length, selectNotified,
     reportDue: pl.length, reportNotified,
     tasksDue: tasks.length, taskNotified, directivesDue: dirs.length, dirNotified,

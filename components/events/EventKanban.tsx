@@ -18,10 +18,13 @@ import { ProgramModal, uid, type ProgramRow } from "@/components/ProgramModal";
 
 type Team = { id: string; name: string; color: string };
 type Person = { id: string; name: string } | null;
-type Item = { id: string; title: string; status: "todo" | "doing" | "hold" | "done"; team: Team | null; assignee: Person; dueDate: string | null; note: string };
+type Item = { id: string; title: string; status: "todo" | "doing" | "hold" | "done"; assignee: Person; dueDate: string | null; note: string };
+type Brief = { dress: string; caution: string; delivery: string; contact: string };
+type Position = { id: string; name: string; note: string; people: { id: string; name: string }[] };
 type EventFull = {
-  id: string; title: string; description: string; teams: Team[]; manager: Person;
-  eventDate: string | null; location: string; priority: string; createdBy: string | null; items: Item[];
+  id: string; title: string; description: string; teams: Team[];
+  eventDate: string | null; location: string; createdBy: string | null; items: Item[];
+  meetTime: string; meetPlace: string; brief: Brief; positions: Position[];
   program: ProgramRow[];
   closedAt: string | null;
 };
@@ -43,7 +46,13 @@ function ddayOf(iso: string | null) {
   return { label: `D+${-diff}`, tone: "past" as const };
 }
 const toPayload = (items: Item[]) =>
-  items.map((it) => ({ id: it.id, title: it.title, status: it.status, teamId: it.team?.id ?? null, assigneeId: it.assignee?.id ?? null, dueDate: it.dueDate, note: it.note }));
+  items.map((it) => ({ id: it.id, title: it.title, status: it.status, assigneeId: it.assignee?.id ?? null, dueDate: it.dueDate, note: it.note }));
+// 집합 시간 "13:30" → "오후 1:30"
+function fmtMeet(t: string) {
+  if (!/^\d{2}:\d{2}$/.test(t)) return "";
+  const h = Number(t.slice(0, 2));
+  return `${h < 12 ? "오전" : "오후"} ${h % 12 === 0 ? 12 : h % 12}:${t.slice(3)}`;
+}
 function dueInfo(iso: string | null, done: boolean) {
   if (!iso) return null;
   const t = new Date(); t.setHours(0, 0, 0, 0);
@@ -61,13 +70,13 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
   const myId = session?.user?.id;
   const [ev, setEv] = useState<EventFull | null>(null);
   const [loading, setLoading] = useState(true);
-  const [teamFilter, setTeamFilter] = useState<string>("all");
   const [mineOnly, setMineOnly] = useState(false);
   const [view, setView] = useState<"board" | "calendar">("board");
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
   const [itemModal, setItemModal] = useState<{ status: Item["status"]; item?: Item } | null>(null);
   const [editEvent, setEditEvent] = useState(false);
   const [programOpen, setProgramOpen] = useState(false);
+  const [positionsOpen, setPositionsOpen] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
@@ -86,23 +95,28 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
   }, [eventId]);
   useEffect(() => { load(); }, [load]);
   // 자동 반영 — 단, 모달·드래그 중에는 건너뛴다 (작업 방해 방지)
-  useAutoRefresh(() => { if (!itemModal && !editEvent && !dragId && !programOpen) load(); }, ["event"]);
+  useAutoRefresh(() => { if (!itemModal && !editEvent && !dragId && !programOpen && !positionsOpen) load(); }, ["event"]);
 
   // 담당자 후보 = 전체 활성 사용자 (팀 무관 지정 가능)
   useEffect(() => {
     fetch("/api/users")
       .then((r) => (r.ok ? r.json() : { users: [] }))
-      .then((d) => setMembers((d.users ?? []).map((u: any) => ({ id: u.id, name: u.name }))))
+      .then((d) => {
+        // 시스템 관리자 계정은 빼고, 과원(과장·부과장·과원)을 먼저 — 그다음 부장단
+        const order = (r: string) => (["leader", "vice_leader", "member"].includes(r) ? 0 : 1);
+        const list = (d.users ?? []).filter((u: any) => u.role !== "admin")
+          .sort((a: any, b: any) => order(a.role) - order(b.role) || a.name.localeCompare(b.name, "ko"));
+        setMembers(list.map((u: any) => ({ id: u.id, name: u.name })));
+      })
       .catch(() => setMembers([]));
   }, []);
 
   const filtered = useMemo(() => {
     if (!ev) return [];
     let list = ev.items;
-    if (teamFilter !== "all") list = list.filter((i) => i.team?.id === teamFilter);
     if (mineOnly) list = list.filter((i) => i.assignee?.id === myId);
     return list;
-  }, [ev, teamFilter, mineOnly, myId]);
+  }, [ev, mineOnly, myId]);
 
   const byCol = useMemo(() => {
     const m: Record<string, Item[]> = { todo: [], doing: [], hold: [], done: [] };
@@ -123,8 +137,20 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
     setEv((prev) => (prev ? { ...prev, program } : prev));
     await fetch(`/api/events/${eventId}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ program: program.map((p) => ({ id: p.id, time: p.time, title: p.title, note: p.note })) }),
+      body: JSON.stringify({ program: program.map((p) => ({ id: p.id, time: p.time, title: p.title, note: p.note, must: !!p.must })) }),
     });
+    load();
+  }, [eventId, load]);
+
+  const [posErr, setPosErr] = useState("");
+  const persistPositions = useCallback(async (positions: Position[]) => {
+    setPosErr("");
+    setEv((prev) => (prev ? { ...prev, positions } : prev));
+    const res = await fetch(`/api/events/${eventId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ positions: positions.map((p) => ({ id: p.id, name: p.name, note: p.note, userIds: p.people.map((x) => x.id) })) }),
+    }).catch(() => null);
+    if (!res?.ok) setPosErr((await res?.json().catch(() => null))?.error ?? "포지션을 저장하지 못했어요.");
     load();
   }, [eventId, load]);
 
@@ -143,15 +169,14 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
     setDragId(null);
     if (item) setStatus(item, status);
   }
-  function saveItem(data: { title: string; teamId: string; assigneeId: string; dueDate: string; note: string; status: Item["status"] }, existing?: Item) {
+  function saveItem(data: { title: string; assigneeId: string; dueDate: string; note: string; status: Item["status"] }, existing?: Item) {
     if (!ev) return;
-    const team = allTeams.find((t) => t.id === data.teamId) ?? null;
     const assignee = members.find((m) => m.id === data.assigneeId) ?? null;
     const dueDate = data.dueDate || null;
     if (existing) {
-      persist(ev.items.map((i) => (i.id === existing.id ? { ...i, title: data.title, team, assignee, dueDate, note: data.note, status: data.status } : i)));
+      persist(ev.items.map((i) => (i.id === existing.id ? { ...i, title: data.title, assignee, dueDate, note: data.note, status: data.status } : i)));
     } else {
-      persist([...ev.items, { id: uid(), title: data.title, status: data.status, team, assignee, dueDate, note: data.note }]);
+      persist([...ev.items, { id: uid(), title: data.title, status: data.status, assignee, dueDate, note: data.note }]);
     }
     setItemModal(null);
   }
@@ -231,9 +256,9 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
           </div>
           <h1 className="page-title" style={{ margin: "8px 0 4px" }}>{ev.title}</h1>
           <p className="page-sub">
-            {ev.eventDate && new Date(ev.eventDate).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}
-            {ev.manager && ` · 담당 ${ev.manager.name}`}
-            {ev.location && ` · ${ev.location}`}
+            {ev.eventDate && new Date(ev.eventDate).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" })}
+            {ev.location && ` · 📍 ${ev.location}`}
+            {(ev.meetTime || ev.meetPlace) && ` · ⏰ 집합 ${[fmtMeet(ev.meetTime), ev.meetPlace].filter(Boolean).join(" ")}`}
           </p>
         </div>
         {canManage && (
@@ -250,6 +275,121 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
         <p className="pc-banner" style={{ marginBottom: 12 }}>
           <Icon name="check" size={14} /> 종료된 행사입니다 ({new Date(ev.closedAt).toLocaleDateString("ko-KR", { month: "long", day: "numeric" })} 종료)
         </p>
+      )}
+
+      {/* 알아야 할 내용 */}
+      {(() => {
+        const rows: [string, string, string][] = [
+          ["⏰", "집합", [fmtMeet(ev.meetTime), ev.meetPlace].filter(Boolean).join(" · ")],
+          ["⚠️", "촬영 주의", ev.brief.caution],
+          ["👔", "복장", ev.brief.dress],
+          ["📦", "납품", ev.brief.delivery],
+          ["📞", "연락처", ev.brief.contact],
+          ["📝", "메모", ev.description],
+        ];
+        const filled = rows.filter((r) => r[2].trim());
+        if (filled.length === 0 && !canManage) return null;
+        return (
+          <div className="card ev-brief">
+            <div className="ev-program-head">
+              <h2>📌 알아야 할 내용</h2>
+              {canManage && <button className="btn btn-line btn-sm" onClick={() => setEditEvent(true)}>{filled.length ? "편집" : "작성하기"}</button>}
+            </div>
+            {filled.length === 0 ? (
+              <p className="muted-note" style={{ padding: "4px 0 0" }}>집합 시간·장소, 촬영 주의, 복장, 납품, 연락처를 적어두면 모두가 여기서 확인해요.</p>
+            ) : (
+              <dl className="ev-brief-list">
+                {filled.map(([ico, label, val]) => (
+                  <div className={`ev-brief-row${label === "촬영 주의" ? " caution" : ""}`} key={label}>
+                    <dt><span aria-hidden>{ico}</span> {label}</dt>
+                    <dd>{val}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* 포지션 배치 — 촬영 당일 서 있는 위치 */}
+      {(canManage || ev.positions.length > 0) && (
+        <div className="card ev-pos">
+          <div className="ev-program-head">
+            <h2>🎯 포지션</h2>
+            {canManage && (
+              <button className="btn btn-line btn-sm" onClick={() => setPositionsOpen(true)}>
+                {ev.positions.length > 0 ? "배치 편집" : "배치하기"}
+              </button>
+            )}
+          </div>
+          {posErr && <p className="err-msg">{posErr}</p>}
+          {ev.positions.length === 0 ? (
+            <p className="muted-note" style={{ padding: "4px 0 0" }}>중앙·상수·하수·부감·3층처럼 촬영 당일 서 있을 위치와 사람을 정해요.</p>
+          ) : (
+            <>
+              <div className="ev-pos-grid">
+                {ev.positions.map((p) => {
+                  const mine = p.people.some((x) => x.id === myId);
+                  return (
+                    <div className={`ev-pos-card${mine ? " mine" : ""}`} key={p.id}>
+                      <div className="ev-pos-name">{p.name}{mine && <span className="ev-pos-me">내 자리</span>}</div>
+                      <div className="ev-pos-people">
+                        {p.people.length ? p.people.map((x) => <span key={x.id} className={x.id === myId ? "me" : ""}>{x.name}</span>) : <em>미배정</em>}
+                      </div>
+                      {p.note && <div className="ev-pos-note">{p.note}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+              {(() => {
+                // 사람 기준 요약 — 한 사람이 여러 자리를 맡는 경우도 한눈에
+                const byPerson = new Map<string, { name: string; spots: string[] }>();
+                for (const p of ev.positions) for (const x of p.people) {
+                  if (!byPerson.has(x.id)) byPerson.set(x.id, { name: x.name, spots: [] });
+                  byPerson.get(x.id)!.spots.push(p.name);
+                }
+                if (byPerson.size === 0) return null;
+                return (
+                  <p className="ev-pos-summary">
+                    {Array.from(byPerson.entries()).map(([id, v]) => (
+                      <span key={id} className={id === myId ? "me" : ""}><b>{v.name}</b> {v.spots.join("·")}</span>
+                    ))}
+                  </p>
+                );
+              })()}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 식순·타임테이블 */}
+      {(canManage || ev.program.length > 0) && (
+        <div className="card ev-program">
+          <div className="ev-program-head">
+            <h2>🕒 식순</h2>
+            {canManage && (
+              <button className="btn btn-line btn-sm" onClick={() => setProgramOpen(true)}>
+                {ev.program.length > 0 ? "식순 편집" : "식순 만들기"}
+              </button>
+            )}
+          </div>
+          {ev.program.length === 0 ? (
+            <p className="muted-note" style={{ padding: "4px 0 0" }}>
+              {canManage ? "행사 진행 순서를 등록하고, 꼭 찍어야 하는 순간은 ⭐필수 컷으로 표시해요." : "등록된 식순이 없어요."}
+            </p>
+          ) : (
+            <ol className="ev-prog-list">
+              {ev.program.map((p) => (
+                <li className={`ev-prog-row${p.must ? " must" : ""}`} key={p.id}>
+                  <span className="ev-prog-time">{p.time || "—"}</span>
+                  <span className="ev-prog-title">{p.title}</span>
+                  {p.must && <span className="ev-prog-must">⭐ 필수 컷</span>}
+                  {p.note && <span className="ev-prog-note">{p.note}</span>}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       )}
 
       {/* 진행률 요약 (Toss 스타일 숫자 강조) */}
@@ -272,35 +412,6 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
               </span>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* 식순·타임테이블 */}
-      {(canManage || ev.program.length > 0) && (
-        <div className="card ev-program">
-          <div className="ev-program-head">
-            <h2><Icon name="clock" size={17} /> 식순</h2>
-            {canManage && (
-              <button className="btn btn-line btn-sm" onClick={() => setProgramOpen(true)}>
-                {ev.program.length > 0 ? "식순 편집" : "식순 만들기"}
-              </button>
-            )}
-          </div>
-          {ev.program.length === 0 ? (
-            <p className="muted-note" style={{ padding: "4px 0 0" }}>
-              {canManage ? "행사 진행 순서(식순)를 등록하면 여기에 시간표로 표시돼요." : "등록된 식순이 없어요."}
-            </p>
-          ) : (
-            <ol className="ev-prog-list">
-              {ev.program.map((p) => (
-                <li className="ev-prog-row" key={p.id}>
-                  <span className="ev-prog-time">{p.time || "—"}</span>
-                  <span className="ev-prog-title">{p.title}</span>
-                  {p.note && <span className="ev-prog-note">{p.note}</span>}
-                </li>
-              ))}
-            </ol>
-          )}
         </div>
       )}
 
@@ -364,7 +475,7 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
 
       {itemModal && (
         <ItemModal
-          teams={ev.teams} members={members} status={itemModal.status} item={itemModal.item}
+          members={members} status={itemModal.status} item={itemModal.item}
           onClose={() => setItemModal(null)}
           onSave={saveItem}
           onDelete={itemModal.item ? () => deleteItem(itemModal.item!) : undefined}
@@ -372,6 +483,13 @@ export default function EventKanban({ eventId, allTeams, canManage }: { eventId:
       )}
       {editEvent && (
         <EventFormModal teams={allTeams} ev={ev} onClose={() => setEditEvent(false)} onSaved={() => { setEditEvent(false); load(); }} />
+      )}
+      {positionsOpen && (
+        <PositionsModal
+          initial={ev.positions} members={members}
+          onClose={() => setPositionsOpen(false)}
+          onSave={(rows) => { setPositionsOpen(false); persistPositions(rows); }}
+        />
       )}
       {programOpen && (
         <ProgramModal
@@ -398,9 +516,8 @@ function ItemCard({
       onDragEnd={canManage ? onDragEnd : undefined}
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}>
       <div className="kb-card-title">{item.title}</div>
-      {(item.team || item.assignee || due) && (
+      {(item.assignee || due) && (
         <div className="kb-card-meta">
-          {item.team && <span className="chip chip-xs"><span className="dot" style={{ background: item.team.color }} />{item.team.name}</span>}
           {due && <span className={`due-badge${due.overdue ? " overdue" : due.soon ? " soon" : ""}`}>{due.overdue ? "지연 " : ""}{due.label}</span>}
           {item.assignee && <span>· {item.assignee.name}</span>}
         </div>
@@ -417,14 +534,13 @@ function ItemCard({
 }
 
 function ItemModal({
-  teams, members, status, item, onClose, onSave, onDelete,
+  members, status, item, onClose, onSave, onDelete,
 }: {
-  teams: Team[]; members: { id: string; name: string }[]; status: Item["status"]; item?: Item;
-  onClose: () => void; onSave: (d: { title: string; teamId: string; assigneeId: string; dueDate: string; note: string; status: Item["status"] }, existing?: Item) => void; onDelete?: () => void;
+  members: { id: string; name: string }[]; status: Item["status"]; item?: Item;
+  onClose: () => void; onSave: (d: { title: string; assigneeId: string; dueDate: string; note: string; status: Item["status"] }, existing?: Item) => void; onDelete?: () => void;
 }) {
   const toDate = (iso: string | null | undefined) => (iso ? new Date(iso).toISOString().slice(0, 10) : "");
   const [title, setTitle] = useState(item?.title ?? "");
-  const [teamId, setTeamId] = useState(item?.team?.id ?? (teams.length === 1 ? teams[0].id : ""));
   const [assigneeId, setAssigneeId] = useState(item?.assignee?.id ?? "");
   const [dueDate, setDueDate] = useState(toDate(item?.dueDate));
   const [note, setNote] = useState(item?.note ?? "");
@@ -434,7 +550,7 @@ function ItemModal({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) { setErr("할 일 내용을 입력하세요."); return; }
-    onSave({ title: title.trim(), teamId, assigneeId, dueDate, note: note, status: st }, item);
+    onSave({ title: title.trim(), assigneeId, dueDate, note: note, status: st }, item);
   }
 
   return (
@@ -445,7 +561,7 @@ function ItemModal({
         <form onSubmit={submit}>
           <div className="field">
             <label>내용</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 무대 조명 세팅" required autoFocus />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 단체 촬영 배치도 만들기" required autoFocus />
           </div>
           <div className="form-grid-2">
             <div className="field">
@@ -491,7 +607,7 @@ const STATUS_COLOR: Record<Item["status"], string> = { todo: "#8b95a1", doing: "
 // 행사별 달력 — 그 행사의 투두를 마감일 기준으로 표시 (메인 달력과 분리)
 function EventItemCalendar({ items, eventDate, onOpen }: { items: Item[]; eventDate: string | null; onOpen: (it: Item) => void }) {
   const events: any[] = items.filter((i) => i.dueDate).map((i) => {
-    const color = i.team?.color ?? STATUS_COLOR[i.status];
+    const color = STATUS_COLOR[i.status];
     return {
       id: i.id, title: i.title, start: i.dueDate!, allDay: true,
       backgroundColor: color + "26", borderColor: color, textColor: color,
@@ -527,6 +643,114 @@ function EventItemCalendar({ items, eventDate, onOpen }: { items: Item[]; eventD
         eventClick={(arg) => { const it = items.find((x) => x.id === arg.event.extendedProps.itemId); if (it) onOpen(it); }}
         noEventsContent="마감일이 지정된 할 일이 없습니다"
       />
+    </div>
+  );
+}
+
+/* ── 포지션 배치 편집 ── */
+const POSITION_PRESETS = ["중앙", "상수", "하수", "부감", "3층", "4층", "백스테이지", "객석", "입구"];
+
+function PositionsModal({ initial, members, onClose, onSave }: {
+  initial: Position[]; members: { id: string; name: string }[];
+  onClose: () => void; onSave: (rows: Position[]) => void;
+}) {
+  const [rows, setRows] = useState<Position[]>(initial.length ? initial : []);
+  const [custom, setCustom] = useState("");
+  const [pickFor, setPickFor] = useState<string | null>(null); // 사람 고르는 중인 포지션
+  const [err, setErr] = useState("");
+  const upd = (id: string, patch: Partial<Position>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const add = (name: string) => {
+    const n = name.trim();
+    if (!n) return;
+    const id = uid();
+    setRows((rs) => [...rs, { id, name: n.slice(0, 30), note: "", people: [] }]);
+    setPickFor(id);
+  };
+  const moveRow = (i: number, dir: -1 | 1) => setRows((rs) => {
+    const j = i + dir;
+    if (j < 0 || j >= rs.length) return rs;
+    const nx = [...rs];
+    [nx[i], nx[j]] = [nx[j], nx[i]];
+    return nx;
+  });
+  const togglePerson = (r: Position, m: { id: string; name: string }) =>
+    upd(r.id, { people: r.people.some((x) => x.id === m.id) ? r.people.filter((x) => x.id !== m.id) : [...r.people, m] });
+  const used = new Set(rows.map((r) => r.name));
+  // 사람별 배정 수 — 여러 자리에 들어간 사람 표시용
+  const count = new Map<string, number>();
+  for (const r of rows) for (const x of r.people) count.set(x.id, (count.get(x.id) ?? 0) + 1);
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (rows.some((r) => !r.name.trim())) { setErr("포지션 이름을 입력하세요."); return; }
+    onSave(rows.map((r) => ({ ...r, name: r.name.trim(), note: r.note.trim() })));
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalClose onClose={onClose} />
+        <h2>포지션 배치</h2>
+        <p className="page-sub" style={{ marginTop: -4 }}>촬영 당일 서 있을 위치를 추가하고 사람을 배정해요. 배정되면 그 사람에게 알림이 가고 내 캘린더에 표시돼요.</p>
+        <form onSubmit={submit}>
+          <div className="pos-presets">
+            {POSITION_PRESETS.map((p) => (
+              <button type="button" key={p} className="chip chip-btn" disabled={used.has(p)} onClick={() => add(p)}>+ {p}</button>
+            ))}
+            <span className="pos-custom">
+              <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="직접 입력" maxLength={30}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(custom); setCustom(""); } }} />
+              <button type="button" className="btn btn-line btn-sm" disabled={!custom.trim()} onClick={() => { add(custom); setCustom(""); }}>추가</button>
+            </span>
+          </div>
+
+          {rows.length === 0 ? (
+            <p className="muted-note" style={{ padding: "14px 0" }}>위에서 포지션을 눌러 추가하세요.</p>
+          ) : (
+            <div className="pos-edit">
+              {rows.map((r, i) => (
+                <div className="pos-edit-row" key={r.id}>
+                  <div className="pos-edit-top">
+                    <div className="prog-edit-move">
+                      <button type="button" className="kb-move-btn" disabled={i === 0} onClick={() => moveRow(i, -1)} aria-label="위로"><Icon name="chevronL" size={15} /></button>
+                      <button type="button" className="kb-move-btn" disabled={i === rows.length - 1} onClick={() => moveRow(i, 1)} aria-label="아래로"><Icon name="chevronR" size={15} /></button>
+                    </div>
+                    <input className="pos-edit-name" value={r.name} onChange={(e) => upd(r.id, { name: e.target.value })} maxLength={30} aria-label="포지션 이름" />
+                    <button type="button" className="prog-edit-del" onClick={() => setRows((rs) => rs.filter((x) => x.id !== r.id))} aria-label="포지션 삭제">×</button>
+                  </div>
+                  <div className="pos-edit-people">
+                    {r.people.map((x) => (
+                      <button type="button" key={x.id} className="chip chip-btn sel" onClick={() => togglePerson(r, x)} title="빼기">{x.name} ×</button>
+                    ))}
+                    <button type="button" className="chip chip-btn pos-add-person" onClick={() => setPickFor(pickFor === r.id ? null : r.id)}>
+                      {pickFor === r.id ? "닫기" : "+ 사람"}
+                    </button>
+                  </div>
+                  {pickFor === r.id && (
+                    <div className="pos-picker">
+                      {members.map((m) => {
+                        const on = r.people.some((x) => x.id === m.id);
+                        const elsewhere = (count.get(m.id) ?? 0) - (on ? 1 : 0);
+                        return (
+                          <button type="button" key={m.id} className={`chip chip-btn${on ? " sel" : ""}`} onClick={() => togglePerson(r, m)}>
+                            {on && "✓ "}{m.name}{elsewhere > 0 && <em className="pos-elsewhere"> · 다른 자리 {elsewhere}</em>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <input className="pos-edit-note" value={r.note} onChange={(e) => upd(r.id, { note: e.target.value })} maxLength={200}
+                    placeholder="역할 메모 (선택) — 예: 전체 와이드, 출연자 등·퇴장" />
+                </div>
+              ))}
+            </div>
+          )}
+          {err && <p className="err-msg">{err}</p>}
+          <div className="modal-actions">
+            <button className="btn btn-primary">저장</button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

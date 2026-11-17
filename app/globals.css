@@ -3020,3 +3020,59 @@ a { color: inherit; text-decoration: none; }
 /* 월간 칸 — 제목이 먼저 보이도록 배지는 짧게, 줄어들지 않게 */
 .ev1c .ev1c-t { min-width: 0; }
 .rsvp-badge.compact { margin-left: 3px; padding: 0 4px; font-size: 10px; letter-spacing: -0.02em; }
+
+/* 식순 ⭐ 필수 컷 */
+.prog-edit-row { grid-template-columns: 34px 30px 96px 1fr 32px; grid-template-areas: "handle must time title del" "handle note note note note"; }
+@media (max-width: 560px) {
+  .prog-edit-row { grid-template-columns: 34px 30px 1fr 32px; grid-template-areas: "handle must time del" "handle title title title" "handle note note note"; }
+}
+.prog-edit-must {
+  grid-area: must; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--line-strong); font-size: 15px; cursor: pointer; line-height: 1; padding: 0;
+}
+.prog-edit-must:hover { color: #f5b301; }
+.prog-edit-must.on { color: #fff; background: #f5b301; border-color: #f5b301; }
+.ev-prog-row.must .ev-prog-title { font-weight: 800; }
+.ev-prog-must { flex: none; font-size: 10.5px; font-weight: 800; color: #b07d00; background: color-mix(in srgb, #f5b301 18%, transparent); padding: 2px 6px; border-radius: 999px; }
+
+/* ── 행사: 알아야 할 내용 · 포지션 (사진과) ── */
+.ev-mypos { font-size: 11.5px; font-weight: 800; color: var(--primary); background: var(--accent-soft); padding: 3px 8px; border-radius: 999px; }
+.evf-section { margin: 18px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; font-weight: 800; color: var(--ink); }
+.evf-section em { font-style: normal; font-size: 12px; font-weight: 500; color: var(--ink-faint); margin-left: 6px; }
+.ev-brief, .ev-pos { padding: 18px 20px; margin-bottom: 14px; }
+.ev-brief-list { margin: 4px 0 0; display: flex; flex-direction: column; }
+.ev-brief-row { display: grid; grid-template-columns: 96px 1fr; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+.ev-brief-row:first-child { border-top: 0; }
+.ev-brief-row dt { font-size: 12.5px; font-weight: 800; color: var(--ink-faint); }
+.ev-brief-row dd { margin: 0; font-size: 14px; color: var(--ink); white-space: pre-wrap; line-height: 1.55; }
+.ev-brief-row.caution { background: color-mix(in srgb, var(--danger) 6%, transparent); margin: 0 -10px; padding: 9px 10px; border-radius: 10px; border-top-color: transparent; }
+.ev-brief-row.caution dt { color: var(--danger); }
+@media (max-width: 560px) { .ev-brief-row { grid-template-columns: 1fr; gap: 2px; } }
+
+.ev-pos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 4px; }
+.ev-pos-card { border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px; background: var(--surface-2); }
+.ev-pos-card.mine { border-color: var(--primary); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--primary); }
+.ev-pos-name { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+.ev-pos-me { font-size: 10.5px; font-weight: 800; color: #fff; background: var(--primary); padding: 2px 6px; border-radius: 999px; }
+.ev-pos-people { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 6px; font-size: 13.5px; font-weight: 600; color: var(--ink-soft); }
+.ev-pos-people .me { color: var(--primary); font-weight: 800; }
+.ev-pos-people em { font-style: normal; color: var(--ink-faint); font-weight: 500; }
+.ev-pos-note { margin-top: 6px; font-size: 12.5px; color: var(--ink-faint); line-height: 1.45; }
+.ev-pos-summary { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 12.5px; color: var(--ink-faint); }
+.ev-pos-summary b { color: var(--ink-soft); margin-right: 3px; }
+.ev-pos-summary .me b { color: var(--primary); }
+
+.pos-presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+.pos-presets .chip:disabled { opacity: 0.35; cursor: default; }
+.pos-custom { display: inline-flex; gap: 6px; align-items: center; }
+.pos-custom input { width: 110px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--ink); font-family: inherit; font-size: 13px; }
+.pos-edit { display: flex; flex-direction: column; gap: 10px; max-height: 52vh; overflow-y: auto; padding: 2px; margin: 0 -2px; }
+.pos-edit-row { padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); display: flex; flex-direction: column; gap: 8px; }
+.pos-edit-top { display: flex; align-items: center; gap: 8px; }
+.pos-edit-top .prog-edit-move { flex-direction: row; }
+.pos-edit-name { flex: 1; min-width: 0; padding: 8px 10px; font-size: 15px; font-weight: 800; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font-family: inherit; }
+.pos-edit-people { display: flex; flex-wrap: wrap; gap: 6px; }
+.pos-add-person { border-style: dashed; }
+.pos-picker { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
+.pos-elsewhere { font-style: normal; font-weight: 500; opacity: 0.7; font-size: 11.5px; }
+.pos-edit-note { width: 100%; padding: 8px 10px; font-size: 13px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font-family: inherit; }
