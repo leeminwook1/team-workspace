@@ -183,6 +183,11 @@ a { color: inherit; text-decoration: none; }
 }
 .field textarea { resize: vertical; min-height: 84px; }
 .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* 그리드 칸이 내용(특히 iOS 날짜·시간 입력의 고유 최소폭)만큼 늘어나 옆 칸을 덮지 않게 */
+.form-grid-2 > * { min-width: 0; }
+.field input[type="date"], .field input[type="time"] { min-width: 0; max-width: 100%; display: block; }
+/* iOS Safari — 날짜·시간 값이 가운데 정렬·높이 0으로 찌그러지는 것 보정 */
+.field input::-webkit-date-and-time-value { text-align: left; min-height: 1.4em; }
 .form-grid-2.wide-first { grid-template-columns: 2fr 1fr; }
 .mini-select {
   padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line);
@@ -250,7 +255,13 @@ a { color: inherit; text-decoration: none; }
   width: 30px; height: 30px; border-radius: 9px; background: var(--primary);
   color: #fff; display: grid; place-items: center; font-size: 15px; font-weight: 800; flex: none;
 }
-.brand .word { font-size: 17px; letter-spacing: -0.02em; }
+.brand .word { font-size: 17px; letter-spacing: -0.02em; white-space: nowrap; } /* 좁은 폰에서 "사진/과" 줄바꿈 방지 */
+/* 아주 좁은 폰(≤380px): 상단 버튼 5개 + 로고 글자가 안 들어가 겹침 → 로고는 "사" 마크만, 버튼 간격 축소 */
+@media (max-width: 380px) {
+  .topbar-m .brand .word { display: none; }
+  .topbar-m > div { gap: 6px !important; } /* 인라인 gap 덮어쓰기 */
+  .topbar-m { padding-left: 12px; padding-right: 12px; }
+}
 
 .side {
   background: var(--surface); border-right: 1px solid var(--line);
@@ -1314,6 +1325,8 @@ a { color: inherit; text-decoration: none; }
     border-bottom: 1px solid var(--line);
   }
   .topbar-m-right { display: flex; align-items: center; gap: 10px; }
+  .topbar-m { gap: 8px; }
+  .topbar-m .brand { min-width: 0; flex: none; }
 
   .bottom-nav {
     display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
@@ -1513,6 +1526,9 @@ a { color: inherit; text-decoration: none; }
   .modal-overlay { place-items: end stretch; padding: 0; }
   .modal {
     max-width: 100%; max-height: 92vh;
+    /* iOS Safari는 vh에 주소창·툴바 뒤 영역까지 포함 → 시트 아래(등록 버튼)가 툴바에 가려짐. 보이는 높이(dvh) 기준 */
+    max-height: 92dvh;
+    overscroll-behavior: contain; /* 시트 끝까지 스크롤해도 뒤 페이지가 같이 밀리지 않게 */
     border-radius: var(--r-lg) var(--r-lg) 0 0;
     padding: 10px 20px calc(24px + env(safe-area-inset-bottom));
     animation: sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -1690,7 +1706,17 @@ a { color: inherit; text-decoration: none; }
     padding: 10px 20px calc(10px + env(safe-area-inset-bottom)); background: var(--surface);
     border-top: 1px solid var(--line);
   }
-  .tf-actions .tf-submit { height: 48px; font-size: 15px; min-width: 110px; }
+  .tf-actions .tf-submit { height: 48px; font-size: 15px; min-width: 96px; flex: none; }
+  /* 요약은 "…"로 잘리지 않게 두 줄까지 */
+  .tf-summary {
+    white-space: normal; font-size: 12.5px; line-height: 1.35;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .tf-summary em { display: block; }
+  /* 장비 목록 — 시트 안에서 또 스크롤되면 손가락이 갇히므로 폰에선 높이 제한 해제 (분류 탭으로 좁혀 고르기) */
+  .tf-modal .equip-list, .tf-modal .equip-sel-grid { max-height: none; overflow: visible; }
+  /* 선택한 장비 줄: 이름이 길면 담당자 선택과 겹치지 않게 줄여서 표시 */
+  .tf-modal .equip-tag { max-width: calc(100% - 118px); }
 }
 
 /* 개인 일정 한 줄 빠른 입력 */
