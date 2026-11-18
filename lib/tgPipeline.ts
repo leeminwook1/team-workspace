@@ -15,19 +15,17 @@ const KST = 9 * 3600_000;
 const md = (d: Date) => { const k = new Date(new Date(d).getTime() + KST); return `${k.getUTCMonth() + 1}/${k.getUTCDate()}`; };
 const hm = (d: Date) => { const k = new Date(new Date(d).getTime() + KST); return `${String(k.getUTCHours()).padStart(2, "0")}:${String(k.getUTCMinutes()).padStart(2, "0")}`; };
 
-/** 이 사람이 반납할 수 있는(대부분 본인 예약) 이 촬영의 연동 장비 — 반납 버튼 표시용 */
+/** 이 촬영에서 "내 이름으로 예약된" 연동 장비 — 반납 버튼 표시용.
+ *  (과장이 담당자여도 다른 사람 장비를 대신 반납하라고 제안하지 않게 본인 예약만. 대리 반납은 웹에서) */
 export async function myTaskReservations(user: SessionUser, taskId: string) {
-  const list: any[] = await Reservation.find({ relatedTaskId: taskId, status: "booked" }).select("resourceId reservedBy").lean();
+  const list: any[] = await Reservation.find({ relatedTaskId: taskId, status: "booked", reservedBy: user.id })
+    .select("resourceId reservedBy").lean();
   if (list.length === 0) return [];
   const res: any[] = await Resource.find({ _id: { $in: list.map((r) => r.resourceId) } }).select("name managerId").lean();
   const byId = new Map(res.map((r) => [String(r._id), r]));
-  const mine = list.filter((r) => String(r.reservedBy) === user.id);
-  // 본인 예약이 없으면 반납 권한이 있는 것(과장단·장비 담당)만
-  const pool = mine.length ? mine : list.filter((r) => {
-    const rs = byId.get(String(r.resourceId));
-    return canMarkReturned(user, String(r.reservedBy), rs?.managerId ? String(rs.managerId) : null);
-  });
-  return pool.map((r) => ({ id: String(r._id), name: byId.get(String(r.resourceId))?.name ?? "장비" }));
+  return list
+    .filter((r) => { const rs = byId.get(String(r.resourceId)); return canMarkReturned(user, String(r.reservedBy), rs?.managerId ? String(rs.managerId) : null); })
+    .map((r) => ({ id: String(r._id), name: byId.get(String(r.resourceId))?.name ?? "장비" }));
 }
 
 /** 진행 메시지 — 제목·일시·단계 진행표 + 다음 단계 버튼 (+ 내 장비 반납 버튼) */

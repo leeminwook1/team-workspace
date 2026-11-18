@@ -8,6 +8,7 @@ import { taskWindow } from "./taskReservations";
 import { renderPipeline, myTaskReservations } from "./tgPipeline";
 import { renderChecklist } from "./tgReturn";
 import type { SessionUser, Role } from "./permissions";
+import { eveValid, wrapValid } from "./noticeMarks";
 
 // 시간 맞춤 알림 — 30분마다 (GitHub Actions → /api/cron/frequent). 늦게·여러 번 불려도 안전하게
 // "보낼 때가 됐고 + 아직 안 보낸(표시 없음)" 것만 보내고, 보낸 표시(task.notice)를 남긴다.
@@ -33,14 +34,16 @@ export async function sendEveningBriefs(now = new Date()) {
     allDay: false, // 종일 일정은 UTC 자정(=09시 KST) 저장이라 "이른 촬영"으로 오인하지 않게 제외
     startDate: { $gte: tStart, $lt: early },
     status: { $ne: "done" },
-    "notice.eveAt": null,
     $or: [{ categoryId: { $in: cats } }, { "pipeline.on": true }],
-  }).populate("assignees", "name").select("title startDate endDate allDay location assignees").lean();
+  }).populate("assignees", "name").select("title startDate endDate allDay location assignees notice").lean();
 
   let count = 0;
   for (const t of tasks) {
-    // 먼저 표시 — 동시에 두 번 불려도 한 번만 보낸다
-    const claim = await Task.updateOne({ _id: t._id, "notice.eveAt": null }, { $set: { "notice.eveAt": new Date() } });
+    if (eveValid(t.notice?.eveAt, t.startDate)) continue; // 지금 시작 시각 기준으로 이미 보냄 (시간이 바뀌었으면 다시)
+    if ((t.assignees ?? []).filter((a: any) => a?._id).length === 0) continue; // 담당자 없으면 표시도 안 함 (나중에 지정되면 보냄)
+    // 읽은 표시 값 그대로일 때만 새로 표시 — 동시에 두 번 불려도 한 번만 보낸다
+    const prev = t.notice?.eveAt ?? null;
+    const claim = await Task.updateOne({ _id: t._id, "notice.eveAt": prev }, { $set: { "notice.eveAt": new Date() } });
     if (claim.modifiedCount === 0) continue;
     await sendShootBrief(t, "🌙 내일 아침 촬영");
     count += 1;
@@ -56,20 +59,21 @@ export async function sendWrapPrompts(now = new Date()) {
   const tasks: any[] = await Task.find({
     endDate: { $gte: new Date(now.getTime() - 3 * DAY), $lt: now },
     status: { $ne: "done" },
-    "notice.wrapAt": null,
     $or: [{ categoryId: { $in: cats } }, { "pipeline.on": true }],
-  }).select("title startDate endDate allDay location assignees createdBy pipeline").lean();
+  }).select("title startDate endDate allDay location assignees createdBy pipeline notice").lean();
 
   let count = 0;
   for (const t of tasks) {
     const end = taskWindow({ startDate: new Date(t.startDate), endDate: new Date(t.endDate), allDay: !!t.allDay }).endAt;
+    if (wrapValid(t.notice?.wrapAt, end)) continue; // 지금 종료 시각 기준으로 이미 보냄 (종료가 늦춰졌으면 다시)
     if (end.getTime() > now.getTime() - 30 * 60_000) continue; // 끝나고 30분 지나서
+    const prev = t.notice?.wrapAt ?? null;
     if (end.getTime() < now.getTime() - 2 * DAY) {
       // 너무 지난 건 조용히 표시만 (배포 직후 과거 촬영에 한꺼번에 가지 않게)
-      await Task.updateOne({ _id: t._id }, { $set: { "notice.wrapAt": now } });
+      await Task.updateOne({ _id: t._id, "notice.wrapAt": prev }, { $set: { "notice.wrapAt": now } });
       continue;
     }
-    const claim = await Task.updateOne({ _id: t._id, "notice.wrapAt": null }, { $set: { "notice.wrapAt": new Date() } });
+    const claim = await Task.updateOne({ _id: t._id, "notice.wrapAt": prev }, { $set: { "notice.wrapAt": new Date() } });
     if (claim.modifiedCount === 0) continue;
 
     const pipelineNeeded = t.pipeline?.on && !t.pipeline?.steps?.shoot;

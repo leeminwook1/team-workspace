@@ -4,6 +4,7 @@ import { Reservation } from "@/models/Reservation";
 import "@/models/Resource";
 import "@/models/User";
 import { notify } from "./notify";
+import { eveValid } from "./noticeMarks";
 
 // 촬영 안내 — 촬영(촬영 카테고리 또는 촬영 진행 관리가 켜진 일정)의 담당자에게
 // 시간·장소·함께 가는 사람·연동 장비(내가 챙길 장비 포함)를 한 번에 보낸다.
@@ -69,7 +70,7 @@ export async function sendShootBriefs(start: Date, end: Date) {
   for (const t of tasks) {
     if ((t.assignees ?? []).filter((a: any) => a?._id).length === 0) continue;
     sent.push(String(t._id));
-    if (t.notice?.eveAt) continue; // 전날 저녁에 이미 안내함
+    if (eveValid(t.notice?.eveAt, t.startDate)) continue; // 전날 저녁에 (지금 시간 기준으로) 이미 안내함
     notified += await sendShootBrief(t, "📸 오늘 촬영");
   }
   return { tasks: sent, notified };
