@@ -11,8 +11,8 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
-// 모바일 하단 탭에 고정할 핵심 메뉴 (나머지는 '더보기' 시트로)
-const PRIMARY_HREFS = ["/home", "/calendar", "/resources", "/events"];
+// 모바일 하단 탭에 고정할 핵심 메뉴 (나머지는 '더보기' 시트로) — 이 순서대로 표시
+const PRIMARY_HREFS = ["/home", "/personal", "/calendar", "/assignments", "/pipeline"];
 
 /** 데스크톱 좌측 세로 네비게이션 */
 export default function NavLinks({ items }: { items: NavItem[] }) {
@@ -30,7 +30,7 @@ export default function NavLinks({ items }: { items: NavItem[] }) {
   );
 }
 
-/** 모바일 하단 탭바 (Toss 스타일) — 핵심 4개 + 더보기 시트 */
+/** 모바일 하단 탭바 (Toss 스타일) — 핵심 5개 + 더보기 시트 */
 export function BottomNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   const router = useRouter();

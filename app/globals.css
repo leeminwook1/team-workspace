@@ -1345,11 +1345,15 @@ a { color: inherit; text-decoration: none; }
     border-top: 1px solid var(--line);
     padding-bottom: env(safe-area-inset-bottom);
   }
-  /* 5칸 균등 (핵심 4개 + 더보기) — 가로 스크롤 없이 한 화면에 */
+  /* 6칸 균등 (핵심 5개 + 더보기) — 가로 스크롤 없이 한 화면에, 글자는 한 줄 */
   .bottom-nav a, .bottom-nav .bn-more-btn {
     flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-    height: var(--nav-h); color: var(--ink-faint); font-size: 11px; font-weight: 700;
+    height: var(--nav-h); color: var(--ink-faint); font-size: 11px; font-weight: 700; letter-spacing: -0.03em;
+    white-space: nowrap; overflow: hidden;
     transition: color 0.15s; border: 0; background: transparent; font-family: inherit; cursor: pointer;
+  }
+  @media (max-width: 380px) {
+    .bottom-nav a, .bottom-nav .bn-more-btn { font-size: 10.5px; letter-spacing: -0.05em; }
   }
   .bottom-nav a.on, .bottom-nav .bn-more-btn.on { color: var(--primary); }
   .bottom-nav a:active, .bottom-nav .bn-more-btn:active { background: var(--paper); }
