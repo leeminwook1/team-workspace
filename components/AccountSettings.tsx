@@ -4,21 +4,23 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { ModalClose } from "./ModalClose";
 
-type NotifyPrefs = { assign: boolean; due: boolean; late: boolean; directive: boolean; equip: boolean };
-const PREF_ITEMS: { key: keyof NotifyPrefs; label: string; desc: string }[] = [
+type NotifyPrefs = { assign: boolean; due: boolean; late: boolean; directive: boolean; equip: boolean; weekly: boolean };
+const PREF_ITEMS: { key: keyof NotifyPrefs; label: string; desc: string; leaderOnly?: boolean }[] = [
   { key: "assign", label: "담당 배정", desc: "업무·행사 담당자로 지정될 때" },
   { key: "due", label: "마감 리마인더", desc: "오늘 마감 업무 아침 알림" },
   { key: "late", label: "지연 리마인더", desc: "마감이 지난 업무 아침 알림" },
   { key: "directive", label: "지시(TODO)", desc: "부장단 TODO가 내려올 때 (과장·부과장)" },
   { key: "equip", label: "장비 예약·반납", desc: "장비 예약·반납·미반납·수령 예정 알림" },
+  { key: "weekly", label: "주간 촬영 보고", desc: "매주 월요일 9시 — 지난주 촬영·이번 주 예정 (과장·부과장)", leaderOnly: true },
 ];
 
 export default function AccountSettings({
-  initialName, email, roleLabel, teamName, initialTelegramChatId, initialNotifyPrefs, initialIcalToken,
+  initialName, email, roleLabel, teamName, initialTelegramChatId, initialNotifyPrefs, initialIcalToken, isLeader,
 }: {
   initialName: string; email: string; roleLabel: string; teamName: string | null; initialTelegramChatId?: string;
   initialNotifyPrefs?: NotifyPrefs;
   initialIcalToken?: string;
+  isLeader?: boolean; // 과장·부과장 — 주간 촬영 보고 항목 표시
 }) {
   const { update } = useSession();
   const [name, setName] = useState(initialName);
@@ -32,7 +34,7 @@ export default function AccountSettings({
   const [codeBusy, setCodeBusy] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [prefs, setPrefs] = useState<NotifyPrefs>(
-    { assign: true, due: true, late: true, directive: true, equip: true, ...(initialNotifyPrefs ?? {}) }
+    { assign: true, due: true, late: true, directive: true, equip: true, weekly: true, ...(initialNotifyPrefs ?? {}) }
   );
 
   // ── iCal 구독 ──
@@ -248,7 +250,7 @@ export default function AccountSettings({
           {tgId.trim() && (
             <div className="tg-prefs">
               <div className="tg-prefs-title">받을 알림 선택</div>
-              {PREF_ITEMS.map((it) => (
+              {PREF_ITEMS.filter((it) => !it.leaderOnly || isLeader).map((it) => (
                 <div className="switch-row" key={it.key}>
                   <div>
                     <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ink-soft)" }}>{it.label}</div>

@@ -189,6 +189,7 @@ export const meUpdateSchema = z.object({
       late: z.boolean().optional(),
       directive: z.boolean().optional(),
       equip: z.boolean().optional(),
+      weekly: z.boolean().optional(),
     })
     .optional(),
 });

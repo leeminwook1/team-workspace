@@ -19,6 +19,7 @@ import { notify } from "./notify";
 import { touchChanged } from "./changes";
 import { esc, answerCallback, editTelegramMessage, type TgButton } from "./telegram";
 import { findSimilarTasks } from "./similarTasks";
+import { buildWeeklyReport } from "./weeklyReport";
 import { getDeptId, DEPT_NAME } from "@/lib/dept";
 
 // 명령 응답 — 문자열(플레인) 또는 서식·버튼 포함 객체. warn = 등록 안 됨(중복 경고 등)
@@ -49,6 +50,7 @@ const HELP = `📖 사용법
   예) /예약 캐논 R6, 배터리(7-1) 내일 14-16
 
 /오늘 · /내일 · /이번주 — 일정 조회
+/주간보고 — 지난주 촬영 + 이번 주 촬영 예정 (날짜·장소·촬영 인원, 매주 월 09시 과장에게 자동 발송)
 /내일정 — 내가 담당인 업무 (번호 표시)
 /완료 3 — /내일정의 3번 업무 완료 처리 (제목 일부로도 가능)
 /검색 키워드 — 일정 제목 검색
@@ -241,6 +243,7 @@ export async function handleTelegramCommand(chatId: string, text: string, fromId
       case "/오늘": case "/today": return await listDay(user, 0);
       case "/내일": case "/tomorrow": return await listDay(user, 1);
       case "/이번주": case "/week": return await listWeek(user);
+      case "/주간보고": case "/weekly": return { text: await buildWeeklyReport(), html: true };
       case "/내일정": case "/mytasks": return await listMyTasks(user);
       case "/완료": case "/complete": return await completeMyTask(user, args);
       case "/검색": case "/find": return await searchTasks(user, args);

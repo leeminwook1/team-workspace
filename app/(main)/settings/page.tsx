@@ -30,7 +30,9 @@ export default async function SettingsPage() {
         late: me.notifyPrefs?.late !== false,
         directive: me.notifyPrefs?.directive !== false,
         equip: me.notifyPrefs?.equip !== false,
+        weekly: me.notifyPrefs?.weekly !== false,
       }}
+      isLeader={me.role === "leader" || me.role === "vice_leader"}
     />
   );
 }

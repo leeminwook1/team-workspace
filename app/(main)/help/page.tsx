@@ -178,6 +178,7 @@ export default function HelpPage() {
               <tr><td><code>/개인 제목 날짜 시간</code></td><td>내 캘린더에 개인 일정 등록 — 줄바꿈으로 여러 건 한 번에</td></tr>
               <tr><td><code>/예약 장비명 날짜 시간</code></td><td>장비 예약 — 쉼표로 여러 개, 세트 이름을 쓰면 세트째</td></tr>
               <tr><td><code>/오늘 · /내일 · /이번주</code></td><td>일정 조회</td></tr>
+              <tr><td><code>/주간보고</code></td><td>지난주 촬영 + 이번 주 촬영 예정 (날짜·시간·장소·촬영 인원) — 매주 월요일 9시 과장·부과장에게 자동 발송</td></tr>
               <tr><td><code>/내일정</code></td><td>내 담당 업무 (번호 표시)</td></tr>
               <tr><td><code>/완료 3</code></td><td>번호나 제목으로 완료 처리</td></tr>
               <tr><td><code>/검색 키워드</code></td><td>일정 제목 검색</td></tr>

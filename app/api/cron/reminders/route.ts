@@ -17,6 +17,7 @@ import { isRetiredDeployment } from "@/lib/deployment";
 import { sendShootBriefs } from "@/lib/shootBrief";
 import { sendEventDayBriefs } from "@/lib/eventBrief";
 import { rsvpSummary, sendRsvpRequest } from "@/lib/rsvp";
+import { sendWeeklyReports } from "@/lib/weeklyReport";
 
 // 여러 팀의 팀장·부팀장을 한 번의 쿼리로 조회 → teamId별 사용자 id 목록 (N+1 방지)
 async function leadersByTeam(teamIds: string[]): Promise<Map<string, string[]>> {
@@ -280,6 +281,9 @@ export async function GET(req: Request) {
     }
   }
 
+  // 6-0) 월요일 — 주간 촬영 보고 (지난주 촬영 + 이번 주 예정) → 과장·부과장
+  const weeklySent = new Date(Date.now() + 9 * 3600_000).getUTCDay() === 1 ? await sendWeeklyReports() : 0;
+
   // 6-1) 모임 참석 확인 — 오늘이 응답 마감인데 아직 답하지 않은 사람에게 재알림 (하루 1번)
   const rsvpDue: any[] = await Task.find({
     "rsvp.on": true, "rsvp.deadline": { $gte: start, $lt: end },
@@ -389,7 +393,7 @@ export async function GET(req: Request) {
   }
 
   return json({
-    shootTasks: shoot.tasks.length, shootNotified: shoot.notified, rsvpReminded,
+    shootTasks: shoot.tasks.length, shootNotified: shoot.notified, rsvpReminded, weeklySent,
     eventDayEvents: eventDay.events, eventDayNotified: eventDay.notified,
     selectDue: sel.length, selectNotified,
     reportDue: pl.length, reportNotified,

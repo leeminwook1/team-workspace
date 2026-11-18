@@ -40,6 +40,7 @@ const UserSchema = new Schema(
       late: { type: Boolean, default: true }, // 지연(마감 지난) 업무 리마인더
       directive: { type: Boolean, default: true }, // 지시(TODO)
       equip: { type: Boolean, default: true }, // 장비 예약·반납
+      weekly: { type: Boolean, default: true }, // 주간 촬영 보고 (월 09시, 과장·부과장)
     },
     // 텔레그램 연동 코드 — 설정에서 발급, 봇에게 /연동 <코드> 전송으로 챗 ID 자동 연결 (10분 유효)
     tgLinkCode: { type: String, default: "" },

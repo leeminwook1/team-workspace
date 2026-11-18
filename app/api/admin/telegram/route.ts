@@ -11,6 +11,7 @@ const BOT_COMMANDS = [
   { command: "today", description: "오늘 일정" },
   { command: "tomorrow", description: "내일 일정" },
   { command: "week", description: "이번 주 일정" },
+  { command: "weekly", description: "주간 촬영 보고 — 지난주·이번 주 촬영" },
   { command: "mytasks", description: "내 담당 업무" },
   { command: "complete", description: "업무 완료 처리 — /내일정 번호" },
   { command: "find", description: "일정 제목 검색" },
