@@ -20,6 +20,7 @@ import { touchChanged } from "./changes";
 import { esc, answerCallback, editTelegramMessage, type TgButton } from "./telegram";
 import { findSimilarTasks } from "./similarTasks";
 import { buildWeeklyReport } from "./weeklyReport";
+import { defaultReportDue } from "./pipeline";
 import { getDeptId, DEPT_NAME } from "@/lib/dept";
 
 // 명령 응답 — 문자열(플레인) 또는 서식·버튼 포함 객체. warn = 등록 안 됨(중복 경고 등)
@@ -55,16 +56,23 @@ const HELP = `📖 사용법
 /완료 3 — /내일정의 3번 업무 완료 처리 (제목 일부로도 가능)
 /검색 키워드 — 일정 제목 검색
 /예약현황 [날짜] — 장비 예약 현황
+/빈장비 [날짜] [시간] — 그 시간에 빌릴 수 있는 장비·세트 (세트는 버튼으로 바로 예약)
+  예) /빈장비 내일 14-16
 /내예약 — 내 장비 예약 (반납·취소 버튼)
 /연동 123456 — 계정 연결 (코드는 사진과 워크스페이스 설정에서 발급)
-/챗아이디 — 이 대화방 챗 ID (팀 그룹방 브리핑 등록용)`;
+/챗아이디 — 이 대화방 챗 ID (팀 그룹방 브리핑 등록용)
+
+✍️ / 없이 그냥 써도 돼요 (1:1 대화방): "내일 오후 3시~5시 촬영 연습" → 개인·과 일정·촬영 중 골라 등록
+📸 사진을 보내면 과제로 제출할 수 있어요 (앨범도 가능)
+📦 반납 버튼을 누르면 배터리·메모리·이상 유무를 체크하고 반납돼요
+🌙 오전 촬영은 전날 저녁, 촬영이 끝나면 진행 버튼(촬영→백업→셀렉→보정→보고)이 와요`;
 
 // ── 파싱 유틸 ──
-type DateRange = { start: { y: number; m: number; d: number }; end: { y: number; m: number; d: number } };
+export type DateRange = { start: { y: number; m: number; d: number }; end: { y: number; m: number; d: number } };
 
 const WEEKDAY_IDX: Record<string, number> = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
 
-function parseOneDate(s: string, now: Date): { y: number; m: number; d: number } | null {
+export function parseOneDate(s: string, now: Date): { y: number; m: number; d: number } | null {
   const kst = new Date(now.getTime() + KST);
   const fromKst = (t: Date) => ({ y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() });
   const plusDays = (n: number) => fromKst(new Date(kst.getTime() + n * 86_400_000));
@@ -92,7 +100,7 @@ function parseOneDate(s: string, now: Date): { y: number; m: number; d: number }
   return null;
 }
 
-function parseDateToken(s: string, now: Date): DateRange | null {
+export function parseDateToken(s: string, now: Date): DateRange | null {
   // 기간: 7/20-7/22, 금요일-일요일 등 (앞뒤 각각 파싱)
   const rangeMatch = s.match(/^(.+?)-(\d{1,2}\/\d{1,2}|\d{4}-\d{1,2}-\d{1,2}|오늘|내일|모레|(?:다음주)?[월화수목금토일]요일)$/);
   if (rangeMatch && !/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
@@ -104,7 +112,7 @@ function parseDateToken(s: string, now: Date): DateRange | null {
   return one ? { start: one, end: one } : null;
 }
 
-function parseTimeToken(s: string): { sh: number; sm: number; eh: number; em: number } | null {
+export function parseTimeToken(s: string): { sh: number; sm: number; eh: number; em: number } | null {
   // 14-16, 14:00-16:00, 14시-16시, 14~16 모두 허용
   const m = s.match(/^(\d{1,2})(?::(\d{2}))?시?[-~](\d{1,2})(?::(\d{2}))?시?$/);
   if (!m) return null;
@@ -130,14 +138,21 @@ function extractTailSections(args: string, keys: string[]): { rest: string; sect
 }
 const splitNames = (s: string | undefined) => (s ?? "").split(",").map((x) => x.trim()).filter(Boolean);
 
-const ymd = (d: { y: number; m: number; d: number }) =>
+export const ymd = (d: { y: number; m: number; d: number }) =>
   `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
 // KST 시각 → UTC Date
-const kstDate = (d: { y: number; m: number; d: number }, h: number, min: number) =>
+export const kstDate = (d: { y: number; m: number; d: number }, h: number, min: number) =>
   new Date(Date.UTC(d.y, d.m - 1, d.d, h, min) - KST);
 
-const fmtT = (dt: Date) =>
+export const fmtT = (dt: Date) =>
   new Date(dt).toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
+
+// 등록 답장용 날짜·시간 — "7/20" 또는 "7/20~7/22", "종일" 또는 "14:00-16:00" (KST)
+export function whenLabel(startDate: Date, endDate: Date, allDay: boolean) {
+  const md = (d: Date) => { const k = new Date(new Date(d).getTime() + KST); return `${k.getUTCMonth() + 1}/${k.getUTCDate()}`; };
+  const a = md(startDate), b = md(endDate);
+  return { when: a === b ? a : `${a}~${b}`, timeStr: allDay ? "종일" : `${fmtT(startDate)}-${fmtT(endDate)}` };
+}
 
 // 장비 이름 매칭 (부분 일치, 대소문자 무시) — /일정 장비: 와 /예약 이 공유
 async function matchResources(names: string[]): Promise<{ picked: { id: string; name: string }[] } | { error: string }> {
@@ -248,6 +263,8 @@ export async function handleTelegramCommand(chatId: string, text: string, fromId
       case "/완료": case "/complete": return await completeMyTask(user, args);
       case "/검색": case "/find": return await searchTasks(user, args);
       case "/예약현황": case "/reservations": return await listReservations(rest[0] ?? "오늘");
+      // 동적 import — tgFree가 이 파일의 파서를 쓰므로 순환 참조를 피한다
+      case "/빈장비": case "/free": return await (await import("./tgFree")).listFree(user, args);
       case "/내예약": case "/mybookings": return await listMyReservations(user);
       default:
         return `모르는 명령이에요: ${cmd}\n\n${HELP}`;
@@ -383,13 +400,7 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
   if (!title) return "❌ 제목이 없어요.\n예) /일정 주간회의 내일 14:00-15:00";
   if (!date) return "❌ 날짜를 못 찾았어요. 7/20, 2026-07-20, 오늘, 내일 형식으로 써주세요.";
   if (time && time.eh * 60 + time.em <= time.sh * 60 + time.sm) return "❌ 종료 시각이 시작보다 빨라요.";
-
-  // 사진과 전용 — 소속은 항상 과 (@팀 옵션은 무시)
-  void teamName;
-  const teamId = await getDeptId();
-  const teamLabel = DEPT_NAME;
-  if (!teamId) return "❌ 과 설정이 아직 없어요. 관리자에게 문의해주세요.";
-  if (!canCreateTaskInAll(user, [teamId])) return "❌ 일정을 등록할 권한이 없어요.";
+  void teamName; // 사진과 전용 — 소속은 항상 과 (@팀 옵션은 무시)
 
   // 카테고리
   let categoryId: string | null = null;
@@ -399,6 +410,37 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
     categoryId = String(cat._id);
   }
 
+  const allDay = !time;
+  const startDate = allDay ? new Date(ymd(date.start)) : kstDate(date.start, time!.sh, time!.sm);
+  // 기간(다중일) + 시간 지정이면 종료일은 date.end 기준 — 예전엔 date.start를 써서
+  // "7/20-7/22 14-16"이 7/20 하루로만 저장되고 답장은 3일로 안내되던 불일치를 수정
+  const endDate = allDay ? new Date(ymd(date.end)) : kstDate(date.end, time!.eh, time!.em);
+
+  return createTaskCore(user, {
+    title, startDate, endDate, allDay, priority, location, categoryId, catLabel: catName,
+    assigneeNames, equipNames, force,
+  });
+}
+
+// 일정 생성 본체 — /일정 파서와 "그냥 쓰기"(자연어) 등록이 같이 쓴다. 날짜는 이미 UTC Date로 계산된 값.
+export async function createTaskCore(user: SessionUser, f: {
+  title: string; startDate: Date; endDate: Date; allDay: boolean;
+  priority?: string; location?: string; categoryId?: string | null; catLabel?: string;
+  assigneeNames?: string[]; equipNames?: string[]; force?: boolean; pipelineOn?: boolean;
+}): Promise<TgReply> {
+  const { title, startDate, endDate, allDay, force } = f;
+  const priority = f.priority ?? "normal";
+  const location = f.location ?? "";
+  const categoryId = f.categoryId ?? null;
+  const catName = f.catLabel ?? "";
+  const equipNames = f.equipNames ?? [];
+  const assigneeNames = f.assigneeNames ?? [];
+
+  const teamId = await getDeptId();
+  const teamLabel = DEPT_NAME;
+  if (!teamId) return "❌ 과 설정이 아직 없어요. 관리자에게 문의해주세요.";
+  if (!canCreateTaskInAll(user, [teamId])) return "❌ 일정을 등록할 권한이 없어요.";
+
   // 담당자 — 이름으로 매칭 (여러 명 쉼표 구분)
   let assignees: { id: string; name: string }[] = [];
   if (assigneeNames.length > 0) {
@@ -407,12 +449,6 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
     if ("error" in m) return m.error;
     assignees = m.picked;
   }
-
-  const allDay = !time;
-  const startDate = allDay ? new Date(ymd(date.start)) : kstDate(date.start, time!.sh, time!.sm);
-  // 기간(다중일) + 시간 지정이면 종료일은 date.end 기준 — 예전엔 date.start를 써서
-  // "7/20-7/22 14-16"이 7/20 하루로만 저장되고 답장은 3일로 안내되던 불일치를 수정
-  const endDate = allDay ? new Date(ymd(date.end)) : kstDate(date.end, time!.eh, time!.em);
 
   // 중복 감지 — 같은 기간에 비슷한 제목의 일정이 있으면 새로 만들지 않고 참여를 제안 (!제목 = 강제 등록)
   if (!force) {
@@ -456,6 +492,8 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
   const task = await Task.create({
     title, teamIds: [teamId], categoryId, assignees: assignees.map((a) => a.id), createdBy: user.id,
     startDate, endDate, allDay, priority, location,
+    // 촬영 진행 관리 — 촬영으로 등록하면 켜서 촬영 후 텔레그램 진행 버튼이 오게 (보고 마감 기본: 종료 + 7일)
+    ...(f.pipelineOn ? { pipeline: { on: true, reportDue: defaultReportDue(endDate) } } : {}),
   });
   if (equipment.length > 0) {
     await syncTaskReservations(task, equipment.map((p) => p.id), window, user.id);
@@ -471,11 +509,8 @@ async function createTask(user: SessionUser, args: string): Promise<TgReply> {
     });
   }
 
-  const when = date.start.m === date.end.m && date.start.d === date.end.d
-    ? `${date.start.m}/${date.start.d}`
-    : `${date.start.m}/${date.start.d}~${date.end.m}/${date.end.d}`;
-  const timeStr = allDay ? "종일" : `${String(time!.sh).padStart(2, "0")}:${String(time!.sm).padStart(2, "0")}-${String(time!.eh).padStart(2, "0")}:${String(time!.em).padStart(2, "0")}`;
-  const extras = [catName && `#${esc(catName)}`, priority === "urgent" && "🔴긴급", priority === "high" && "🟠높음", location && `📍${esc(location)}`].filter(Boolean).join(" ");
+  const { when, timeStr } = whenLabel(startDate, endDate, allDay);
+  const extras = [catName && `#${esc(catName)}`, f.pipelineOn && "📸 촬영 진행 관리", priority === "urgent" && "🔴긴급", priority === "high" && "🟠높음", location && `📍${esc(location)}`].filter(Boolean).join(" ");
   const assigneeLine = assignees.length > 0 ? `\n👤 담당: ${esc(assignees.map((a) => a.name).join(", "))}` : "";
   const equipLine = equipment.length > 0 ? `\n📦 장비 예약: ${esc(equipment.map((p) => p.name).join(", "))}` : "";
   return {
@@ -522,15 +557,19 @@ async function createPersonalEvent(user: SessionUser, args: string): Promise<TgR
   const startDate = allDay ? new Date(ymd(date.start)) : kstDate(date.start, time!.sh, time!.sm);
   // 기간(다중일) + 시간 지정이면 종료일은 date.end 기준 (하루로 뭉개지던 버그 수정)
   const endDate = allDay ? new Date(ymd(date.end)) : kstDate(date.end, time!.eh, time!.em);
+  return createPersonalCore(user, { title, startDate, endDate, allDay, location });
+}
 
+// 개인 일정 생성 본체 — /개인 파서와 "그냥 쓰기"(자연어) 등록이 같이 쓴다
+export async function createPersonalCore(user: SessionUser, f: {
+  title: string; startDate: Date; endDate: Date; allDay: boolean; location?: string;
+}): Promise<TgReply> {
+  const { title, startDate, endDate, allDay } = f;
+  const location = f.location ?? "";
   const ev = await PersonalEvent.create({ userId: user.id, title, memo: "", location, startDate, endDate, allDay });
   await touchChanged("personal"); // 웹 '내 캘린더' 자동 반영
 
-  const p2 = (n: number) => String(n).padStart(2, "0");
-  const when = date.start.m === date.end.m && date.start.d === date.end.d
-    ? `${date.start.m}/${date.start.d}`
-    : `${date.start.m}/${date.start.d}~${date.end.m}/${date.end.d}`;
-  const timeStr = allDay ? "종일" : `${p2(time!.sh)}:${p2(time!.sm)}-${p2(time!.eh)}:${p2(time!.em)}`;
+  const { when, timeStr } = whenLabel(startDate, endDate, allDay);
   const locLine = location ? `\n📍 ${esc(location)}` : "";
   return {
     text: `✅ 개인 일정 등록: <b>${esc(title)}</b> (${esc(user.name ?? "")})\n${when} ${timeStr}${locLine}\n🔒 내 캘린더에만 표시돼요.`,
@@ -933,38 +972,7 @@ export async function handleTelegramCallback(p: {
       return;
     }
 
-    if (action === "ret") {
-      const r: any = await Reservation.findById(id);
-      if (!r) { await answerCallback(p.callbackId, "예약을 찾을 수 없어요."); return; }
-      if (r.status === "returned") { await answerCallback(p.callbackId, "이미 반납 처리된 예약이에요."); return; }
-      if (r.status !== "booked") { await answerCallback(p.callbackId, "취소된 예약은 반납할 수 없어요."); return; }
-      const res: any = await Resource.findById(r.resourceId).select("name managerId").lean();
-      if (!canMarkReturned(user, String(r.reservedBy), res?.managerId ? String(res.managerId) : null)) {
-        await answerCallback(p.callbackId, "반납 처리 권한이 없어요. (예약자·관리 담당자·과장단)"); return;
-      }
-      const now = new Date();
-      const late = now.getTime() > new Date(r.endAt).getTime() + 10 * 60_000;
-      r.status = "returned";
-      r.returnedAt = now;
-      r.returnedBy = user.id;
-      await r.save();
-      const label = reservationLabel(res?.name ?? "자원", r.startAt, r.endAt);
-      await logActivity({
-        actorId: user.id, actorName: user.name ?? "", action: "status", targetType: "reservation",
-        targetTitle: label, meta: { detail: late ? "지연 반납 (텔레그램)" : "반납 완료 (텔레그램)" },
-      });
-      // 웹 반납과 동일 — 예약자·관리 담당자에게 알림 (처리한 본인 제외)
-      const recipients = [String(r.reservedBy), res?.managerId ? String(res.managerId) : ""]
-        .filter((uid) => uid && uid !== user.id);
-      await notify(recipients, {
-        type: "reservation",
-        title: late ? "⏰ 장비가 지연 반납되었습니다" : "✅ 장비가 반납되었습니다",
-        body: `${label} — ${user.name ?? ""} 님이 반납 처리`,
-        link: "/resources",
-      });
-      await finish("반납 처리했어요!", `✅ 반납 처리됨 — ${user.name ?? ""}${late ? " (지연)" : ""}`);
-      return;
-    }
+    // ret:<rid>(반납)은 lib/tgRouter → lib/tgReturn 의 체크리스트로 처리
 
     await answerCallback(p.callbackId, "알 수 없는 동작이에요.");
   } catch (e) {

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { handleTelegramCommand, handleTelegramCallback } from "@/lib/telegramCommands";
-import { sendTelegram } from "@/lib/telegram";
+import { routeMessage, routeCallback } from "@/lib/tgRouter";
 
 // POST /api/telegram/webhook — 텔레그램 봇이 받은 메시지·버튼 콜백 수신 (setWebhook으로 등록)
 // 보안: setWebhook 시 지정한 secret_token이 X-Telegram-Bot-Api-Secret-Token 헤더로 와야 처리.
+// 처리 분배는 lib/tgRouter (명령·사진·그냥 쓰기·버튼).
 export async function POST(req: Request) {
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
   if (!secret) {
@@ -15,11 +15,11 @@ export async function POST(req: Request) {
 
   const update = await req.json().catch(() => null);
 
-  // 인라인 버튼 콜백 — 완료·등록 취소·예약 취소·반납 처리
+  // 인라인 버튼 콜백
   const cb = update?.callback_query;
   if (cb?.id && cb.message?.chat?.id && typeof cb.data === "string") {
     try {
-      await handleTelegramCallback({
+      await routeCallback({
         fromId: String(cb.from?.id ?? ""),
         chatId: String(cb.message.chat.id),
         messageId: cb.message.message_id,
@@ -28,26 +28,17 @@ export async function POST(req: Request) {
         callbackId: String(cb.id),
       });
     } catch (e) {
-      console.error("[telegram webhook] 콜백 처리 오류:", e);
+      console.error("[telegram webhook] 콜백 처리 오류:", (e as Error)?.message);
     }
     return NextResponse.json({ ok: true });
   }
 
-  const msg = update?.message;
-  const chatId = msg?.chat?.id;
-  const text = msg?.text;
-
-  // 텍스트 명령만 처리 (사진·스티커 등 무시). 그룹방에서는 보낸 사람 개인 ID로 계정 식별.
-  if (chatId && typeof text === "string" && text.startsWith("/")) {
+  // 메시지 — / 명령(그룹방 포함), 1:1 대화방의 사진·일반 문장
+  if (update?.message) {
     try {
-      const reply = await handleTelegramCommand(String(chatId), text, msg?.from?.id ? String(msg.from.id) : undefined);
-      if (typeof reply === "string") {
-        if (reply) await sendTelegram(String(chatId), reply);
-      } else if (reply?.text) {
-        await sendTelegram(String(chatId), reply.text, { html: reply.html, buttons: reply.buttons });
-      }
+      await routeMessage(update.message);
     } catch (e) {
-      console.error("[telegram webhook] 처리 오류:", e);
+      console.error("[telegram webhook] 처리 오류:", (e as Error)?.message);
     }
   }
 

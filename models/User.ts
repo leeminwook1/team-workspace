@@ -45,6 +45,9 @@ const UserSchema = new Schema(
     // 텔레그램 연동 코드 — 설정에서 발급, 봇에게 /연동 <코드> 전송으로 챗 ID 자동 연결 (10분 유효)
     tgLinkCode: { type: String, default: "" },
     tgLinkCodeExp: { type: Date, default: null },
+    // 텔레그램 대화 중 임시 상태 (lib/tgDraft.ts) — "그냥 쓰기" 등록 대기 문장 / 과제 사진 묶음 / 반납 이상 내용 입력 대기
+    // { kind: "text"|"photo"|"issue", at, ...종류별 값 } — 30분 지나면 무시
+    tgDraft: { type: Schema.Types.Mixed, default: null },
   },
   { timestamps: true }
 );

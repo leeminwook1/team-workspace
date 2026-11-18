@@ -119,6 +119,31 @@ export async function editTelegramMessage(chatId: string, messageId: number, tex
   });
 }
 
+/** 사용자가 보낸 파일(사진) 내려받기 — 실패 시 null. 다운로드 URL에 봇 토큰이 들어 있으므로 절대 로그에 남기지 않는다 */
+export async function downloadTelegramFile(fileId: string, maxBytes = 8 * 1024 * 1024): Promise<{ data: Buffer; path: string } | null> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !fileId) return null;
+  try {
+    const meta: any = await fetch(`${API}/bot${token}/getFile`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ file_id: fileId }),
+    }).then((r) => r.json()).catch(() => null);
+    const path: string | undefined = meta?.result?.file_path;
+    if (!meta?.ok || !path) { console.error("[telegram] getFile 실패"); return null; }
+    if (meta.result.file_size && meta.result.file_size > maxBytes) return null;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20_000);
+    const res = await fetch(`${API}/file/bot${token}/${path}`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) { console.error(`[telegram] 파일 다운로드 실패 (${res.status})`); return null; }
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > maxBytes) return null;
+    return { data: buf, path };
+  } catch {
+    console.error("[telegram] 파일 다운로드 오류");
+    return null;
+  }
+}
+
 /** 봇 명령 메뉴 등록 — 텔레그램 규격상 명령어는 영문 소문자·숫자·_만 허용 */
 export async function setBotCommands(commands: { command: string; description: string }[]) {
   return tgCall("setMyCommands", { commands });

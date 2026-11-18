@@ -17,6 +17,7 @@ const BOT_COMMANDS = [
   { command: "find", description: "일정 제목 검색" },
   { command: "reservations", description: "장비 예약 현황" },
   { command: "mybookings", description: "내 장비 예약 (반납·취소)" },
+  { command: "free", description: "빈 장비 — 날짜 [시간], 세트 바로 예약" },
   { command: "schedule", description: "일정 등록 — 제목 날짜 [시간]" },
   { command: "private", description: "개인 일정 등록 — 내 캘린더에만" },
   { command: "book", description: "장비 예약 — 장비명 날짜 [시간]" },

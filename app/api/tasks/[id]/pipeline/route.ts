@@ -2,10 +2,9 @@ import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
 import { requireActiveUser, json, badId } from "@/lib/api";
 import { canEditTaskDoc, canChangeStatusAny } from "@/lib/permissions";
-import { logActivity } from "@/lib/activity";
 import { touchChanged } from "@/lib/changes";
-import { returnTaskReservations } from "@/lib/taskReservations";
-import { STEP_KEYS, STEP_LABEL, serializePipeline, defaultReportDue, type StepKey } from "@/lib/pipeline";
+import { applyPipelineStep } from "@/lib/pipelineOps";
+import { STEP_KEYS, serializePipeline, defaultReportDue, type StepKey } from "@/lib/pipeline";
 
 // PATCH /api/tasks/:id/pipeline — 촬영 진행 관리
 //  { step, done }      단계 체크/해제 — 담당자·등록자·과장·부과장·부장단
@@ -52,46 +51,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     task.pipeline.selectDue = d;
   }
 
-  // 단계 체크
-  let finished = false;
+  // 단계 체크 (텔레그램 버튼과 같은 로직 — lib/pipelineOps)
   let equipDone: string[] = [];
   if (body.step !== undefined) {
     const step = body.step as StepKey;
     if (!STEP_KEYS.includes(step)) return json({ error: "알 수 없는 단계입니다." }, 400);
     if (!task.pipeline?.on) return json({ error: "진행 관리가 꺼져 있어요." }, 409);
     if (!canStep) return json({ error: "진행 상황을 바꿀 권한이 없습니다. (담당자·과장)" }, 403);
-    const done = body.done !== false;
-    const idx = STEP_KEYS.indexOf(step);
-    if (done) {
-      // 앞 단계가 비어 있으면 함께 체크 (보정 완료를 누르면 촬영~셀렉도 완료로 간주)
-      for (let i = 0; i <= idx; i++) {
-        const k = STEP_KEYS[i];
-        if (!task.pipeline.steps[k]) {
-          task.pipeline.steps[k] = new Date();
-          task.pipeline.stepBy[k] = user.id;
-        }
-      }
-      if (task.status === "todo") task.status = "in_progress";
-      if (step === "report" && task.status !== "done") { task.status = "done"; finished = true; }
-    } else {
-      // 해제 — 뒤 단계도 함께 해제
-      for (let i = idx; i < STEP_KEYS.length; i++) {
-        const k = STEP_KEYS[i];
-        task.pipeline.steps[k] = null;
-        task.pipeline.stepBy[k] = null;
-      }
-      if (task.status === "done") task.status = "in_progress";
-    }
-    task.markModified("pipeline");
-    await task.save();
-    if (finished) {
-      const rr = await returnTaskReservations(task._id, user.id);
-      equipDone = [...rr.returned, ...rr.cancelled];
-    }
-    await logActivity({
-      actorId: user.id, actorName: user.name, action: "status", targetTitle: task.title,
-      meta: { detail: `${STEP_LABEL[step]} ${done ? "완료" : "취소"}${finished ? " — 보고 완료로 일정 종료" : ""}` },
-    });
+    const r = await applyPipelineStep(task, step, body.done !== false, user);
+    equipDone = r.equipDone;
   } else {
     task.markModified("pipeline");
     await task.save();

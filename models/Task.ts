@@ -83,6 +83,12 @@ const TaskSchema = new Schema(
       selectDue: { type: Date, default: null }, // 셀렉 마감 — 바로 못 할 때 담당자가 정해두는 기한 (선택)
     },
 
+    // 시간 맞춤 알림 보낸 표시 (중복 방지) — lib/timedNotices.ts
+    notice: {
+      eveAt: { type: Date, default: null }, // 오전 촬영 전날 저녁 안내
+      wrapAt: { type: Date, default: null }, // 촬영 끝난 뒤 진행·반납 버튼
+    },
+
     deletedAt: { type: Date, default: null }, // 소프트 삭제 — 30일 내 복구 가능, 이후 크론이 완전 삭제
   },
   { timestamps: true }
