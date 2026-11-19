@@ -80,6 +80,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (body.dueDate !== undefined) {
     const d = body.dueDate ? new Date(body.dueDate) : null;
     if (d && isNaN(d.getTime())) return json({ error: "마감일 형식이 잘못됐습니다." }, 400);
+    // 마감일이 바뀌면 일주일 전 알림을 새 마감일 기준으로 다시 보낸다
+    if (String(a.dueDate?.getTime?.() ?? "") !== String(d?.getTime() ?? "")) a.dueRemindedAt = null;
     a.dueDate = d;
   }
   if (typeof body.closed === "boolean") a.closed = body.closed;

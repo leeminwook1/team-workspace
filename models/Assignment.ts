@@ -20,6 +20,7 @@ const AssignmentSchema = new Schema(
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
     dueDate: { type: Date, default: null }, // 제출 마감
     closed: { type: Boolean, default: false }, // 마감 처리되면 제출·수정 불가
+    dueRemindedAt: { type: Date, default: null }, // 마감 일주일 전 알림 보낸 시각 (중복 방지)
   },
   { timestamps: true }
 );
