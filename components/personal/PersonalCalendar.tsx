@@ -12,13 +12,14 @@ import { Icon } from "@/components/icons";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useAutoRefresh } from "@/components/useAutoRefresh";
 import { parseQuickEntry, type QuickParsed } from "@/lib/quickEntry";
+import { RepeatEvery, RepeatDates, encodeRepeat, type RepeatMode } from "@/components/RepeatExtra";
+import { repeatLabel } from "@/lib/repeatRule";
 
 type PEvent = {
   id: string; title: string; memo: string; location: string;
   startDate: string; endDate: string; allDay: boolean;
   recurrenceId?: string | null; repeatFreq?: string | null;
 };
-const REPEAT_LABEL: Record<string, string> = { daily: "매일", weekly: "매주", biweekly: "격주", monthly: "매월" };
 // 담당 업무 (팀 달력의 일정 중 이 캘린더 주인이 담당자인 것 — 읽기 전용 오버레이)
 type ATask = {
   id: string; title: string; startDate: string; endDate: string; allDay: boolean;
@@ -615,8 +616,11 @@ function PersonalEventModal({ event, defaultDate, defaultEndDate, prefill, onClo
   const [memo, setMemo] = useState(event?.memo ?? "");
   const [showExtra, setShowExtra] = useState(!!(event?.location || event?.memo || prefill?.location)); // 장소·메모 펼침
   // 반복 — 새 일정: 주기·종료일 / 반복 일정 수정: 적용 범위
-  const [repeat, setRepeat] = useState<"none" | "daily" | "weekly" | "biweekly" | "monthly">("none");
+  const [repeat, setRepeat] = useState<RepeatMode>("none");
   const [repeatUntil, setRepeatUntil] = useState("");
+  const [everyN, setEveryN] = useState(3); // N일·N주마다
+  const [everyUnit, setEveryUnit] = useState<"d" | "w">("d");
+  const [repeatDates, setRepeatDates] = useState<string[]>([]); // 날짜 직접 지정
   const isSeries = !!event?.recurrenceId;
   const [scope, setScope] = useState<"one" | "following" | "all">("one");
   const [err, setErr] = useState("");
@@ -666,7 +670,9 @@ function PersonalEventModal({ event, defaultDate, defaultEndDate, prefill, onClo
     if (allDay && endDate < startDate) { setErr("종료일이 시작일보다 빠를 수 없어요."); return; }
     if (!allDay && endTime <= startTime) { setErr("종료 시각이 시작 시각보다 빨라요."); return; }
     const rUntil = repeatUntil || addMonths(startDate, 3);
-    if (!isEdit && repeat !== "none") {
+    const extraDates = repeatDates.filter((x) => x > startDate);
+    if (!isEdit && repeat === "dates" && extraDates.length === 0) { setErr("반복할 날짜를 하나 이상 더 골라주세요."); return; }
+    if (!isEdit && repeat !== "none" && repeat !== "dates") {
       if (rUntil < startDate) { setErr("반복 종료일이 시작일보다 빨라요."); return; }
       if (rUntil > addMonths(startDate, 12)) { setErr("반복은 최대 1년까지 설정할 수 있어요."); return; }
     }
@@ -684,7 +690,8 @@ function PersonalEventModal({ event, defaultDate, defaultEndDate, prefill, onClo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim(), location, memo, ...when,
-          ...(!isEdit && repeat !== "none" ? { repeat, repeatUntil: rUntil } : {}),
+          ...(!isEdit && repeat === "dates" ? { repeat: "dates", repeatDates: extraDates } : {}),
+          ...(!isEdit && repeat !== "none" && repeat !== "dates" ? { repeat: encodeRepeat(repeat, everyN, everyUnit), repeatUntil: rUntil } : {}),
         }),
       });
       const data = await res.json().catch(() => ({} as any));
@@ -792,7 +799,14 @@ function PersonalEventModal({ event, defaultDate, defaultEndDate, prefill, onClo
                   <button key={k} type="button" role="radio" aria-checked={repeat === k} className={repeat === k ? "on" : ""} onClick={() => setRepeat(k)}>{l}</button>
                 ))}
               </div>
-              {repeat !== "none" && (
+              {/* 직접 지정 — N일·N주마다 / 날짜를 골라서 */}
+              <div className="pe-chips rp-more">
+                <button type="button" className={`chip chip-btn${repeat === "every" ? " sel" : ""}`} onClick={() => setRepeat(repeat === "every" ? "none" : "every")}>🔁 N일·N주마다</button>
+                <button type="button" className={`chip chip-btn${repeat === "dates" ? " sel" : ""}`} onClick={() => setRepeat(repeat === "dates" ? "none" : "dates")}>📅 날짜 직접 선택</button>
+              </div>
+              {repeat === "every" && <RepeatEvery n={everyN} unit={everyUnit} onN={setEveryN} onUnit={setEveryUnit} />}
+              {repeat === "dates" && <RepeatDates base={startDate} dates={repeatDates} onChange={setRepeatDates} />}
+              {repeat !== "none" && repeat !== "dates" && (
                 <div className="pe-repeat-until">
                   <label htmlFor="pe-ru">반복 종료일</label>
                   <DateField id="pe-ru" value={repeatUntil || addMonths(startDate, 3)} min={startDate} max={addMonths(startDate, 12)} onChange={(v) => setRepeatUntil(v)} />
@@ -803,7 +817,7 @@ function PersonalEventModal({ event, defaultDate, defaultEndDate, prefill, onClo
           )}
           {isSeries && (
             <div className="field">
-              <label>🔁 {REPEAT_LABEL[event!.repeatFreq ?? ""] ?? ""} 반복 일정 — 적용 범위</label>
+              <label>🔁 {repeatLabel(event!.repeatFreq)} 반복 일정 — 적용 범위</label>
               <div className="seg pe-seg" role="radiogroup" aria-label="적용 범위">
                 {([["one", "이 일정만"], ["following", "이후 모두"], ["all", "전체"]] as const).map(([k, l]) => (
                   <button key={k} type="button" role="radio" aria-checked={scope === k} className={scope === k ? "on" : ""} onClick={() => setScope(k)}>{l}</button>

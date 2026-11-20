@@ -28,7 +28,8 @@ const TaskSchema = new Schema(
     // 반복 일정 — 같은 반복 묶음의 오커런스들이 공유하는 id (생성 시 확정, null = 단건)
     recurrenceId: { type: Schema.Types.ObjectId, default: null, index: true },
     // 반복 규칙 — 크론이 오커런스를 이어서 생성(롤링 연장)할 때 사용
-    repeatFreq: { type: String, enum: ["daily", "weekly", "biweekly", "monthly", null], default: null },
+    // 매일·매주·격주·매월·d<N>(N일마다)·w<N>(N주마다)·dates(날짜 지정 — 크론 연장 없음) — lib/repeatRule
+    repeatFreq: { type: String, default: null, match: /^(daily|weekly|biweekly|monthly|dates|d\d{1,2}|w\d{1,2})$/ },
     repeatUntil: { type: Date, default: null }, // 반복 종료(그날 포함 다음날 자정)
 
     status: { type: String, enum: ["todo", "in_progress", "done", "hold"], default: "todo" },

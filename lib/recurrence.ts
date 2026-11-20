@@ -1,7 +1,11 @@
 // 반복 일정 오커런스 날짜 계산 — 생성(API)과 롤링 연장(크론)이 공유
+import { intervalDays } from "./repeatRule";
 
 // 반복 오커런스 시작일 계산 — monthly는 말일 클램프 (1/31 → 2/28)
 export function addInterval(d: Date, repeat: string, n: number): Date {
+  // N일마다(d3)·N주마다(w2) — lib/repeatRule
+  const every = intervalDays(repeat);
+  if (every) return new Date(d.getTime() + n * every * 86_400_000);
   if (repeat === "daily") return new Date(d.getTime() + n * 86_400_000);
   if (repeat === "weekly") return new Date(d.getTime() + n * 7 * 86_400_000);
   if (repeat === "biweekly") return new Date(d.getTime() + n * 14 * 86_400_000);

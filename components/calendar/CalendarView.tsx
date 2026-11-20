@@ -17,6 +17,8 @@ import { PIPELINE_STEPS, nextStep, isShootCategory, type PipelineState, type Ste
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useAutoRefresh } from "@/components/useAutoRefresh";
 import { ProgramModal, type ProgramRow } from "@/components/ProgramModal";
+import { RepeatEvery, RepeatDates, encodeRepeat, type RepeatMode } from "@/components/RepeatExtra";
+import { repeatLabel } from "@/lib/repeatRule";
 
 type TeamInfo = { id: string; name: string; slug: string; color: string };
 type TeamRef = { id: string; name: string; color: string };
@@ -55,8 +57,10 @@ const STATUS_LABEL: Record<string, [string, string]> = {
 const PRIORITY_LABEL: Record<string, string> = {
   low: "낮음", normal: "보통", high: "높음", urgent: "긴급",
 };
-const REPEAT_LABEL: Record<string, string> = {
+// 반복 선택 목록 — every(N일·N주마다)·dates(날짜 직접)는 아래 추가 입력 (components/RepeatExtra)
+const REPEAT_LABEL: Record<RepeatMode, string> = {
   none: "반복 없음", daily: "매일", weekly: "매주", biweekly: "격주", monthly: "매월",
+  every: "N일·N주마다…", dates: "날짜 직접 선택…",
 };
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -804,8 +808,11 @@ function TaskFormModal({
     setPipelineOn(isShootCategory(categories.find((c) => c.id === categoryId)?.name));
   }, [categoryId, categories, task, pipelineTouched]);
   const [location, setLocation] = useState(task?.location ?? "");
-  const [repeat, setRepeat] = useState("none"); // 반복 — 생성 시에만
+  const [repeat, setRepeat] = useState<RepeatMode>("none"); // 반복 — 생성 시에만
   const [repeatUntil, setRepeatUntil] = useState("");
+  const [everyN, setEveryN] = useState(3); // N일·N주마다
+  const [everyUnit, setEveryUnit] = useState<"d" | "w">("d");
+  const [repeatDates, setRepeatDates] = useState<string[]>([]); // 날짜 직접 지정
   const [allResources, setAllResources] = useState<ResourceOpt[]>([]);
   const [resourceIds, setResourceIds] = useState<string[]>(task?.resources?.map((r) => r.id) ?? []);
   // 장비별 담당자 (resourceId → userId) — 그 사람 이름으로 예약이 잡혀 반납 책임이 감
@@ -1114,7 +1121,12 @@ function TaskFormModal({
           resourceOwners: repeat !== "none" ? undefined : Object.fromEntries(
             Object.entries(resourceOwners).filter(([rid, uid]) => resourceIds.includes(rid) && assignees.has(uid))
           ),
-          ...(isEdit ? {} : { repeat, repeatUntil: repeat !== "none" && repeatUntil ? repeatUntil : undefined, pipelineOn: repeat === "none" ? pipelineOn : false, rsvpOn: repeat === "none" ? rsvpOn : false }),
+          ...(isEdit ? {} : {
+            repeat: encodeRepeat(repeat, everyN, everyUnit),
+            repeatUntil: repeat !== "none" && repeat !== "dates" && repeatUntil ? repeatUntil : undefined,
+            repeatDates: repeat === "dates" ? repeatDates.filter((x) => x > startDate) : undefined,
+            pipelineOn: repeat === "none" ? pipelineOn : false, rsvpOn: repeat === "none" ? rsvpOn : false,
+          }),
         }),
       });
       const data = await res.json().catch(() => ({} as any));
@@ -1516,7 +1528,7 @@ function TaskFormModal({
           <button type="button" className="tf-more" aria-expanded={moreOpen} onClick={() => setMoreOpen((v) => !v)}>
             <span>추가 옵션</span>
             <span className="tf-more-sum">
-              {!isEdit && `${REPEAT_LABEL[repeat] ?? "반복 없음"} · `}우선순위 {PRIORITY_LABEL[priority] ?? "보통"}
+              {!isEdit && `${repeatLabel(encodeRepeat(repeat, everyN, everyUnit))} · `}우선순위 {PRIORITY_LABEL[priority] ?? "보통"}
             </span>
             <span aria-hidden>{moreOpen ? "▲" : "▼"}</span>
           </button>
@@ -1533,20 +1545,26 @@ function TaskFormModal({
                 </div>
               </div>
               {!isEdit && (
-                <div className="form-grid-2">
-                  <div className="field">
-                    <label>반복</label>
-                    <select value={repeat} onChange={(e) => setRepeat(e.target.value)}>
-                      {Object.entries(REPEAT_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                    </select>
-                  </div>
-                  {repeat !== "none" && (
+                <>
+                  <div className="form-grid-2">
                     <div className="field">
-                      <label>반복 종료일 (기본 3개월)</label>
-                      <DateField value={repeatUntil} min={startDate} onChange={(v) => setRepeatUntil(v)} clearable placeholder="종료일 (기본 3개월)" />
+                      <label>반복</label>
+                      <select value={repeat} onChange={(e) => setRepeat(e.target.value as RepeatMode)}>
+                        {Object.entries(REPEAT_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                      </select>
+                      {repeat === "every" && <RepeatEvery n={everyN} unit={everyUnit} onN={setEveryN} onUnit={setEveryUnit} />}
                     </div>
+                    {repeat !== "none" && repeat !== "dates" && (
+                      <div className="field">
+                        <label>반복 종료일 (기본 3개월)</label>
+                        <DateField value={repeatUntil} min={startDate} onChange={(v) => setRepeatUntil(v)} clearable placeholder="종료일 (기본 3개월)" />
+                      </div>
+                    )}
+                  </div>
+                  {repeat === "dates" && (
+                    <div className="field"><RepeatDates base={startDate} dates={repeatDates} onChange={setRepeatDates} /></div>
                   )}
-                </div>
+                </>
               )}
             </div>
           )}

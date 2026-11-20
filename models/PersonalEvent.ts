@@ -13,7 +13,8 @@ const PersonalEventSchema = new Schema(
     allDay: { type: Boolean, default: true },
     // 반복 — 생성 시 종료일까지 회차를 모두 만들어 둔다 (최대 1년). 같은 시리즈는 recurrenceId로 묶음
     recurrenceId: { type: Schema.Types.ObjectId, default: null },
-    repeatFreq: { type: String, enum: ["daily", "weekly", "biweekly", "monthly", null], default: null },
+    // 매일·매주·격주·매월·d<N>(N일마다)·w<N>(N주마다)·dates(날짜 지정) — lib/repeatRule
+    repeatFreq: { type: String, default: null, match: /^(daily|weekly|biweekly|monthly|dates|d\d{1,2}|w\d{1,2})$/ },
   },
   { timestamps: true }
 );

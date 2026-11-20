@@ -14,6 +14,7 @@ import { filterValidAssignees } from "@/lib/assignees";
 import { Reservation } from "@/models/Reservation";
 import { taskWindow, findConflicts, conflictMessage, syncTaskReservations, findUnavailableResources, unavailableMessage } from "@/lib/taskReservations";
 import { addInterval, RECUR_BATCH_CAP } from "@/lib/recurrence";
+import { dateOccurrences } from "@/lib/repeatRule";
 import { getDeptId } from "@/lib/dept";
 import { rsvpSummary, rsvpTargetIds, defaultRsvpDeadline, sendRsvpRequest, isMeetingCategory } from "@/lib/rsvp";
 import { serializePipeline, isShootCategory, defaultReportDue } from "@/lib/pipeline";
@@ -146,7 +147,7 @@ export async function POST(req: Request) {
   await connectDB();
   // 담당자는 관여 팀의 활성 소속자만 — 임의 userId 주입·알림 스팸 차단 (join과 동일 정책)
   const validAssignees = await filterValidAssignees(d.assignees ?? [], d.teamIds);
-  const { repeat, repeatUntil, resourceIds, resourceOwners, pipelineOn: _pipelineOn, rsvpOn: _rsvpOn, ...fields } = d;
+  const { repeat, repeatUntil, repeatDates, resourceIds, resourceOwners, pipelineOn: _pipelineOn, rsvpOn: _rsvpOn, ...fields } = d;
   void _pipelineOn; void _rsvpOn;
   // 장비별 담당자 — 이 일정의 담당자(또는 등록자)만 허용, 그 외 값은 무시(등록자로 대체)
   const ownerAllowed = new Set([...validAssignees, user.id]);
@@ -211,7 +212,19 @@ export async function POST(req: Request) {
     return json({ id: String(task._id), ...(warning ? { warning } : {}) }, 201);
   }
 
-  // 반복 — repeatUntil까지 오커런스 생성 (기본 3개월, 최대 60개)
+  // 날짜 직접 지정 — 고른 날짜마다 같은 시각으로 (시작일 포함). 규칙이 없어 크론이 이어서 만들지 않음 (repeatUntil 없음)
+  if (repeat === "dates") {
+    const occ = dateOccurrences(start, end, d.allDay, repeatDates ?? []);
+    if ("error" in occ) return json({ error: occ.error }, 400);
+    if (occ.list.length < 2) return json({ error: "반복할 날짜를 하나 이상 더 골라주세요." }, 400);
+    const recurrenceId = new mongoose.Types.ObjectId();
+    const created = await Task.insertMany(occ.list.map((o) => ({ ...base, recurrenceId, repeatFreq: "dates", startDate: o.startDate, endDate: o.endDate })));
+    await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetTitle: `${d.title} (날짜 지정 ${created.length}회)` });
+    await notifyAssignees(String(created[0]._id));
+    return json({ id: String(created[0]._id), count: created.length }, 201);
+  }
+
+  // 반복 — repeatUntil까지 오커런스 생성 (기본 3개월, 최대 60개). N일마다(d3)·N주마다(w2)도 같은 방식
   const until = repeatUntil ? new Date(repeatUntil) : addInterval(start, "monthly", 3);
   if (isNaN(until.getTime()) || until < start) {
     return json({ error: "반복 종료일이 시작일보다 빠를 수 없습니다." }, 400);

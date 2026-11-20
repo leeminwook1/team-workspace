@@ -1732,6 +1732,29 @@ a { color: inherit; text-decoration: none; }
   .tf-modal .equip-tag { max-width: calc(100% - 118px); }
 }
 
+/* 반복 직접 지정 — N일·N주마다 / 날짜 직접 선택 (components/RepeatExtra) */
+.rp-more { margin-top: 8px; }
+.pe-repeat-until label { white-space: nowrap; flex: none; } /* "반복 종/료일" 줄바꿈 방지 */
+.rp-every { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.rp-every input {
+  width: 72px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); font-family: inherit; font-size: 15px; font-weight: 700; text-align: center;
+}
+.rp-every input:focus { outline: none; border-color: var(--primary); }
+.rp-unit button { padding: 7px 14px; cursor: pointer; font-family: inherit; }
+.rp-every-tail { font-size: 14px; font-weight: 700; color: var(--ink-soft); }
+.rp-dates { margin-top: 8px; }
+.rp-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rp-chip { font-size: 12.5px; }
+.rp-chip.base { background: var(--accent-soft); border-color: var(--primary); color: var(--primary); }
+.rp-chip span { font-size: 10px; opacity: 0.6; margin-left: 2px; }
+.rp-add {
+  border: 1px dashed var(--line-strong) !important; background: transparent !important; border-radius: 999px;
+  padding: 6px 12px !important; font-size: 12.5px; font-weight: 700; color: var(--primary) !important; cursor: pointer;
+}
+.rp-hint { margin: 6px 2px 0; font-size: 12px; color: var(--ink-faint); }
+@media (max-width: 640px) { .rp-every input { font-size: 16px; } }
+
 /* 개인 일정 한 줄 빠른 입력 */
 .qa-wrap { margin-top: 12px; }
 .qa-row {

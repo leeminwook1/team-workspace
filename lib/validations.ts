@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { REPEAT_RE, MAX_REPEAT_DATES } from "./repeatRule";
 
 // MongoDB ObjectId 형식(24자리 hex) 문자열. 형식이 어긋난 값이 Mongoose 쿼리·생성에
 // 그대로 들어가면 CastError로 500(비-JSON)이 나 클라이언트가 무한로딩에 빠진다.
@@ -37,8 +38,10 @@ export const taskCreateSchema = z.object({
   priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
   location: z.string().max(120).optional().default(""),
   // 반복 일정 — 생성 시에만. repeatUntil까지 오커런스를 미리 생성(최대 60개)
-  repeat: z.enum(["none", "daily", "weekly", "biweekly", "monthly"]).optional().default("none"),
+  // 규칙은 lib/repeatRule — 매일·매주·격주·매월·N일마다(d3)·N주마다(w2)·날짜 지정(dates)
+  repeat: z.string().regex(REPEAT_RE, "반복 형식이 잘못됐습니다").optional().default("none"),
   repeatUntil: z.string().optional(),
+  repeatDates: z.array(z.string()).max(MAX_REPEAT_DATES).optional(), // repeat=dates일 때 추가로 고른 날짜 (YYYY-MM-DD)
   // 대여 장비 — 선택 시 업무 기간에 자원 예약 자동 생성 (반복 일정과는 함께 불가)
   resourceIds: z.array(objectId).max(40, "장비는 최대 40개까지 선택할 수 있어요").optional().default([]),
   // 장비별 담당자 — resourceId → userId. 그 사람 이름으로 예약이 잡혀 반납 책임이 감 (미지정 = 등록자)
@@ -203,8 +206,9 @@ export const personalEventSchema = z.object({
   memo: z.string().max(1000).optional().default(""),
   location: z.string().max(120).optional().default(""),
   // 반복 — 등록할 때만 사용 (최대 1년)
-  repeat: z.enum(["none", "daily", "weekly", "biweekly", "monthly"]).optional(),
+  repeat: z.string().regex(REPEAT_RE, "반복 형식이 잘못됐습니다").optional(),
   repeatUntil: z.string().optional(),
+  repeatDates: z.array(z.string()).max(MAX_REPEAT_DATES).optional(),
 });
 
 export const teamSchema = z.object({

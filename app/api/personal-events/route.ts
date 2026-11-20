@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongodb";
 import { addInterval } from "@/lib/recurrence";
+import { dateOccurrences } from "@/lib/repeatRule";
 import { PersonalEvent } from "@/models/PersonalEvent";
 import { User } from "@/models/User";
 import { requireActiveUser, json } from "@/lib/api";
@@ -66,12 +67,23 @@ export async function POST(req: Request) {
   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return json({ error: "날짜 형식이 잘못됐습니다." }, 400);
   if (endDate < startDate) return json({ error: "종료가 시작보다 빠를 수 없습니다." }, 400);
 
-  const { repeat, repeatUntil, ...fields } = d;
+  const { repeat, repeatUntil, repeatDates, ...fields } = d;
   await connectDB();
   if (!repeat || repeat === "none") {
     const e = await PersonalEvent.create({ ...fields, userId: user.id, startDate, endDate });
     await touchChanged("personal");
     return json({ id: String(e._id) }, 201);
+  }
+
+  // 날짜 직접 지정 — 고른 날짜마다 같은 시각으로 (시작일 포함)
+  if (repeat === "dates") {
+    const occ = dateOccurrences(startDate, endDate, d.allDay, repeatDates ?? []);
+    if ("error" in occ) return json({ error: occ.error }, 400);
+    if (occ.list.length < 2) return json({ error: "반복할 날짜를 하나 이상 더 골라주세요." }, 400);
+    const recurrenceId = new mongoose.Types.ObjectId();
+    const created = await PersonalEvent.insertMany(occ.list.map((o) => ({ ...fields, userId: user.id, recurrenceId, repeatFreq: "dates", startDate: o.startDate, endDate: o.endDate })));
+    await touchChanged("personal");
+    return json({ id: String(created[0]._id), count: created.length }, 201);
   }
 
   // 반복 — 종료일(기본 3개월, 최대 1년)까지 회차를 한 번에 생성
