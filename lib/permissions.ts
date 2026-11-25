@@ -1,8 +1,8 @@
 // 사진과 직급 체계 — 부장단(부장·서무·총교관) → 과장·부과장 → 과원
 // 역할 키는 문화부 시절 값을 유지하고 표시명만 바꿨다 (DB 마이그레이션 없이 전환).
 // - admin(시스템 관리자): 계정·설정 관리, 전체 권한
-// - 부장단 = manager(부장)·secretary(서무)·deputy(총교관): 전체 조회·등록·수정, TODO 지시, 가입 승인 (삭제 ✕)
-// - leader(과장): 과 일정 등록·수정·삭제, 지시 수신·배분, 과원 개인일정 열람, 가입 승인
+// - 부장단 = manager(부장)·secretary(서무)·deputy(총교관): 전체 조회·등록·수정, 가입 승인 (삭제 ✕)
+// - leader(과장): 과 일정 등록·수정·삭제, TODO·공지 작성(과원에게), 과원 개인일정 열람, 가입 승인
 // - vice_leader(부과장): 과 일정 등록·수정 (삭제 ✕)
 // - member(과원): 일정 등록·장비 예약 + 본인이 만든 일정 수정·삭제 + 본인 담당 업무 상태 변경
 // "팀"은 사진과 하나만 남아(lib/dept.ts) 아래의 inTeam 검사는 곧 "사진과 소속" 검사다.
@@ -91,35 +91,37 @@ export function canDeleteEvent(u: SessionUser, createdById: string) {
   return String(u.id) === String(createdById); // 그 외엔 본인이 만든 것만
 }
 
-// ── 지시(하달) ──
-// 발신: 전사 역할(전 팀 편집자). 수신: 대상 팀의 팀장.
+// ── TODO (지시) ──
+// 과장이 과원에게 내린다. 발신: 과장·admin. 수신: TODO에 지정된 과원(부과장 포함).
+// 부장단은 TODO 흐름에 들어가지 않는다.
+const DIRECTIVE_SENDERS: Role[] = ["admin", "leader"];
 export function canCreateDirective(u: SessionUser) {
-  return isActive(u) && ALL_TEAM_EDITORS.includes(u.role);
+  return isActive(u) && DIRECTIVE_SENDERS.includes(u.role);
 }
-// 지시를 받는 사람(대상 팀의 팀장)인가
+// 지시를 관리하는 사람(과장)인가 — 상태 변경·배분·일정 등록
 export function isDirectiveLeader(u: SessionUser, teamId: string) {
   return isActive(u) && u.role === "leader" && inTeam(u, teamId);
 }
-// 지시함에서 이 지시를 볼 수 있는가 (발신 그룹은 전체, 그 외엔 대상 팀 팀장만)
-export function canViewDirective(u: SessionUser, teamId: string) {
+// 이 TODO를 볼 수 있는가 (발신 그룹은 전체, 과원은 자기가 지정된 것만)
+export function canViewDirective(u: SessionUser, assigneeIds: string[]) {
   if (!isActive(u)) return false;
-  if (ALL_TEAM_EDITORS.includes(u.role)) return true;
-  return isDirectiveLeader(u, teamId);
+  if (DIRECTIVE_SENDERS.includes(u.role)) return true;
+  return assigneeIds.includes(String(u.id));
 }
-// 상태 변경·팀원 재분배 (팀장 또는 admin)
+// 상태 변경·과원 재배분·일정 등록 (과장 또는 admin)
 export function canManageDirective(u: SessionUser, teamId: string) {
   if (!isActive(u)) return false;
   if (u.role === "admin") return true;
   return isDirectiveLeader(u, teamId);
 }
-// 지시 삭제·본문 수정 (발신자 본인 또는 admin)
+// TODO 삭제·본문 수정 (발신자 본인 또는 admin)
 export function canEditDirective(u: SessionUser, createdById: string) {
   if (!isActive(u)) return false;
   return u.role === "admin" || String(u.id) === String(createdById);
 }
-// 지시함 메뉴 노출 대상 (발신 가능하거나 팀장)
+// TODO 메뉴 노출 대상 (발신 가능하거나 과 소속 — 과원은 받은 TODO만 본다)
 export function canUseDirectives(u: SessionUser) {
-  return isActive(u) && (ALL_TEAM_EDITORS.includes(u.role) || u.role === "leader");
+  return isActive(u) && (DIRECTIVE_SENDERS.includes(u.role) || isTeamRole(u.role));
 }
 
 // ── 과제 (레퍼런스 촬영 과제) ──
@@ -149,9 +151,9 @@ export function canViewPersonalCalendar(viewer: SessionUser, target: { id: strin
 }
 
 // ── 공지사항 ──
-// 조회: 전체 활성 사용자. 작성: 전사 역할. 수정·삭제: 작성자 본인 또는 admin.
+// 조회: 전체 활성 사용자. 작성: 과장·admin. 수정·삭제: 작성자 본인 또는 admin.
 export function canCreateNotice(u: SessionUser) {
-  return isActive(u) && ALL_TEAM_EDITORS.includes(u.role);
+  return isActive(u) && (u.role === "admin" || u.role === "leader");
 }
 export function canEditNotice(u: SessionUser, createdById: string) {
   return isActive(u) && (u.role === "admin" || String(u.id) === String(createdById));

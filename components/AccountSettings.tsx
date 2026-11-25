@@ -9,7 +9,7 @@ const PREF_ITEMS: { key: keyof NotifyPrefs; label: string; desc: string; leaderO
   { key: "assign", label: "담당 배정", desc: "업무·행사 담당자로 지정될 때" },
   { key: "due", label: "마감 리마인더", desc: "오늘 마감 업무 아침 알림" },
   { key: "late", label: "지연 리마인더", desc: "마감이 지난 업무 아침 알림" },
-  { key: "directive", label: "지시(TODO)", desc: "부장단 TODO가 내려올 때 (과장·부과장)" },
+  { key: "directive", label: "TODO", desc: "과장이 TODO를 보냈을 때 · 내가 보낸 TODO를 과원이 완료했을 때" },
   { key: "equip", label: "장비 예약·반납", desc: "장비 예약·반납·미반납·수령 예정 알림" },
   { key: "weekly", label: "주간 촬영 보고", desc: "매주 월요일 9시 — 지난주 촬영·이번 주 예정 (과장·부과장)", leaderOnly: true },
 ];

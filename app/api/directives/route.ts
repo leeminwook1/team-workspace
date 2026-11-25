@@ -1,4 +1,5 @@
 import { connectDB } from "@/lib/mongodb";
+import { Types } from "mongoose";
 import { Directive } from "@/models/Directive";
 import "@/models/Team";
 import "@/models/User";
@@ -8,8 +9,10 @@ import { canCreateDirective, canUseDirectives } from "@/lib/permissions";
 import { directiveCreateSchema } from "@/lib/validations";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { User } from "@/models/User";
 import { getDeptId } from "@/lib/dept";
+import { directiveScope } from "@/lib/directives";
+import { filterValidAssignees } from "@/lib/assignees";
+import { touchChanged } from "@/lib/changes";
 
 function serialize(d: any) {
   return {
@@ -32,6 +35,8 @@ function serialize(d: any) {
         : (a.userId ? { id: String(a.userId), name: "" } : null),
       note: a.note ?? "",
       done: !!a.done,
+      doneAt: a.doneAt ?? null,
+      readAt: a.readAt ?? null,
       taskId: a.taskId ? String(a.taskId) : null,
     })),
     converted: !!d.convertedTaskId, // 지시 전체가 일정으로 등록됐는지
@@ -41,23 +46,22 @@ function serialize(d: any) {
   };
 }
 
-// GET /api/directives — 지시함 조회 (발신 그룹=전체, 팀장=소속 팀만)
+// GET /api/directives — TODO 목록 (과장·admin=전체, 과원=자기가 받은 것만)
 export async function GET() {
   const { user, error } = await requireActiveUser();
   if (error) return error;
   if (!canUseDirectives(user)) return json({ directives: [] });
 
   await connectDB();
-  const q: any = {};
-  // 발신 그룹(admin·과장·부과장·서기)이 아니면 팀장 → 소속 팀 지시만
+  const q: any = directiveScope(user);
   if (!canCreateDirective(user)) {
-    if (!user.teamId) return json({ directives: [] });
-    q.teamId = user.teamId;
-    // 읽음 확인 — 수신자(팀장·부팀장)가 목록을 열람하면 미열람 지시를 읽음 처리
-    await Directive.updateMany(
-      { teamId: user.teamId, readAt: null },
-      { $set: { readAt: new Date(), readBy: user.id } }
+    // 읽음 확인 — 받은 과원이 목록을 열면 내 몫을 읽음 처리 (과장 화면에 표시)
+    const r = await Directive.updateMany(
+      { assignments: { $elemMatch: { userId: user.id, readAt: null } } },
+      { $set: { "assignments.$[me].readAt": new Date() } },
+      { arrayFilters: [{ "me.userId": new Types.ObjectId(user.id), "me.readAt": null }] }
     );
+    if (r.modifiedCount) await touchChanged("directive");
   }
 
   const list = await Directive.find(q)
@@ -71,11 +75,11 @@ export async function GET() {
   return json({ directives: list.map(serialize) });
 }
 
-// POST /api/directives — 지시 내리기 (전사 역할)
+// POST /api/directives — TODO 내리기 (과장 → 과원)
 export async function POST(req: Request) {
   const { user, error } = await requireActiveUser();
   if (error) return error;
-  if (!canCreateDirective(user)) return json({ error: "TODO를 내릴 권한이 없습니다." }, 403);
+  if (!canCreateDirective(user)) return json({ error: "TODO는 과장만 내릴 수 있어요." }, 403);
 
   const body = await req.json().catch(() => null);
   const parsed = directiveCreateSchema.safeParse(body);
@@ -83,30 +87,41 @@ export async function POST(req: Request) {
 
   const d = parsed.data;
   await connectDB();
-  // 사진과 전용 — 지시 대상은 항상 과 (과장이 받아 과원에게 배분)
   const deptId = await getDeptId();
   if (!deptId) return json({ error: "과 설정이 아직 없습니다." }, 500);
-  d.teamId = deptId;
+
+  // 받는 사람은 과의 활성 소속자만 (임의 userId 주입 차단)
+  const valid = new Set(await filterValidAssignees(d.assignments.map((a) => a.userId), [deptId]));
+  const seen = new Set<string>();
+  const assignments = d.assignments
+    .filter((a) => valid.has(a.userId) && !seen.has(a.userId) && seen.add(a.userId))
+    .map((a) => ({ userId: a.userId, note: a.note ?? "", done: false }));
+  if (assignments.length === 0) return json({ error: "받을 과원을 1명 이상 골라주세요." }, 400);
+
   const created = await Directive.create({
     title: d.title,
     body: d.body,
-    teamId: d.teamId,
+    teamId: deptId,
     priority: d.priority,
     dueDate: d.dueDate ? new Date(d.dueDate) : null,
     createdBy: user.id,
+    assignments,
   });
   await logActivity({ actorId: user.id, actorName: user.name, action: "create", targetType: "directive", targetTitle: created.title });
 
-  // 대상 팀의 팀장·부팀장에게 알림
-  const leads: any[] = await User.find({
-    teamId: d.teamId, role: { $in: ["leader", "vice_leader"] }, status: "active",
-  }).select("_id").lean();
-  await notify(leads.map((l) => String(l._id)).filter((id) => id !== user.id), {
-    type: "directive",
-    title: "새 TODO가 도착했어요",
-    body: created.title,
-    link: "/directives",
-  });
+  // 받는 과원에게 알림 (각자 담당 내용 포함)
+  const due = created.dueDate
+    ? `\n⏰ ${new Date(created.dueDate).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric" })}까지`
+    : "";
+  for (const a of assignments) {
+    if (a.userId === user.id) continue;
+    await notify([a.userId], {
+      type: "directive",
+      title: `📝 새 TODO — ${created.title}`,
+      body: `${user.name ?? "과장"}님이 보냈어요${a.note ? `\n👉 ${a.note}` : ""}${d.body ? `\n${d.body.slice(0, 200)}` : ""}${due}`,
+      link: `/directives?q=${encodeURIComponent(created.title)}`,
+    });
+  }
 
   return json({ id: String(created._id) }, 201);
 }

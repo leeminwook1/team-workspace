@@ -4,9 +4,10 @@ import { authOptions } from "@/lib/auth";
 import Link from "next/link";
 import { connectDB } from "@/lib/mongodb";
 import { Directive } from "@/models/Directive";
+import { pendingDirectiveQuery } from "@/lib/directives";
 import { Notice } from "@/models/Notice";
 import { User } from "@/models/User";
-import { canApproveUsers, canCreateDirective, canManageTeams, canUseDirectives, canViewAllTeams, ROLE_LABEL, type SessionUser } from "@/lib/permissions";
+import { canApproveUsers, canManageTeams, canUseDirectives, canViewAllTeams, ROLE_LABEL, type SessionUser } from "@/lib/permissions";
 import LogoutButton from "@/components/LogoutButton";
 import NavLinks, { BottomNav, type NavItem } from "@/components/NavLinks";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -17,17 +18,12 @@ import { Icon } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
-// 대기 중(TODO 상태) 지시 개수 — 사이드바 뱃지용. 실패해도 화면을 막지 않는다.
+// 대기 중인 TODO 개수 — 사이드바 뱃지용 (과원은 내 몫 미완료). 실패해도 화면을 막지 않는다.
 async function pendingDirectiveCount(user: SessionUser): Promise<number> {
   if (!canUseDirectives(user)) return 0;
   try {
     await connectDB();
-    const q: any = { status: "todo" };
-    if (!canCreateDirective(user)) {
-      if (!user.teamId) return 0;
-      q.teamId = user.teamId; // 팀장: 소속 팀 인박스만
-    }
-    return await Directive.countDocuments(q);
+    return await Directive.countDocuments(pendingDirectiveQuery(user));
   } catch {
     return 0;
   }

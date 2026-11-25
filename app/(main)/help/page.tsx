@@ -150,16 +150,17 @@ export default function HelpPage() {
         </div>
       </Sec>
 
-      <Sec id="todo" icon="inbox" tint="#3182f6" title="TODO (지시)" tag="과장 이상">
+      <Sec id="todo" icon="inbox" tint="#3182f6" title="TODO" tag="과장 → 과원">
         <div className="help-rows">
-          <Row k="하달">부장단이 과장에게 할 일을 내려줘요. 과장이 확인하면 발신자에게 읽음이 표시돼요.</Row>
-          <Row k="처리">과장은 상태를 바꾸고 과원에게 배분하거나, 일정으로 등록해 달력에 올려요.</Row>
+          <Row k="보내기">과장이 할 일을 쓰고 받을 과원을 골라 보내요(과원 전체 선택 가능, 사람마다 담당 내용 적기). 받은 과원에게 알림이 가요.</Row>
+          <Row k="받은 TODO">과원은 TODO 메뉴에서 <b>나에게 온 것만</b> 보여요. 다 하면 <b>완료</b>를 누르면 과장에게 알림이 가요. 모두 완료하면 TODO도 자동으로 완료돼요.</Row>
+          <Row k="확인">과장 화면에는 사람별 <b>읽음/안 읽음</b>과 완료 수(예: 완료 3/5)가 보여요. 필요하면 일정으로 등록해 달력에 올려요. 마감일 아침에는 아직 안 한 사람에게 알림이 가요.</Row>
         </div>
       </Sec>
 
       <Sec id="notices" icon="megaphone" tint="#f0466e" title="공지사항 · 피드백">
         <div className="help-rows">
-          <Row k="공지사항">부장단·과장이 올리는 과 전체 소식이에요. 새 공지가 올라오면 알림이 가고, 안 읽은 공지는 메뉴에 숫자로 표시돼요. 중요한 공지는 📌 고정으로 맨 위에 둬요.</Row>
+          <Row k="공지사항">과장이 과원들에게 올리는 소식이에요. 새 공지가 올라오면 알림이 가고, 안 읽은 공지는 메뉴에 숫자로 표시돼요. 중요한 공지는 📌 고정으로 맨 위에 둬요.</Row>
           <Row k="피드백">쓰다가 느낀 <b>기능 제안 · 버그 · 개선사항</b>을 누구나 남길 수 있어요. 다른 사람 피드백에 👍 공감과 댓글도 달 수 있어요.</Row>
           <Row k="처리">남긴 피드백은 접수 → 진행중 → 반영 완료 순으로 처리되고, 상태가 바뀌면 작성자에게 알림이 가요.</Row>
         </div>
@@ -216,7 +217,8 @@ export default function HelpPage() {
               <tr><td>일정 삭제</td><td>본인 등록건</td><td>본인 등록건</td><td>전체</td><td>본인 등록건</td><td>전체</td></tr>
               <tr><td>촬영 진행 체크</td><td>담당 건</td><td>전체</td><td>전체</td><td>전체</td><td>전체</td></tr>
               <tr><td>개인 캘린더 열람</td><td>본인</td><td>본인</td><td>본인·과원</td><td>본인·과장</td><td>전체</td></tr>
-              <tr><td>TODO</td><td>배분받기</td><td>—</td><td>받기·배분</td><td>내리기</td><td>전체</td></tr>
+              <tr><td>TODO</td><td>받기·완료</td><td>받기·완료</td><td>보내기</td><td>—</td><td>전체</td></tr>
+              <tr><td>공지 작성</td><td>—</td><td>—</td><td>가능</td><td>—</td><td>가능</td></tr>
               <tr><td>과제</td><td>제출</td><td>출제·점검</td><td>출제·점검</td><td>열람</td><td>전체</td></tr>
               <tr><td>통계</td><td>—</td><td>가능</td><td>가능</td><td>가능</td><td>가능</td></tr>
               <tr><td>가입 승인</td><td>—</td><td>—</td><td>가능</td><td>가능</td><td>가능</td></tr>

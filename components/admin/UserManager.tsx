@@ -242,7 +242,7 @@ function EditModal({
 
         {BOARD.includes(role) && (
           <p style={{ fontSize: 12.5, color: "var(--ink-faint)", margin: "0 0 8px" }}>
-            부장단은 사진과 전체를 조회하고 TODO를 지시할 수 있어요.
+            부장단은 사진과 전체 일정을 조회·등록할 수 있어요.
           </p>
         )}
 

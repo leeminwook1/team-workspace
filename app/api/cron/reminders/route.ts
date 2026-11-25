@@ -82,16 +82,13 @@ export async function GET(req: Request) {
     taskNotified += ids.length;
   }
 
-  // 2) 오늘 마감인 대기(TODO) → 대상 팀 팀장·부팀장에게
-  const dirs: any[] = await Directive.find({ status: "todo", dueDate: { $gte: start, $lt: end } })
-    .select("title teamId")
+  // 2) 오늘 마감인 TODO → 아직 내 몫을 완료 안 한 과원에게
+  const dirs: any[] = await Directive.find({ status: { $in: ["todo", "in_progress"] }, dueDate: { $gte: start, $lt: end } })
+    .select("title assignments")
     .lean();
-  // 팀별 리더를 한 번에 조회해 그룹핑 (지시 건수만큼 쿼리하지 않도록)
-  const dirTeamIds = Array.from(new Set(dirs.map((d) => String(d.teamId)).filter(Boolean)));
-  const leadsByTeam = await leadersByTeam(dirTeamIds);
   let dirNotified = 0;
   for (const d of dirs) {
-    const ids = leadsByTeam.get(String(d.teamId)) ?? [];
+    const ids = (d.assignments ?? []).filter((a: any) => !a.done).map((a: any) => String(a.userId));
     if (ids.length === 0) continue;
     await notify(ids, { type: "due", title: "오늘 마감인 TODO가 있어요", body: d.title, link: `/directives?q=${encodeURIComponent(d.title)}` });
     dirNotified += ids.length;

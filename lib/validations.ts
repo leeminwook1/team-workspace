@@ -122,13 +122,19 @@ export const eventUpdateSchema = z.object({
   closed: z.boolean().optional(), // 행사 종료(보관)/재개
 });
 
-// 지시(하달) — 발신은 전사 역할, 대상은 팀(그 팀장이 수신)
+const directiveTargetSchema = z.object({
+  userId: z.string().min(1),
+  note: z.string().max(300).optional().default(""),
+});
+
+// TODO — 과장이 과원에게 (받는 과원 1명 이상)
 export const directiveCreateSchema = z.object({
   title: z.string().min(1, "TODO 제목을 입력하세요").max(200),
   body: z.string().max(2000).optional().default(""),
   teamId: z.string().optional(), // 사진과 전용 — 서버가 과 id로 채움
   dueDate: z.string().nullable().optional(), // ISO date 또는 null
   priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
+  assignments: z.array(directiveTargetSchema).min(1, "받을 과원을 1명 이상 골라주세요").max(100),
 });
 
 const assignmentSchema = z.object({
@@ -144,6 +150,7 @@ export const directiveUpdateSchema = z.object({
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
   status: z.enum(["todo", "in_progress", "done", "hold"]).optional(),
   assignments: z.array(assignmentSchema).optional(),
+  myDone: z.boolean().optional(), // 과원 — 내 몫 완료 체크
 });
 
 // 공지사항

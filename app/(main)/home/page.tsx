@@ -6,6 +6,7 @@ import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
 import { Event } from "@/models/Event";
 import { Directive } from "@/models/Directive";
+import { pendingDirectiveQuery } from "@/lib/directives";
 import { Notice } from "@/models/Notice";
 import { Reservation } from "@/models/Reservation";
 import { User } from "@/models/User";
@@ -13,7 +14,7 @@ import "@/models/Team";
 import "@/models/Resource";
 import "@/models/Category";
 import {
-  visibleTeamIds, canUseDirectives, canCreateDirective, canApproveUsers, type SessionUser,
+  visibleTeamIds, canUseDirectives, canApproveUsers, type SessionUser,
 } from "@/lib/permissions";
 import { Icon } from "@/components/icons";
 import HomeWidgets, { type WTask } from "@/components/home/HomeWidgets";
@@ -54,8 +55,7 @@ export default async function HomePage() {
   const monthEnd = new Date(Date.UTC(kY, kM + 1, 1) - 9 * 3600_000);
 
   // 대시보드 쿼리는 상호 독립 — 병렬 실행으로 첫 로딩 단축
-  const dirQ: any = { status: "todo" };
-  if (!canCreateDirective(user)) dirQ.teamId = user.teamId ?? null;
+  const dirQ: any = pendingDirectiveQuery(user);
   const [todayTasks, eventsRaw, pendingDirs, todayResv, pendingUsers, monthTasks, upcomingTasks, meDoc, myTasks, recentNotices] = (await Promise.all([
     // 1) 오늘 일정 (조회 범위 내)
     noScope ? [] : Task.find(scoped({ startDate: { $lt: end }, endDate: { $gt: start } }))

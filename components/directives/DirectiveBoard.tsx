@@ -12,7 +12,7 @@ import { useAutoRefresh } from "@/components/useAutoRefresh";
 
 type Team = { id: string; name: string; color: string };
 type Person = { id: string; name: string } | null;
-type Assignment = { id: string; user: Person; note: string; done: boolean; taskId: string | null };
+type Assignment = { id: string; user: Person; note: string; done: boolean; doneAt: string | null; readAt: string | null; taskId: string | null };
 type Directive = {
   id: string;
   title: string;
@@ -25,7 +25,6 @@ type Directive = {
   assignments: Assignment[];
   converted: boolean;
   createdAt: string;
-  readAt: string | null; // 팀장 열람 시각 (읽음 확인)
   doneAt: string | null; // 완료 시각
 };
 
@@ -64,9 +63,7 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
   const [items, setItems] = useState<Directive[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
-  const [view, setView] = useState<"list" | "report">("list"); // 발신 그룹만 리포트 탭
   const [statusFilter, setStatusFilter] = useState<string>("all"); // 상태 필터 칩
-  const [teamFilter, setTeamFilter] = useState<string>("all"); // 팀 필터 (발신 그룹)
 
   // 전역 검색에서 TODO를 고르면 ?q=제목 으로 들어옴 — 제목으로 필터
   const searchParams = useSearchParams();
@@ -95,11 +92,9 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
 
   const shown = items.filter((d) =>
     (statusFilter === "all" || d.status === statusFilter) &&
-    (teamFilter === "all" || d.team?.id === teamFilter) &&
     (!q || (d.title ?? "").toLowerCase().includes(q.toLowerCase()))
   );
   const countOf = (s: string) => items.filter((d) => d.status === s).length;
-  const filterTeams = teams.filter((t) => items.some((d) => d.team?.id === t.id));
 
   return (
     <div className="directives">
@@ -107,12 +102,12 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
         <div>
           <h1 className="page-title">TODO</h1>
           <p className="page-sub">
-            {canCreate ? "과장에게 할 일(TODO)을 내려주고 진행 상황을 확인하세요." : "부장단이 내린 TODO를 확인하고 과원에게 배분하세요."}
+            {canCreate ? "과원에게 할 일(TODO)을 보내고 누가 했는지 확인하세요." : "과장이 보낸 TODO예요. 다 하면 ‘완료’를 눌러주세요."}
           </p>
         </div>
         {canCreate && (
           <button className="btn btn-primary btn-sm" onClick={() => setCreateOpen(true)}>
-            <Icon name="plus" size={16} strokeWidth={2.4} /> TODO 내리기
+            <Icon name="plus" size={16} strokeWidth={2.4} /> TODO 보내기
           </button>
         )}
       </div>
@@ -122,7 +117,7 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
       ) : loadErr ? (
         <LoadError onRetry={() => { setLoading(true); load(); }} />
       ) : items.length === 0 ? (
-        <p className="muted-note">아직 TODO가 없습니다.</p>
+        <p className="muted-note">{canCreate ? "아직 보낸 TODO가 없어요." : "받은 TODO가 없어요."}</p>
       ) : (
         <>
           {/* 상태 필터 칩 */}
@@ -151,7 +146,7 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
                   dir={d}
                   canManage={canManage(d)}
                   canDelete={canDelete(d)}
-                  showRead={canCreate}
+                  meId={user?.id ?? ""}
                   onChanged={load}
                 />
               ))}
@@ -168,9 +163,9 @@ export default function DirectiveBoard({ teams, canCreate }: { teams: Team[]; ca
 }
 
 function DirectiveCard({
-  dir, canManage, canDelete, showRead, onChanged,
+  dir, canManage, canDelete, meId, onChanged,
 }: {
-  dir: Directive; canManage: boolean; canDelete: boolean; showRead: boolean; onChanged: () => void;
+  dir: Directive; canManage: boolean; canDelete: boolean; meId: string; onChanged: () => void;
 }) {
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
@@ -193,6 +188,20 @@ function DirectiveCard({
     }
     onChanged();
   }
+  async function setMyDone(done: boolean) {
+    setBusy(true);
+    const res = await fetch(`/api/directives/${dir.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ myDone: done }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      await confirm({ title: "알림", message: data.error ?? "저장하지 못했어요. 잠시 후 다시 시도해주세요.", confirmText: "확인", alert: true });
+    }
+    onChanged();
+  }
+  const doneN = dir.assignments.filter((a) => a.done).length;
   async function convert(assignmentId?: string) {
     if (busy) return; // 중복 클릭 방지
     setBusy(true);
@@ -227,16 +236,10 @@ function DirectiveCard({
           <span className="badge" style={{ background: `color-mix(in srgb, ${prio.color} 14%, transparent)`, color: prio.color }}>{prio.label}</span>
         )}
         {due && <span className="dir-due">마감 {due}</span>}
-        {showRead && (
-          dir.readAt ? (
-            <span className="dir-read ok" title={new Date(dir.readAt).toLocaleString("ko-KR")}>
-              <Icon name="check" size={12} strokeWidth={2.8} /> 읽음
-            </span>
-          ) : (
-            <span className="dir-read no">
-              미확인{daysSince(dir.createdAt) >= 1 ? ` ${daysSince(dir.createdAt)}일째` : ""}
-            </span>
-          )
+        {dir.assignments.length > 0 && (
+          <span className={`dir-read ${doneN === dir.assignments.length ? "ok" : "prog"}`}>
+            완료 {doneN}/{dir.assignments.length}
+          </span>
         )}
         <span className="dir-meta-r">{dir.createdBy?.name ?? "?"} · {relTime(dir.createdAt)}</span>
       </div>
@@ -247,15 +250,31 @@ function DirectiveCard({
       {dir.assignments.length > 0 && (
         <div className="dir-assigns">
           {dir.assignments.map((a) => (
-            <div className="dir-assign" key={a.id}>
+            <div className={`dir-assign${a.done ? " done" : ""}`} key={a.id}>
               <span className="avatar sm" aria-hidden>{a.user?.name?.slice(0, 1) ?? "?"}</span>
               <div className="dir-assign-body">
                 <b>{a.user?.name ?? "알 수 없음"}</b>
                 {a.note && <span className="dir-assign-note">{a.note}</span>}
               </div>
+              {canManage && !a.done && (
+                a.readAt ? (
+                  <span className="dir-read ok" title={new Date(a.readAt).toLocaleString("ko-KR")}>읽음</span>
+                ) : (
+                  <span className="dir-read no">안 읽음{daysSince(dir.createdAt) >= 1 ? ` ${daysSince(dir.createdAt)}일째` : ""}</span>
+                )
+              )}
+              {a.user?.id === meId ? (
+                <button className={`btn btn-xs ${a.done ? "btn-line" : "btn-primary"}`} disabled={busy} onClick={() => setMyDone(!a.done)}>
+                  {a.done ? "완료 취소" : "완료"}
+                </button>
+              ) : a.done ? (
+                <span className="dir-conv-done" title={a.doneAt ? new Date(a.doneAt).toLocaleString("ko-KR") : undefined}>
+                  <Icon name="check" size={13} strokeWidth={2.6} /> 완료
+                </span>
+              ) : null}
               {a.taskId ? (
                 <span className="dir-conv-done"><Icon name="check" size={13} strokeWidth={2.6} /> 일정 등록됨</span>
-              ) : canManage ? (
+              ) : canManage && !a.done ? (
                 <button className="btn btn-line btn-xs" disabled={busy} onClick={() => convert(a.id)}>일정으로 등록</button>
               ) : null}
             </div>
@@ -273,7 +292,7 @@ function DirectiveCard({
                 ))}
               </div>
               <button className="btn btn-line btn-sm" onClick={() => setAssignOpen(true)}>
-                <Icon name="userLine" size={14} /> 과원 배분
+                <Icon name="userLine" size={14} /> 받는 과원
               </button>
               {dir.assignments.length === 0 && (
                 dir.converted ? (
@@ -303,73 +322,67 @@ function DirectiveCard({
   );
 }
 
-/* ── 팀별 처리 현황 리포트 (발신 그룹 전용) ── */
-function DirectiveReport({ items }: { items: Directive[] }) {
-  type Row = {
-    team: Team; total: number; todo: number; inProgress: number; hold: number; done: number;
-    unread: number; oldestWaitDays: number | null; avgDoneDays: number | null;
-  };
-  const byTeam = new Map<string, Directive[]>();
-  for (const d of items) {
-    if (!d.team) continue;
-    if (!byTeam.has(d.team.id)) byTeam.set(d.team.id, []);
-    byTeam.get(d.team.id)!.push(d);
-  }
-  const rows: Row[] = Array.from(byTeam.values()).map((list) => {
-    const waiting = list.filter((d) => d.status === "todo");
-    const doneWithTime = list.filter((d) => d.status === "done" && d.doneAt);
-    const avg = doneWithTime.length
-      ? doneWithTime.reduce((s, d) => s + (new Date(d.doneAt!).getTime() - new Date(d.createdAt).getTime()), 0) / doneWithTime.length / 86400_000
-      : null;
-    return {
-      team: list[0].team!,
-      total: list.length,
-      todo: waiting.length,
-      inProgress: list.filter((d) => d.status === "in_progress").length,
-      hold: list.filter((d) => d.status === "hold").length,
-      done: list.filter((d) => d.status === "done").length,
-      unread: list.filter((d) => !d.readAt).length,
-      oldestWaitDays: waiting.length ? Math.max(...waiting.map((d) => daysSince(d.createdAt))) : null,
-      avgDoneDays: avg,
-    };
-  }).sort((a, b) => (b.todo + b.inProgress) - (a.todo + a.inProgress));
+type PickRows = Record<string, { on: boolean; note: string }>;
+const DEPT_ROLES = ["leader", "vice_leader", "member"];
 
-  if (rows.length === 0) return <p className="muted-note">아직 TODO가 없습니다.</p>;
+/** 과원 목록 (과장·부과장·과원) — 받는 사람 고르기용 */
+function useDeptMembers(teamId: string) {
+  const [members, setMembers] = useState<{ id: string; name: string }[] | null>(null);
+  useEffect(() => {
+    if (!teamId) { setMembers([]); return; }
+    fetch(`/api/users?team=${teamId}`)
+      .then((r) => (r.ok ? r.json() : { users: [] }))
+      .then((d) => setMembers((d.users ?? []).filter((u: any) => DEPT_ROLES.includes(u.role))))
+      .catch(() => setMembers([]));
+  }, [teamId]);
+  return members;
+}
 
+/** 받는 과원 고르기 — 체크 + 각자 담당 내용 */
+function MemberPicker({ members, rows, setRows, meId }: {
+  members: { id: string; name: string }[] | null; rows: PickRows; setRows: (f: (p: PickRows) => PickRows) => void; meId?: string;
+}) {
+  if (members == null) return <p className="muted-note">불러오는 중…</p>;
+  if (members.length === 0) return <p className="muted-note">등록된 과원이 없습니다.</p>;
+  const others = members.filter((m) => m.id !== meId);
+  const allOn = others.length > 0 && others.every((m) => rows[m.id]?.on);
+  const n = members.filter((m) => rows[m.id]?.on).length;
   return (
-    <div className="dir-report">
-      {rows.map((r) => {
-        const pct = r.total ? Math.round((r.done / r.total) * 100) : 0;
-        return (
-          <div className="dir-rep-card" key={r.team.id}>
-            <div className="dir-rep-head">
-              <span className="chip"><span className="dot" style={{ background: r.team.color }} />{r.team.name}</span>
-              {r.unread > 0 && <span className="dir-read no">미확인 {r.unread}</span>}
-              {r.oldestWaitDays != null && r.oldestWaitDays >= 3 && (
-                <span className="rsv-st rsv-st-overdue">⚠ 대기 {r.oldestWaitDays}일째</span>
-              )}
-              <span className="dir-rep-pct" style={pct === 100 ? { color: "var(--st-done)" } : undefined}>{pct}%</span>
+    <>
+      <div className="assign-head">
+        <span>받는 과원 <b>{n}</b>명</span>
+        <button type="button" className="btn btn-ghost btn-xs" onClick={() => setRows((p) => {
+          const next = { ...p };
+          others.forEach((m) => { next[m.id] = { on: !allOn, note: p[m.id]?.note ?? "" }; });
+          return next;
+        })}>{allOn ? "전체 해제" : "과원 전체 선택"}</button>
+      </div>
+      <div className="assign-rows">
+        {members.map((m) => {
+          const row = rows[m.id] ?? { on: false, note: "" };
+          return (
+            <div className={`assign-row${row.on ? " on" : ""}`} key={m.id}>
+              <button type="button" className={`assign-check${row.on ? " on" : ""}`}
+                onClick={() => setRows((p) => ({ ...p, [m.id]: { ...row, on: !row.on } }))}>
+                {row.on && <Icon name="check" size={13} strokeWidth={2.8} />}
+              </button>
+              <span className="assign-name" onClick={() => setRows((p) => ({ ...p, [m.id]: { ...row, on: !row.on } }))}>{m.name}</span>
+              <input className="assign-note" placeholder="담당 내용 (선택, 예: 촬영)" value={row.note}
+                disabled={!row.on}
+                onChange={(e) => setRows((p) => ({ ...p, [m.id]: { ...row, note: e.target.value } }))} />
             </div>
-            <div className="dir-rep-bar"><span style={{ width: `${pct}%` }} /></div>
-            <div className="dir-rep-nums">
-              <span>대기 <b>{r.todo}</b></span>
-              <span>진행 <b>{r.inProgress}</b></span>
-              {r.hold > 0 && <span>보류 <b>{r.hold}</b></span>}
-              <span>완료 <b>{r.done}</b>/{r.total}</span>
-              {r.avgDoneDays != null && <span className="dir-rep-avg">평균 처리 {r.avgDoneDays < 1 ? "1일 이내" : `${Math.round(r.avgDoneDays)}일`}</span>}
-            </div>
-          </div>
-        );
-      })}
-      <p className="muted-note" style={{ marginTop: 4 }}>
-        읽음 = 과장이 TODO 목록을 열람한 것 · 평균 처리 = TODO 하달부터 완료 처리까지
-      </p>
-    </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
 function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () => void; onSaved: () => void }) {
-  const [teamId, setTeamId] = useState(teams[0]?.id ?? "");
+  const { data: session } = useSession();
+  const teamId = teams[0]?.id ?? "";
+  const members = useDeptMembers(teamId);
+  const [rows, setRows] = useState<PickRows>({});
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -380,11 +393,13 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
+    const assignments = (members ?? []).filter((m) => rows[m.id]?.on).map((m) => ({ userId: m.id, note: rows[m.id]?.note ?? "" }));
+    if (assignments.length === 0) { setErr("받을 과원을 1명 이상 골라주세요."); return; }
     setBusy(true);
     try {
       const res = await fetch("/api/directives", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, body, teamId, dueDate: dueDate || null, priority }),
+        body: JSON.stringify({ title, body, dueDate: dueDate || null, priority, assignments }),
       });
       const data = await res.json().catch(() => ({} as any));
       if (!res.ok) { setErr(data.error ?? "등록 실패"); return; }
@@ -400,15 +415,15 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
     <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <ModalClose onClose={onClose} />
-        <h2>TODO 내리기</h2>
+        <h2>TODO 보내기</h2>
         <form onSubmit={submit}>
-          <p className="rsv-form-hint" style={{ marginTop: -6 }}>과장이 받아서 과원에게 배분해요.</p>
+          <p className="rsv-form-hint" style={{ marginTop: -6 }}>고른 과원에게 알림이 가고, 각자 다 하면 ‘완료’를 눌러요.</p>
           <div className="field">
             <label>제목</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 홍보영상 콘티 초안 작성" required />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 지난주 행사 사진 셀렉" required />
           </div>
           <div className="field">
-            <label>TODO 내용 (선택)</label>
+            <label>내용 (선택)</label>
             <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="세부 내용" />
           </div>
           <div className="form-grid-2">
@@ -426,9 +441,12 @@ function CreateModal({ teams, onClose, onSaved }: { teams: Team[]; onClose: () =
               </select>
             </div>
           </div>
+          <div className="field">
+            <MemberPicker members={members} rows={rows} setRows={setRows} meId={session?.user?.id} />
+          </div>
           {err && <p className="err-msg">{err}</p>}
           <div className="modal-actions">
-            <button className="btn btn-primary" disabled={busy}>{busy ? "내리는 중…" : "TODO 내리기"}</button>
+            <button className="btn btn-primary" disabled={busy}>{busy ? "보내는 중…" : "TODO 보내기"}</button>
           </div>
         </form>
       </div>
@@ -504,34 +522,29 @@ function AssignModal({
 }: {
   dir: Directive; teamId: string; onClose: () => void; onSaved: () => void;
 }) {
-  const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
-  const [rows, setRows] = useState<Record<string, { on: boolean; note: string }>>({});
+  const { data: session } = useSession();
+  const members = useDeptMembers(teamId);
+  const [rows, setRows] = useState<PickRows>(() => {
+    const init: PickRows = {};
+    dir.assignments.forEach((a) => { if (a.user?.id) init[a.user.id] = { on: true, note: a.note ?? "" }; });
+    return init;
+  });
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    fetch(`/api/users?team=${teamId}`)
-      .then((r) => (r.ok ? r.json() : { users: [] }))
-      .then((d) => {
-        setMembers(d.users ?? []);
-        const init: Record<string, { on: boolean; note: string }> = {};
-        (d.users ?? []).forEach((u: any) => {
-          const ex = dir.assignments.find((a) => a.user?.id === u.id);
-          init[u.id] = { on: !!ex, note: ex?.note ?? "" };
-        });
-        setRows(init);
-      });
-  }, [teamId, dir.assignments]);
+  const [err, setErr] = useState("");
 
   async function save() {
-    setBusy(true);
-    const assignments = members
+    setErr("");
+    const assignments = (members ?? [])
       .filter((m) => rows[m.id]?.on)
-      .map((m) => ({ userId: m.id, note: rows[m.id]?.note ?? "", done: false }));
-    await fetch(`/api/directives/${dir.id}`, {
+      .map((m) => ({ userId: m.id, note: rows[m.id]?.note ?? "" }));
+    if (assignments.length === 0) { setErr("받을 과원을 1명 이상 골라주세요."); return; }
+    setBusy(true);
+    const res = await fetch(`/api/directives/${dir.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ assignments }),
     });
     setBusy(false);
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setErr(d.error ?? "저장 실패"); return; }
     onSaved();
   }
 
@@ -539,31 +552,12 @@ function AssignModal({
     <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <ModalClose onClose={onClose} />
-        <h2>과원 배분</h2>
-        <p className="page-sub" style={{ marginTop: -4 }}>배분할 과원을 고르고 담당 내용을 적어주세요.</p>
-        {members.length === 0 ? (
-          <p className="muted-note">등록된 과원이 없습니다.</p>
-        ) : (
-          <div className="assign-rows">
-            {members.map((m) => {
-              const row = rows[m.id] ?? { on: false, note: "" };
-              return (
-                <div className={`assign-row${row.on ? " on" : ""}`} key={m.id}>
-                  <button type="button" className={`assign-check${row.on ? " on" : ""}`}
-                    onClick={() => setRows((p) => ({ ...p, [m.id]: { ...row, on: !row.on } }))}>
-                    {row.on && <Icon name="check" size={13} strokeWidth={2.8} />}
-                  </button>
-                  <span className="assign-name">{m.name}</span>
-                  <input className="assign-note" placeholder="담당 내용 (예: 촬영)" value={row.note}
-                    disabled={!row.on}
-                    onChange={(e) => setRows((p) => ({ ...p, [m.id]: { ...row, note: e.target.value } }))} />
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <h2>받는 과원</h2>
+        <p className="page-sub" style={{ marginTop: -4 }}>새로 추가한 과원에게는 알림이 가요. 이미 완료한 기록은 그대로 남아요.</p>
+        <MemberPicker members={members} rows={rows} setRows={setRows} meId={session?.user?.id} />
+        {err && <p className="err-msg">{err}</p>}
         <div className="modal-actions">
-          <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? "저장 중…" : "분배 저장"}</button>
+          <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? "저장 중…" : "저장"}</button>
         </div>
       </div>
     </div>

@@ -2,11 +2,12 @@ import { connectDB } from "@/lib/mongodb";
 import { Task } from "@/models/Task";
 import { Event } from "@/models/Event";
 import { Directive } from "@/models/Directive";
+import { directiveScope } from "@/lib/directives";
 import { Resource } from "@/models/Resource";
 import "@/models/Team";
 import "@/models/ResourceCategory";
 import { requireActiveUser, json } from "@/lib/api";
-import { visibleTeamIds, canUseDirectives, canCreateDirective } from "@/lib/permissions";
+import { visibleTeamIds, canUseDirectives } from "@/lib/permissions";
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -54,11 +55,7 @@ export async function GET(req: Request) {
   // TODO — 지시함 조회 규칙과 동일
   let directives: any[] = [];
   if (canUseDirectives(user)) {
-    const dirQ: any = { $or: [{ title: rx }, { body: rx }] };
-    if (!canCreateDirective(user)) {
-      if (user.teamId) dirQ.teamId = user.teamId;
-      else dirQ.teamId = null; // 팀 없는 비발신자는 결과 없음
-    }
+    const dirQ: any = { $or: [{ title: rx }, { body: rx }], ...directiveScope(user) };
     directives = await Directive.find(dirQ)
       .populate("teamId", "name color")
       .sort({ createdAt: -1 })
